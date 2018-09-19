@@ -1,0 +1,1271 @@
+import os
+import re
+
+from unittest import TestCase
+from argparse import Namespace
+from mock import patch, Mock, call
+
+from shub_workflow.graph import GraphManager
+from shub_workflow.graph.task import Task, Resource
+
+from .utils.contexts import script_args
+
+
+class TestManager(GraphManager):
+    project_id = 999
+    name = 'test'
+
+    def configure_workflow(self):
+        # define jobs
+        jobA = Task(task_id='jobA', command='commandA', init_args=['argA', '--optionA'],
+                    retry_args=['argA'], tags=['tag1', 'tag2'], units=2)
+        jobB = Task(task_id='jobB', command='commandB', init_args=['argB', '--optionB'])
+        jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
+        jobD = Task(task_id='jobD', command='commandD', init_args=['argD'])
+
+        # connect them
+        jobA.add_next_task(jobC)
+        jobC.add_next_task(jobD)
+        jobC.add_wait_for(jobB)
+
+        # return starting jobs
+        return jobA, jobB
+
+
+class TestManager2(GraphManager):
+    project_id = 999
+    name = 'test'
+    parallelization = 4
+
+    def configure_workflow(self):
+        # define jobs
+        jobA = Task(task_id='jobA', command='commandA', init_args=['argA', '--optionA'],
+                    retry_args=['argA'], parallel_arg='--parg=%d', tags=['tag1', 'tag2'],
+                    retries=2)
+        jobB = Task(task_id='jobB', command='commandB', init_args=['argB', '--optionB'],
+                    parallel_arg='--parg=%d')
+        jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
+        jobD = Task(task_id='jobD', command='commandD')
+
+        # connect them
+        jobA.add_next_task(jobB)
+        jobA.add_next_task(jobD)
+        jobB.add_next_task(jobC)
+        jobD.add_wait_for(jobB)
+
+        # return starting jobs
+        return (jobA,)
+
+class TestManager3(GraphManager):
+    project_id = 999
+    name = 'test'
+    parallelization = 4
+
+    def configure_workflow(self):
+        # define jobs
+        jobA = Task(task_id='jobA', command='commandA', init_args=['argA', '--optionA'],
+                    retry_args=['argA'], parallel_arg='--parg=%d', tags=['tag1', 'tag2'])
+        jobB = Task(task_id='jobB', command='commandB', init_args=['argB', '--optionB'],
+                    parallel_arg='--parg=%d')
+        jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
+        jobD = Task(task_id='jobD', command='commandD')
+        jobE = Task(task_id='jobE', command='commandE')
+
+        # connect them
+        jobA.add_next_task(jobB)
+        jobA.add_next_task(jobC)
+        jobC.add_next_task(jobD)
+        jobD.add_next_task(jobE)
+        jobE.add_wait_for(jobB)
+
+        # return starting jobs
+        return (jobA,)
+
+
+class BaseTestCase(TestCase):
+
+    def setUp(self):
+        os.environ['SH_APIKEY'] = 'ffff'
+
+
+class ManagerTest(BaseTestCase):
+
+    def test_full_specs(self):
+        with script_args(['--starting-job=jobA', '--starting-job=jobB']):
+            manager = TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/1/2']
+        manager.on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 2)
+        manager.schedule_script.assert_any_call(['commandA', 'argA', '--optionA'], tags=['tag1', 'tag2'], units=2,
+                                                project_id=None)
+        manager.schedule_script.assert_any_call(['commandB', 'argB', '--optionB'], tags=None, units=None,
+                                                project_id=None)
+
+        # second loop, something went wrong with jobA
+        manager.is_finished = lambda x: 'failed' if x == '999/1/1' else None
+        manager.schedule_script.reset_mock()
+        manager.schedule_script.side_effect = ['999/1/3']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_called_with(['commandA', 'argA'], tags=['tag1', 'tag2'], units=2,
+                                                   project_id=None)
+
+        # third loop, both jobs are still running
+        manager.is_finished = lambda x: None
+        manager.schedule_script.reset_mock()
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertFalse(manager.schedule_script.called)
+
+        # fourth loop, jobA finished (but has to wait for jobB for next job)
+        manager.is_finished = lambda x: 'finished' if x == '999/1/3' else None
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertFalse(manager.schedule_script.called)
+
+        # fifth loop, jobB finished, now we can run jobC
+        manager.is_finished = lambda x: 'finished' if x == '999/1/2' else None 
+        manager.schedule_script.side_effect = ['999/1/4']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_called_with(['commandC', 'argC'], tags=None, units=None, project_id=None)
+
+        # sixth loop, jobC finished, schedule jobD
+        manager.is_finished = lambda x: 'finished' if x == '999/1/4' else None
+        manager.schedule_script.reset_mock()
+        manager.schedule_script.side_effect = ['999/1/5']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_called_with(['commandD', 'argD'], tags=None, units=None, project_id=None)
+
+        # last loop, jobD finished, workflow finished
+        manager.is_finished = lambda x: 'finished' if x == '999/1/5' else None
+        manager.schedule_script.reset_mock()
+        result = manager.workflow_loop()
+        self.assertFalse(result)
+        self.assertFalse(manager.schedule_script.called)
+
+    def test_invalid_job(self):
+        with script_args(['--starting-job=jobA', '--starting-job=jobN']):
+            manager = TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/1/2']
+        # Patch error method to avoid printing to console.
+        with patch.object(manager.argparser, 'error', side_effect=SystemExit(2)):
+            with self.assertRaises(SystemExit):
+                manager.on_start()
+
+    def test_retry_job(self):
+        """
+        Test that failed job is retried only the specified number of times
+        """
+        with script_args(['--starting-job=jobA']):
+            manager = TestManager2()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/1/2', '999/1/3', '999/1/4']
+        manager.on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 4)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandA', 'argA', '--optionA', '--parg=%d' %i],
+                                                    tags=['tag1', 'tag2'], units=None, project_id=None)
+
+        # second loop still running job A
+        manager.schedule_script.reset_mock()
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertFalse(manager.schedule_script.called)
+
+        # third loop, job A_0 fails, must be retried
+        manager.is_finished = lambda x: 'failed' if x == '999/1/1' else None
+        manager.schedule_script.side_effect = ['999/1/5']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_called_with(['commandA', 'argA', '--parg=0'], tags=['tag1', 'tag2'],
+                                                   units=None, project_id=None)
+
+        # fourth loop, job A_0 fails, must be retried
+        manager.schedule_script.reset_mock()
+        manager.is_finished = lambda x: 'failed' if x == '999/1/5' else None
+        manager.schedule_script.side_effect = ['999/1/6']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_called_with(['commandA', 'argA', '--parg=0'], tags=['tag1', 'tag2'],
+                                                   units=None, project_id=None)
+
+        # fifth loop, job A_0 fails again, cannot be retried (retries=2)
+        manager.schedule_script.reset_mock()
+        manager.is_finished = lambda x: 'failed' if x == '999/1/6' else None
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertFalse(manager.schedule_script.called)
+
+        # sixth loop, job A_1 fails, must be retried
+        manager.schedule_script.reset_mock()
+        manager.is_finished = lambda x: 'failed' if x == '999/1/2' else None
+        manager.schedule_script.side_effect = ['999/1/7']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_called_with(['commandA', 'argA', '--parg=1'], tags=['tag1', 'tag2'],
+                                                   units=None, project_id=None)
+
+        # 7th loop, job A_1 fails again, must be retried
+        manager.schedule_script.reset_mock()
+        manager.is_finished = lambda x: 'failed' if x == '999/1/7' else None
+        manager.schedule_script.side_effect = ['999/1/8']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_called_with(['commandA', 'argA', '--parg=1'], tags=['tag1', 'tag2'],
+                                                   units=None, project_id=None)
+
+        # 8th loop, job A_1 fails again, cannot be retried (retries=2)
+        manager.schedule_script.reset_mock()
+        manager.is_finished = lambda x: 'failed' if x == '999/1/8' else None
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertFalse(manager.schedule_script.called)
+
+    def test_parallel_job(self):
+        """
+        Test correct scheduling of a job with parallelization
+        """
+        with script_args(['--starting-job=jobA']):
+            manager = TestManager2()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/1/2', '999/1/3', '999/1/4']
+        manager.on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 4)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandA', 'argA', '--optionA', '--parg=%d' %i], tags=['tag1', 'tag2'],
+                                                    units=None, project_id=None)
+
+        # second loop still running job A
+        manager.schedule_script.reset_mock()
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertFalse(manager.schedule_script.called)
+
+        # third loop, job A_0 fails, must be resumed
+        manager.is_finished = lambda x: 'failed' if x == '999/1/1' else None
+        manager.schedule_script.side_effect = ['999/1/5']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_called_with(['commandA', 'argA', '--parg=0'], tags=['tag1', 'tag2'],
+                                                   units=None, project_id=None)
+
+        # fourth loop, job A finishes, will start now parallel job B
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/2/1', '999/2/2', '999/2/3', '999/2/4']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandB', 'argB', '--optionB', '--parg=%d' %i], tags=None,
+                                                    units=None, project_id=None)
+
+        # fifth loop, jobB finishes partially, neither jobD nor jobC can still be scheduled
+        manager.is_finished = lambda x: 'finished' if x == '999/2/1' else None
+        manager.schedule_script.reset_mock()
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertFalse(manager.schedule_script.called)
+
+        # sixth loop, jobB finishes, jobD now can run, also jobC is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/3/1', '999/3/2']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandC', 'argC'], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(['commandD'], tags=None, units=None, project_id=None)
+
+    def test_wait_for_already_finished_job(self):
+        with script_args(['--starting-job=jobA']):
+            manager = TestManager3()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/1/2', '999/1/3', '999/1/4']
+        manager.on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 4)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandA', 'argA', '--optionA', '--parg=%d' %i],
+                                                    tags=['tag1', 'tag2'], units=None, project_id=None)
+
+        # second loop, jobA finishes, jobB and jobC are scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/2/1', '999/2/2', '999/2/3', '999/2/4', '999/3/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandB', 'argB', '--optionB', '--parg=%d' %i],
+                                                    tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(['commandC', 'argC'], tags=None, units=None, project_id=None)
+
+        # third loop, jobB finishes
+        manager.is_finished = lambda x: 'finished' if x.startswith('999/2/') else None
+        manager.schedule_script.reset_mock()
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertFalse(manager.schedule_script.called)
+
+        # fourth loop, jobC finishes, jobD is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/4/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandD'], tags=None, units=None, project_id=None)
+
+        # fifth loop, jobD finishes, jobE is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/5/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandE'], tags=None, units=None, project_id=None)
+
+    def test_no_wait_for_a_job_that_will_not_be_run(self):
+        with script_args(['--starting-job=jobD']):
+            manager = TestManager3()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/4/1']
+        manager.on_start()
+
+        # first loop, jobD is scheduled
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandD'], tags=None, units=None, project_id=None)
+
+        # second loop, jobD finishes, jobE is scheduled, regardless it should wait for jobB to finish.
+        # However, as defined in the start jobs, jobB will never be scheduled (i.e. could have been
+        # already scheduled/finished by another instance of the manager)
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/5/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandE'], tags=None, units=None, project_id=None)
+
+    def test_start_job_wait_for_another_in_start_jobs(self):
+        with script_args(['--starting-job=jobB', '--starting-job=jobE']):
+            manager = TestManager3()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/2/1', '999/2/2', '999/2/3', '999/2/4']
+        manager.on_start()
+
+        # first loop, jobB is scheduled
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandB', 'argB', '--optionB', '--parg=%d' %i], tags=None,
+                                                    units=None, project_id=None)
+
+        # second loop, jobB finishes, jobE is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/5/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandE'], tags=None, units=None, project_id=None)
+
+    def test_wait_for_a_starting_parallel_job(self):
+        with script_args(['--starting-job=jobB']):
+            manager = TestManager2()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/2/1', '999/2/2', '999/2/3', '999/2/4']
+        manager.on_start()
+
+        # first loop, jobB is scheduled
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandB', 'argB', '--optionB', '--parg=%d' %i], tags=None, units=None,
+                                                    project_id=None)
+
+        # second loop, one jobB finishes, jobC must not still be scheduled
+        manager.is_finished = lambda x: 'finished' if x == '999/2/1' else None
+        manager.schedule_script.reset_mock()
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertFalse(manager.schedule_script.called)
+
+    def test_start_job_wait_for_a_job_after_another_start_job(self):
+        """
+        One of the starting jobs must wait for a job triggered on the other start job finish:
+        jobC -> jobD
+        jobE must wait for jobD
+        """
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            def configure_workflow(self):
+                # define jobs
+                jobA = Task(task_id='jobA', command='commandA', init_args=['argA', '--optionA'],
+                            retry_args=['argA'], parallel_arg='--parg=%d', tags=['tag1', 'tag2'])
+                jobB = Task(task_id='jobB', command='commandB', init_args=['argB', '--optionB'],
+                            parallel_arg='--parg=%d')
+                jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
+                jobD = Task(task_id='jobD', command='commandD')
+                jobE = Task(task_id='jobE', command='commandE')
+
+                # connect them
+                jobA.add_next_task(jobB)
+                jobA.add_next_task(jobC)
+                jobC.add_next_task(jobD)
+                jobE.add_wait_for(jobD)
+
+                return (jobA, jobE)
+    
+        with script_args(['--starting-job=jobC', '--starting-job=jobE']):
+            manager = _TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/3/1']
+        manager.on_start()
+
+        # first loop, jobC is scheduled
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_called_with(['commandC', 'argC'], tags=None, units=None, project_id=None)
+
+        # second loop, jobC finishes, jobD is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/4/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandD'], tags=None, units=None, project_id=None)
+
+        # third loop, jobD finishes, jobE is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/5/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandE'], tags=None, units=None, project_id=None)
+
+    def test_start_job_wait_for_another_that_must_wait_another(self):
+        """
+        One of the starting jobs must wait for a job triggered on the other start job finish:
+        jobC -> jobD
+        jobE must wait for jobD
+        """
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            def configure_workflow(self):
+                # define jobs
+                jobA = Task(task_id='jobA', command='commandA', init_args=['argA', '--optionA'],
+                            retry_args=['argA'], parallel_arg='--parg=%d', tags=['tag1', 'tag2'])
+                jobB = Task(task_id='jobB', command='commandB', init_args=['argB', '--optionB'],
+                            parallel_arg='--parg=%d')
+                jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
+                jobD = Task(task_id='jobD', command='commandD')
+                jobE = Task(task_id='jobE', command='commandE')
+
+                # connect them
+                jobA.add_next_task(jobB)
+                jobB.add_next_task(jobC)
+
+                jobD.add_wait_for(jobC)
+                jobE.add_wait_for(jobD)
+
+                return (jobA, jobD, jobE)
+
+        with script_args(['--starting-job=jobB', '--starting-job=jobD', '--starting-job=jobE']):
+            manager = _TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/2/1', '999/2/2', '999/2/3', '999/2/4']
+        manager.on_start()
+
+        # first loop, jobB is scheduled
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandB', 'argB', '--optionB', '--parg=%d' %i], tags=None,
+                                                    units=None, project_id=None)
+
+        # second loop, jobB finishes, jobC is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/3/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_called_with(['commandC', 'argC'], tags=None, units=None, project_id=None)
+
+        # third loop, jobC finishes, jobD is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/4/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandD'], tags=None, units=None, project_id=None)
+
+        # fourth loop, jobD finishes, jobE is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/5/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandE'], tags=None, units=None, project_id=None)
+
+    def test_job_wait_for_another_that_must_wait_another_that_will_not_run(self):
+        """
+        One of the jobs must wait for a job that waits for another that will never run
+        """
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            def configure_workflow(self):
+                # define jobs
+                jobA = Task(task_id='jobA', command='commandA', init_args=['argA', '--optionA'],
+                            retry_args=['argA'], parallel_arg='--parg=%d', tags=['tag1', 'tag2'])
+                jobB = Task(task_id='jobB', command='commandB', init_args=['argB', '--optionB'],
+                            parallel_arg='--parg=%d')
+                jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
+                jobD = Task(task_id='jobD', command='commandD')
+                jobE = Task(task_id='jobE', command='commandE')
+
+                # connect them
+                jobA.add_next_task(jobB)
+                jobB.add_next_task(jobC)
+                jobB.add_next_task(jobD)
+                jobC.add_next_task(jobE)
+
+                jobD.add_wait_for(jobA)
+                jobE.add_wait_for(jobD)
+
+                return (jobA,)
+
+        with script_args(['--starting-job=jobB']):
+            manager = _TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/2/1', '999/2/2', '999/2/3', '999/2/4']
+        manager.on_start()
+
+        # first loop, jobB is scheduled
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandB', 'argB', '--optionB', '--parg=%d' %i], tags=None,
+                                                    units=None, project_id=None)
+
+        # second loop, jobB finishes, jobC must be scheduled, but not jobD
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/3/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_called_with(['commandC', 'argC'], tags=None, units=None, project_id=None)
+
+        # third loop, jobC finishes, jobD is scheduled, but not jobE
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/4/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandD'], tags=None, units=None, project_id=None)
+
+        # fourth loop, jobD finishes, jobE is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/5/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandE'], tags=None, units=None, project_id=None)
+
+    def test_job_wait_for_another_that_must_wait_another_that_will_not_run_ii(self):
+        """
+        One of the jobs must wait for a job that waits for another that will never run. Second variant.
+        """
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            def configure_workflow(self):
+                # define jobs
+                jobA = Task(task_id='jobA', command='commandA', init_args=['argA', '--optionA'],
+                            retry_args=['argA'], parallel_arg='--parg=%d', tags=['tag1', 'tag2'])
+                jobB = Task(task_id='jobB', command='commandB', init_args=['argB', '--optionB'],
+                            parallel_arg='--parg=%d')
+                jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
+                jobD = Task(task_id='jobD', command='commandD')
+                jobE = Task(task_id='jobE', command='commandE')
+
+                # connect them
+                jobA.add_next_task(jobB)
+                jobB.add_next_task(jobC)
+                jobB.add_next_task(jobE)
+                jobC.add_next_task(jobD)
+
+                jobD.add_wait_for(jobE)
+                jobE.add_wait_for(jobA)
+
+                return (jobA,)
+
+        with script_args(['--starting-job=jobB']):
+            manager = _TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/2/1', '999/2/2', '999/2/3', '999/2/4']
+        manager.on_start()
+
+        # first loop, jobB is scheduled
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandB', 'argB', '--optionB', '--parg=%d' %i], tags=None,
+                                                    units=None, project_id=None)
+
+        # second loop, jobB finishes, jobC must be scheduled, but not jobE
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/3/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_called_with(['commandC', 'argC'], tags=None, units=None, project_id=None)
+
+        # third loop, jobC finishes, jobE is scheduled, but not jobD
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/5/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandE'], tags=None, units=None, project_id=None)
+
+        # fourth loop, jobE finishes, jobD is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/4/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandD'], tags=None, units=None, project_id=None)
+
+    def test_many_jobs_waiting_for_not_running_job(self):
+        """
+        When many jobs waits for the same that will not run, ensure that only one job at a time
+        is choosen for run, except when we run a job with parallelization (in this case, all
+        parallel jobs must run)
+        """
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            def configure_workflow(self):
+                # define jobs
+                jobA = Task(task_id='jobA', command='commandA', init_args=['argA', '--optionA'],
+                            parallel_arg='--parg=%d')
+                jobB = Task(task_id='jobB', command='commandB', init_args=['argB', '--optionB'])
+                jobC = Task(task_id='jobC', command='commandC', init_args=['argC', '--optionC'])
+                jobE = Task(task_id='jobE', command='commandE')
+
+                # connect them
+                jobA.add_wait_for(jobE)
+                jobB.add_wait_for(jobE)
+                jobC.add_wait_for(jobE)
+
+                return (jobA, jobB, jobC, jobE)
+
+        with script_args(['--starting-job=jobA', '--starting-job=jobB', '--starting-job=jobC']):
+            manager = _TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/1/2', '999/1/3', '999/1/4']
+        manager.on_start()
+
+        # first loop, All jobs A must be scheduled
+        self.assertTrue(manager.workflow_loop())
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandA', 'argA', '--optionA', '--parg=%d' %i], tags=None,
+                                                    units=None, project_id=None)
+
+        # second loop, jobs still running, nothing scheduled
+        manager.is_finished = lambda x: None
+        self.assertTrue(manager.workflow_loop())
+
+        # third loop, jobs A finishes, jobB scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/2/1']
+        self.assertTrue(manager.workflow_loop())
+        manager.schedule_script.assert_called_with(['commandB', 'argB', '--optionB'], tags=None, units=None,
+                                                   project_id=None)
+
+        # fourth loop, jobs still running, nothing scheduled
+        manager.is_finished = lambda x: None
+        self.assertTrue(manager.workflow_loop())
+
+        # 5th loop, job B finishes, jobC scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/3/1']
+        self.assertTrue(manager.workflow_loop())
+        manager.schedule_script.assert_called_with(['commandC', 'argC', '--optionC'], tags=None, units=None,
+                                                   project_id=None)
+
+    def test_job_cyclic_dependency(self):
+        """If at some point all pending jobs depend on each other, raise an error."""
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            def configure_workflow(self):
+                # define jobs
+                jobA = Task(task_id='jobA', command='commandA')
+                jobB = Task(task_id='jobB', command='commandB', init_args=['argB', '--optionB'],
+                            parallel_arg='--parg=%d')
+                jobC = Task(task_id='jobC', command='commandC')
+                jobD = Task(task_id='jobD', command='commandD')
+
+                # connect them
+                jobA.add_next_task(jobD)
+
+                jobB.add_wait_for(jobC)
+                jobC.add_wait_for(jobD)
+                jobD.add_wait_for(jobB)
+                
+                return (jobA, jobB, jobC) 
+
+        with script_args(['--starting-job=jobA', '--starting-job=jobB', '--starting-job=jobC']):
+            manager = _TestManager()
+
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/2/1']
+        manager.on_start()
+
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandA'], tags=None, units=None, project_id=None)
+
+        manager.is_finished = lambda x: 'finished'
+        with self.assertRaisesRegexp(
+                RuntimeError,
+                re.escape(
+                    "Job dependency cycle detected:"
+                    " jobB_0 waits for ['jobC'],"
+                    " jobB_1 waits for ['jobC'],"
+                    " jobB_2 waits for ['jobC'],"
+                    " jobB_3 waits for ['jobC'],"
+                    " jobC waits for ['jobD'],"
+                    " jobD waits for ['jobB_0', 'jobB_1', 'jobB_2', 'jobB_3']")):
+            manager.workflow_loop()
+
+    def test_job_required_resource(self):
+        """If a jobs depends on an unavailable resource, it should not run."""
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            fooR = Resource('foo')
+
+            def configure_workflow(self):
+                # define tasks
+                jobA = Task('jobA', command='commandA')
+                jobB = Task('jobB', command='commandB')
+
+                # set required resources
+                jobA.add_required_resources(self.fooR, 1)
+                jobB.add_required_resources(self.fooR, 1)
+
+                return jobA, jobB
+
+        with script_args(['--starting-job=jobA', '--starting-job=jobB']):
+            manager = _TestManager()
+
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/2/1']
+        manager.on_start()
+        self.assertEqual(manager._available_resources, {'foo': 1})
+
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_called_with(['commandA'], tags=None, units=None, project_id=None)
+
+        # If commandA is still running, commandB should not get started.
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/2/2']
+
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 0)
+
+        manager.is_finished = lambda x: 'finished'
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_called_with(['commandB'], tags=None, units=None, project_id=None)
+
+    def test_job_required_alternative_resources(self):
+        """Test alternative resources."""
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            fooR = Resource('foo')
+            barR = Resource('bar')
+
+            def configure_workflow(self):
+                # define tasks
+                jobA = Task('jobA', command='commandA')
+                jobB = Task('jobB', command='commandB')
+                jobC = Task('jobC', command='commandC')
+                jobD = Task('jobD', command='commandD')
+
+                # set required resources
+                jobA.add_required_resources(self.fooR, 1)
+                jobB.add_required_resources(self.fooR, 1)
+                jobC.add_required_resources(self.fooR, 1)
+                jobC.add_required_resources(self.barR, 1)
+                jobD.add_required_resources(self.barR, 1)
+
+                return jobA, jobB, jobC, jobD
+
+        with script_args(['--starting-job=jobA', '--starting-job=jobB', '--starting-job=jobC', '--starting-job=jobD']):
+            manager = _TestManager()
+
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/3/1']
+        manager.on_start()
+
+        # First loop: can run jobA and jobC
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandA'], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(['commandC'], tags=None, units=None, project_id=None)
+
+        # Second loop: if both commandA and command C are still running, nor commandB neither commandD can't start.
+        manager.is_finished = lambda x: None
+        manager.schedule_script.reset_mock()
+
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 0)
+
+        # third loop: commandC finishes so commandD can run
+        manager.is_finished = lambda x: 'finished' if x == '999/3/1' else None
+        manager.schedule_script.side_effect = ['999/4/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_called_with(['commandD'], tags=None, units=None, project_id=None)
+
+        # fourth loop: commandD finishes. commandB, can't still run
+        manager.schedule_script.reset_mock()
+        manager.is_finished = lambda x: 'finished' if x == '999/4/1' else None
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 0)
+
+        # fifth loop: commandA finishes so commandB can run
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/2/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_called_with(['commandB'], tags=None, units=None, project_id=None)
+
+    def test_parallel_job_required_resource(self):
+        """If a job with required resource is parallel, divide the resource among all parallel subjobs"""
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+            
+            fooR = Resource('foo')
+
+            def configure_workflow(self):
+                # define tasks
+                jobA = Task('jobA', command='commandA', parallel_arg='--parg=%d')
+                jobB = Task('jobB', command='commandB')
+
+                # set required resources
+                jobA.add_required_resources(self.fooR, 1)
+                jobB.add_required_resources(self.fooR, 1)
+
+                return jobA, jobB
+
+        with script_args(['--starting-job=jobA', '--starting-job=jobB']):
+            manager = _TestManager()
+
+        def generate_job_keys(proj, spider):
+            for i in range(1000):
+                yield '%d/%d/%d' % (proj, spider, i)
+
+        manager.schedule_script = Mock(side_effect=generate_job_keys(999, 2))
+        manager.on_start()
+        self.assertEqual(manager._available_resources, {'foo': 1})
+
+        # First loop: schedule jobA
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 4)
+        calls = [
+            call(['commandA', '--parg=%d' % i], tags=None, units=None, project_id=None)
+            for i in range(4)
+        ]
+        manager.schedule_script.assert_has_calls(calls)
+
+        # Second loop. If commandA is still running, commandB should not get started.
+        manager.is_finished = lambda x: None
+        manager.schedule_script.reset_mock()
+
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 0)
+
+        # Third loop. All jobA subjobs finished. Schedule jobB.
+        manager.is_finished = lambda x: 'finished'
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_called_with(['commandB'], tags=None, units=None, project_id=None)
+
+    def test_parallel_job_required_double_resource(self):
+        """Double resources with parallel jobs"""
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            fooR = Resource('foo')
+            barR = Resource('bar')
+
+            def configure_workflow(self):
+                # define tasks
+                jobA = Task('jobA', command='commandA', parallel_arg='--parg=%d')
+                jobB = Task('jobB', command='commandB')
+                jobC = Task('jobC', command='commandC', parallel_arg='--parg=%d')
+
+                # set required resources
+                jobA.add_required_resources(self.fooR, 1)
+                jobB.add_required_resources(self.fooR, 1)
+                jobB.add_required_resources(self.barR, 1)
+                jobC.add_required_resources(self.fooR, 1, self.barR, 1)
+
+                return jobA, jobB, jobC
+ 
+        with script_args(['--starting-job=jobA', '--starting-job=jobB', '--starting-job=jobC']):
+            manager = _TestManager()
+
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect=['999/1/%d' % i for i in range(1,5)] + ['999/2/1']
+        manager.on_start()
+        self.assertEqual(manager._available_resources, {'foo': 1, 'bar': 1})
+
+        # first loop: run commandA and command B
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 5)
+        calls = [
+            call(['commandA', '--parg=%d' % i], tags=None, units=None, project_id=None)
+            for i in range(4)
+        ] + [call(['commandB'], tags=None, units=None, project_id=None)]
+        manager.schedule_script.assert_has_calls(calls)
+
+        # If only jobA is finished, jobC can't run
+        manager.is_finished = lambda x: 'finished' if x.startswith('999/1/') else None
+        manager.schedule_script.reset_mock()
+
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 0)
+
+        # finished jobB, jobC can run
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect=['999/3/%d' % i for i in range(1,5)]
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 4)
+        calls = [
+            call(['commandC', '--parg=%d' % i], tags=None, units=None, project_id=None)
+            for i in range(4)
+        ]
+        manager.schedule_script.assert_has_calls(calls)
+
+    def test_parallel_job_alternative_required_resource(self):
+        """Alternative resources with parallel jobs"""
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            fooR = Resource('foo')
+            barR = Resource('bar')
+
+            def configure_workflow(self):
+                # define tasks
+                jobA = Task('jobA', command='commandA', parallel_arg='--parg=%d')
+                jobB = Task('jobB', command='commandB')
+                jobC = Task('jobC', command='commandC', parallel_arg='--parg=%d')
+
+                # set required resources
+                jobA.add_required_resources(self.fooR, 1)
+                jobB.add_required_resources(self.fooR, 1)
+                jobB.add_required_resources(self.barR, 1)
+                jobC.add_required_resources(self.fooR, 1)
+                jobC.add_required_resources(self.barR, 1)
+
+                return jobA, jobB, jobC
+ 
+        with script_args(['--starting-job=jobA', '--starting-job=jobB', '--starting-job=jobC']):
+            manager = _TestManager()
+
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect=['999/1/%d' % i for i in range(1,5)] + ['999/2/1']
+        manager.on_start()
+        self.assertEqual(manager._available_resources, {'foo': 1, 'bar': 1})
+
+        # first loop: run commandA and command B
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 5)
+        calls = [
+            call(['commandA', '--parg=%d' % i], tags=None, units=None, project_id=None)
+            for i in range(4)
+        ] + [call(['commandB'], tags=None, units=None, project_id=None)]
+        manager.schedule_script.assert_has_calls(calls)
+
+        # If any job is finished, jobC can run
+        manager.is_finished = lambda x: 'finished' if x.startswith('999/1/') else None
+        manager.schedule_script.reset_mock()
+
+        manager.schedule_script.side_effect=['999/3/%d' % i for i in range(1,5)]
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 4)
+        calls = [
+            call(['commandC', '--parg=%d' % i], tags=None, units=None, project_id=None)
+            for i in range(4)
+        ]
+        manager.schedule_script.assert_has_calls(calls)
+
+    def test_parallel_job_partial_resource(self):
+        """When two parallel jobs share same resource, if one partially finishes,
+           the other can partially acquire the resource."""
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            fooR = Resource('foo')
+
+            def configure_workflow(self):
+                # define tasks
+                jobA = Task('jobA', command='commandA', parallel_arg='--parg=%d')
+                jobC = Task('jobC', command='commandC', parallel_arg='--parg=%d')
+
+                # set required resources
+                jobA.add_required_resources(self.fooR, 1)
+                jobC.add_required_resources(self.fooR, 1)
+
+                return jobA, jobC
+
+        with script_args(['--starting-job=jobA', '--starting-job=jobC', '--max-running-job=3']):
+            manager = _TestManager()
+
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect=['999/1/%d' % i for i in range(1,5)] + ['999/2/%d' % i for i in range(1,5)]
+        manager.on_start()
+
+        # first loop: run three jobs of jobA
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 3)
+        calls = [
+            call(['commandA', '--parg=%d' % i], tags=None, units=None, project_id=None)
+            for i in range(3)
+        ]
+        manager.schedule_script.assert_has_calls(calls)
+
+        # second loop: run remaining jobA and two jobC
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.reset_mock()
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 3)
+        calls = [
+            call(['commandA', '--parg=3'], tags=None, units=None, project_id=None)
+        ] + [call(['commandC', '--parg=%d' % i], tags=None, units=None, project_id=None)
+            for i in range(2)
+        ]
+        manager.schedule_script.assert_has_calls(calls)
+
+        # third loop: run remaining two jobC
+        manager.schedule_script.reset_mock()
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEquals(manager.schedule_script.call_count, 2)
+        calls = [call(['commandC', '--parg=%d' % i], tags=None, units=None, project_id=None)
+            for i in range(2, 4)
+        ]
+        manager.schedule_script.assert_has_calls(calls)
+
+    def test_max_running_jobs(self):
+        """
+        Test max running jobs
+        """
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            def configure_workflow(self):
+                # define tasks
+                jobA = Task('jobA', command='commandA', parallel_arg='--parg=%d')
+                jobB = Task('jobB', command='commandB')
+
+                return jobA, jobB
+
+        with script_args(['--starting-job=jobA', '--starting-job=jobB', '--max-running-jobs=2']):
+            manager = _TestManager()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.on_start()
+        # will test that all 5 jobs (4 for A and 1 for B) will run one by one
+        side_effects = ['999/1/%d' % (i + 1) for i in range(4)] + ['999/2/1']
+        for i in range(3):
+            side_effect, side_effects = side_effects[:2], side_effects[2:]
+            manager.schedule_script.side_effect = side_effect
+            result = manager.workflow_loop()
+            self.assertTrue(result)
+            self.assertEqual(manager.schedule_script.call_count, len(side_effect))
+            manager.is_finished = lambda x: 'finished'
+            manager.schedule_script.reset_mock()
+        result = manager.workflow_loop()
+        self.assertFalse(result)
+
+    def test_only_starting_jobs(self):
+        with script_args(['--starting-job=jobA', '--starting-job=jobB', '--only-starting-jobs']):
+            manager = TestManager()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.on_start()
+
+        # first loop: job A and job B are scheduled
+        manager.schedule_script.side_effect = ['999/1/1', '999/2/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 2)
+        manager.is_finished = lambda x: 'finished'
+
+        result = manager.workflow_loop()
+        self.assertFalse(result)
+
+    def test_multiple_parallel_arg_substitution(self):
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            def configure_workflow(self):
+                jobB = Task('jobB', command='commandB', init_args=['argB', '--optionB'],
+                            parallel_arg='--config={"topic": %d, "file": "ds_dump_%d"}')
+                return (jobB,)
+
+        with script_args(['--starting-job=jobB']):
+            manager = _TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/2/1', '999/2/2', '999/2/3', '999/2/4']
+        manager.on_start()
+
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandB', 'argB', '--optionB',
+                                                     '--config={{"topic": {p}, "file": "ds_dump_{p}"}}'.format(p=i)],
+                                                    tags=None, units=None, project_id=None)
+
+    def test_custom_target_project_id(self):
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            def configure_workflow(self):
+                jobB = Task('jobB', command='commandB', init_args=['argB', '--optionB'],
+                            parallel_arg='--config={"topic": %d, "file": "ds_dump_%d"}',
+                            project_id=1999)
+                return (jobB,)
+
+        with script_args(['--starting-job=jobB']):
+            manager = _TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['1999/2/1', '1999/2/2', '1999/2/3', '1999/2/4']
+        manager.on_start()
+
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(
+                ['commandB', 'argB', '--optionB',
+                '--config={{"topic": {p}, "file": "ds_dump_{p}"}}'.format(p=i)],
+                tags=None, units=None, project_id=1999)
+
+    @patch('shub_workflow.graph.time')
+    def test_wait_time(self, mocked_time):
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+            parallelization = 4
+
+            def configure_workflow(self):
+                jobA = Task('jobA', 'commandA', wait_time=3600, parallel_arg='--parg=%d')
+                jobB = Task('jobB', 'commandB')
+                jobB.add_wait_for(jobA)
+
+                return (jobA, jobB)
+
+        mocked_time.side_effect = [0] + [900] * 4
+        with script_args(['--starting-job=jobA', '--starting-job=jobB']):
+            manager = _TestManager()
+
+        manager.schedule_script = Mock()
+        manager.on_start()
+
+        # first loop, jobA still can't run 
+        self.assertTrue(manager.workflow_loop())
+        self.assertEquals(manager.schedule_script.call_count, 0)
+
+        # second loop, jobA can run now
+        mocked_time.side_effect = [3660] * 4
+        manager.schedule_script.side_effect=['999/1/%d' % i for i in range(1,5)]
+
+        self.assertTrue(manager.workflow_loop())
+        self.assertEquals(manager.schedule_script.call_count, 4)
+        calls = [
+            call(['commandA', '--parg=%d' % i], tags=None, units=None, project_id=None)
+            for i in range(4)
+        ] 
+        manager.schedule_script.assert_has_calls(calls)
+
+        # third loop: jobA finishes, can run jobB
+        manager.schedule_script.side_effect=['999/2/1']
+        manager.is_finished = lambda x: 'finished' 
+        self.assertTrue(manager.workflow_loop())
+        self.assertEquals(manager.schedule_script.call_count, 5)
+        manager.schedule_script.assert_called_with(['commandB'], tags=None, units=None, project_id=None)
+
+        # fourth loop: joB finishes, all finishes
+        self.assertFalse(manager.workflow_loop())
