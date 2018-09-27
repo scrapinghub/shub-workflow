@@ -768,8 +768,8 @@ class ManagerTest(BaseTestCase):
                 jobB = Task('jobB', command='commandB')
 
                 # set required resources
-                jobA.add_required_resources(self.fooR, 1)
-                jobB.add_required_resources(self.fooR, 1)
+                jobA.add_required_resources({self.fooR: 1})
+                jobB.add_required_resources({self.fooR: 1})
 
                 return jobA, jobB
 
@@ -779,7 +779,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ['999/2/1']
         manager.on_start()
-        self.assertEqual(manager._available_resources, {'foo': 1})
+        self.assertEqual(manager._available_resources, {manager.fooR: 1})
 
         result = manager.workflow_loop()
         self.assertTrue(result)
@@ -819,11 +819,11 @@ class ManagerTest(BaseTestCase):
                 jobD = Task('jobD', command='commandD')
 
                 # set required resources
-                jobA.add_required_resources(self.fooR, 1)
-                jobB.add_required_resources(self.fooR, 1)
-                jobC.add_required_resources(self.fooR, 1)
-                jobC.add_required_resources(self.barR, 1)
-                jobD.add_required_resources(self.barR, 1)
+                jobA.add_required_resources({self.fooR: 1})
+                jobB.add_required_resources({self.fooR: 1})
+                jobC.add_required_resources({self.fooR: 1})
+                jobC.add_required_resources({self.barR: 1})
+                jobD.add_required_resources({self.barR: 1})
 
                 return jobA, jobB, jobC, jobD
 
@@ -886,8 +886,8 @@ class ManagerTest(BaseTestCase):
                 jobB = Task('jobB', command='commandB')
 
                 # set required resources
-                jobA.add_required_resources(self.fooR, 1)
-                jobB.add_required_resources(self.fooR, 1)
+                jobA.add_required_resources({self.fooR: 1})
+                jobB.add_required_resources({self.fooR: 1})
 
                 return jobA, jobB
 
@@ -900,7 +900,7 @@ class ManagerTest(BaseTestCase):
 
         manager.schedule_script = Mock(side_effect=generate_job_keys(999, 2))
         manager.on_start()
-        self.assertEqual(manager._available_resources, {'foo': 1})
+        self.assertEqual(manager._available_resources, {manager.fooR: 1})
 
         # First loop: schedule jobA
         result = manager.workflow_loop()
@@ -944,10 +944,10 @@ class ManagerTest(BaseTestCase):
                 jobC = Task('jobC', command='{% for i in range(4) %}commandC --parg={{ i }} {% endfor %}')
 
                 # set required resources
-                jobA.add_required_resources(self.fooR, 1)
-                jobB.add_required_resources(self.fooR, 1)
-                jobB.add_required_resources(self.barR, 1)
-                jobC.add_required_resources(self.fooR, 1, self.barR, 1)
+                jobA.add_required_resources({self.fooR: 1})
+                jobB.add_required_resources({self.fooR: 1})
+                jobB.add_required_resources({self.barR: 1})
+                jobC.add_required_resources({self.fooR: 1, self.barR: 1})
 
                 return jobA, jobB, jobC
 
@@ -957,9 +957,9 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [f'999/1/{i}' for i in range(1, 5)] + ['999/2/1']
         manager.on_start()
-        self.assertEqual(manager._available_resources, {'foo': 1, 'bar': 1})
+        self.assertEqual(manager._available_resources, {manager.fooR: 1, manager.barR: 1})
 
-        # first loop: run commandA and command B
+        # first loop: run jobA and jobB
         result = manager.workflow_loop()
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 5)
@@ -1006,11 +1006,11 @@ class ManagerTest(BaseTestCase):
                 jobC = Task('jobC', command='{% for i in range(4) %}commandC --parg={{ i }} {% endfor %}')
 
                 # set required resources
-                jobA.add_required_resources(self.fooR, 1)
-                jobB.add_required_resources(self.fooR, 1)
-                jobB.add_required_resources(self.barR, 1)
-                jobC.add_required_resources(self.fooR, 1)
-                jobC.add_required_resources(self.barR, 1)
+                jobA.add_required_resources({self.fooR: 1})
+                jobB.add_required_resources({self.fooR: 1})
+                jobB.add_required_resources({self.barR: 1})
+                jobC.add_required_resources({self.fooR: 1})
+                jobC.add_required_resources({self.barR: 1})
 
                 return jobA, jobB, jobC
 
@@ -1020,7 +1020,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [f'999/1/{i}' for i in range(1, 5)] + ['999/2/1']
         manager.on_start()
-        self.assertEqual(manager._available_resources, {'foo': 1, 'bar': 1})
+        self.assertEqual(manager._available_resources, {manager.fooR: 1, manager.barR: 1})
 
         # first loop: run commandA and command B
         result = manager.workflow_loop()
@@ -1062,8 +1062,8 @@ class ManagerTest(BaseTestCase):
                 jobC = Task('jobC', command='{% for i in range(4) %}commandC --parg={{ i }} {% endfor %}')
 
                 # set required resources
-                jobA.add_required_resources(self.fooR, 1)
-                jobC.add_required_resources(self.fooR, 1)
+                jobA.add_required_resources({self.fooR: 1})
+                jobC.add_required_resources({self.fooR: 1})
 
                 return jobA, jobC
 

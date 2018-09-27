@@ -45,8 +45,8 @@ class BaseTask(object):
     def add_wait_for(self, task):
         self.__wait_for.append(task)
 
-    def add_required_resources(self, *rargs):
-        self.__required_resources.append(rargs)
+    def add_required_resources(self, resources_dict):
+        self.__required_resources.append(resources_dict)
 
     def get_next_tasks(self):
         return self.__next_tasks
@@ -71,12 +71,7 @@ class BaseTask(object):
         if self.retries > 0:
             jdict['retries'] = self.retries
             jdict['on_finish']['failed'] = ['retry']
-        for _rscs in self.get_required_resources():
-            as_dict = {}
-            while _rscs:
-                as_dict[_rscs[0].name] = _rscs[1]
-                _rscs = _rscs[2:]
-            jdict['required_resources'].append(as_dict)
+        jdict['required_resources'] = self.get_required_resources()
         if self.project_id:
             jdict['project_id'] = self.project_id
         if self.wait_time:
