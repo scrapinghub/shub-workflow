@@ -54,7 +54,7 @@ class GraphManager(WorkFlowManager):
             self._add_task(ntask)
 
     def configure_workflow(self):
-        pass
+        raise NotImplementedError("configure_workflow() method need to be implemented.")
 
     def on_start(self):
         if not self.jobs_graph:
