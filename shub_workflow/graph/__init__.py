@@ -10,7 +10,6 @@ import logging
 
 from collections import defaultdict, OrderedDict as odict
 from copy import copy, deepcopy
-from fractions import Fraction
 
 import yaml
 
@@ -20,7 +19,6 @@ from .utils import get_scheduled_jobs_specs
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 _STARTING_JOB_RE = re.compile("--starting-job(?:=(.+))?")
@@ -115,16 +113,16 @@ class GraphManager(WorkFlowManager):
         Ensure there are enough starting resources in order every job
         can run at some point
         """
-        for job, job_info in self.jobs_graph.items():
-            for required_resources in job_info.get('required_resources', []):
-                for res_name, res_amount in required_resources.items():
-                    old_amount = self._available_resources.get(res_name, 0)
-                    if old_amount < res_amount:
+        for job in self.jobs_graph.keys():
+            for required_resources in self.__tasks[job].get_required_resources():
+                for resource, req_amount in required_resources.items():
+                    old_amount = self._available_resources.get(resource, 0)
+                    if old_amount < req_amount:
                         logger.info("Increasing available resources count for %r"
                                     " from %r to %r.  Old value was not enough"
                                     " for job %r to run.",
-                                    res_name, old_amount, res_amount, job)
-                        self._available_resources[res_name] = res_amount
+                                    resource, old_amount, req_amount, job)
+                        self._available_resources[resource] = req_amount
 
     def get_job(self, job, pop=False):
         if job not in self.jobs_graph:
@@ -138,50 +136,27 @@ class GraphManager(WorkFlowManager):
         self._add_pending_job(job, wait_for=tuple(wait_for))
 
     def _add_pending_job(self, job, wait_for=(), retries=0):
+        basejobconf = self.get_job(job)
         if job in self.__tasks:
             task = self.__tasks[job]
             parallelization = len(task.get_commands())
         else:
+            task = self.__tasks[basejobconf['origin']]
             parallelization = 1
         if parallelization == 1:
-            basejobconf = self.get_job(job)
-            required_resources_sets = basejobconf.get('required_resources', [])
             self.__pending_jobs[job] = {
                 'wait_for': set(wait_for),
                 'retries': retries,
-                # This field is only added for debug logging.
-                'required_resources': required_resources_sets,
-                'wait_time': basejobconf.get('wait_time'),
+                'wait_time': task.wait_time,
             }
         else:
-            # Split parallelized job into N parallel instances.
-            basejobconf = self.get_job(job, pop=True)
-            required_resources_sets = basejobconf.get('required_resources', [])
+            # Split parallelized task into N parallel jobs.
+            self.get_job(job, pop=True)
             for i in range(parallelization):
                 job_unit = "%s_%i" % (job, i)
                 job_unit_conf = deepcopy(basejobconf)
-                job_unit_conf['required_resources'] = []
-                job_unit_conf['orig_job'] = job
+                job_unit_conf['origin'] = job
                 job_unit_conf['index'] = i
-                for required_resources in required_resources_sets:
-                    job_unit_required_resources = {}
-                    for res, res_amount in required_resources.items():
-                        # Split required resource into N parts.  There are two
-                        # ideas behind this:
-                        #
-                        # - if the job in whole requires some resources, each of
-                        #   its N parts should be using 1/N of that resource
-                        #
-                        # - in most common scenario when 1 unit of something is
-                        #   required, allocating 1/N of it means that when we start
-                        #   one unit job, we can start another unit job to allocate
-                        #   2/N, but not a completely different job (as it would
-                        #   consume (1 + 1/N) of the resource.
-                        #
-                        # Use fraction to avoid any floating point quirks.
-                        job_unit_required_resources[res] = Fraction(
-                            res_amount, parallelization)
-                    job_unit_conf['required_resources'].append(job_unit_required_resources)
 
                 for _, nextjobs in job_unit_conf.get('on_finish', {}).items():
                     if i != 0:  # only job 0 will conserve finish targets
@@ -202,8 +177,6 @@ class GraphManager(WorkFlowManager):
                 self.__pending_jobs[job_unit] = {
                     'wait_for': set(wait_for),
                     'retries': retries,
-                    # This field is only added for debug logging.
-                    'required_resources': job_unit_conf.get('required_resources'),
                     'origin': job,
                     'wait_time': task.wait_time,
                 }
@@ -269,7 +242,7 @@ class GraphManager(WorkFlowManager):
             return task.run(self, retries)
 
         jobconf = self.get_job(job)
-        task = self.__tasks.get(jobconf['orig_job'])
+        task = self.__tasks.get(jobconf['origin'])
         if task is not None:
             idx = jobconf['index']
             return task.run(self, retries, index=idx)
@@ -380,24 +353,25 @@ class GraphManager(WorkFlowManager):
 
     def _try_acquire_resources(self, job):
         result = True
-        for resources in self.get_job(job).get('required_resources', []):
-            for res_name, res_amount in resources.items():
-                if self._available_resources[res_name] < res_amount:
+        task_id = job if job in self.__tasks else self.get_job(job)['origin']
+        for required_resources in self.__tasks[task_id].get_required_resources(partial=True):
+            for resource, req_amount in required_resources.items():
+                if self._available_resources[resource] < req_amount:
                     result = False
                     break
             else:
-                for res_name, res_amount in resources.items():
-                    self._available_resources[res_name] -= res_amount
-                    self._acquired_resources[res_name].append((job, res_amount))
+                for resource, req_amount in required_resources.items():
+                    self._available_resources[resource] -= req_amount
+                    self._acquired_resources[resource].append((job, req_amount))
                 return True
         return result
 
     def _release_resources(self, job):
-        for res_name, acquired in self._acquired_resources.items():
+        for res, acquired in self._acquired_resources.items():
             for rjob, res_amount in acquired:
                 if rjob == job:
-                    self._available_resources[res_name] += res_amount
-                    self._acquired_resources[res_name].remove((rjob, res_amount))
+                    self._available_resources[res] += res_amount
+                    self._acquired_resources[res].remove((rjob, res_amount))
 
     def _get_next_jobs(self, job, outcome):
         if self.args.only_starting_jobs:

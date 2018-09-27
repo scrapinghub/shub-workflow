@@ -1,6 +1,7 @@
 import logging
 import shlex
 from collections import namedtuple
+from fractions import Fraction
 
 from jinja2 import Template
 
@@ -8,7 +9,6 @@ from .utils import get_scheduled_jobs_specs
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 Resource = namedtuple('Resource', ['name'])
@@ -51,8 +51,34 @@ class BaseTask(object):
     def get_next_tasks(self):
         return self.__next_tasks
 
-    def get_required_resources(self):
-        return self.__required_resources
+    def get_required_resources(self, partial=False):
+        """
+        If partial is True, return required resources for each splitted job.
+        Otherwise return the resouces required for the full task.
+        """
+        if not partial:
+            return self.__required_resources
+        required_resources = []
+        parallelization = len(self.get_commands())
+        for reqset in self.__required_resources:
+            reqres = {}
+            for resource, req_amount in reqset.items():
+                # Split required resource into N parts.  There are two
+                # ideas behind this:
+                #
+                # - if the job in whole requires some resources, each of
+                #   its N parts should be using 1/N of that resource
+                #
+                # - in most common scenario when 1 unit of something is
+                #   required, allocating 1/N of it means that when we start
+                #   one unit job, we can start another unit job to allocate
+                #   2/N, but not a completely different job (as it would
+                #   consume (1 + 1/N) of the resource.
+                #
+                # Use fraction to avoid any floating point quirks.
+                reqres[resource] = Fraction(req_amount, parallelization)
+            required_resources.append(reqres)
+        return required_resources
 
     def get_wait_for(self):
         return self.__wait_for
@@ -62,7 +88,6 @@ class BaseTask(object):
             'tags': self.tags,
             'units': self.units,
             'on_finish': {},
-            'required_resources': [],
             'wait_for': [t.task_id for t in self.get_wait_for()],
         }
         next_tasks = self.get_next_tasks()
@@ -71,7 +96,6 @@ class BaseTask(object):
         if self.retries > 0:
             jdict['retries'] = self.retries
             jdict['on_finish']['failed'] = ['retry']
-        jdict['required_resources'] = self.get_required_resources()
         if self.project_id:
             jdict['project_id'] = self.project_id
         if self.wait_time:

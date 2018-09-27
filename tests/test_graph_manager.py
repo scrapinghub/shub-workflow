@@ -741,7 +741,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.assert_any_call(['commandA'], tags=None, units=None, project_id=None)
 
         manager.is_finished = lambda x: 'finished'
-        with self.assertRaisesRegexp(
+        with self.assertRaisesRegex(
                 RuntimeError,
                 re.escape(
                     "Job dependency cycle detected:"
