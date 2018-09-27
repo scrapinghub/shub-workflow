@@ -1,5 +1,8 @@
 import logging
+import shlex
 from collections import namedtuple
+
+from jinja2 import Template
 
 from .utils import get_scheduled_jobs_specs
 
@@ -89,15 +92,13 @@ class BaseTask(object):
 
 
 class Task(BaseTask):
-    def __init__(self, task_id, command, init_args=None, parallel_arg=None,
+    def __init__(self, task_id, command, init_args=None,
                  retry_args=None, tags=None, units=None, retries=1,
                  project_id=None, wait_time=None):
         """
         id - String. identifies the task.
-        command - String. script name.
+        command - String. script name or jinja2 template string.
         init_args - List of strings. Arguments and options to add to the command.
-        parallel_args - String. Specify an option/argument template that depends on parallel pipeline.
-                        %d will be replaced by the specific pipeline index.
         retry_args - List of strings. If given and job is retries, use this list of arguments instead the ones
                      specified in init_args.
         tags - List of strings. tags to add to the scheduled job.
@@ -109,18 +110,24 @@ class Task(BaseTask):
         super(Task, self).__init__(task_id, tags, units, retries, project_id, wait_time)
         self.command = command
         self.init_args = init_args or []
-        self.parallel_arg = parallel_arg
         self.retry_args = retry_args or []
+        self.__template = Template(self.command)
 
     def as_jobgraph_dict(self):
         jdict = super(Task, self).as_jobgraph_dict()
         jdict.update({
-            'command': self.command,
+            'command': self.get_commands(),
             'init_args': self.init_args,
             'retry_args': self.retry_args,
-            'parallel_arg': self.parallel_arg,
         })
         return jdict
+
+    def get_commands(self):
+        return list(self.__template.generate())
+
+    def get_command(self, index=None):
+        index = index or 0
+        return shlex.split(self.get_commands()[index])
 
     def get_scheduled_jobs(self, manager=None, level=0):
         """
@@ -135,17 +142,21 @@ class Task(BaseTask):
         assert level == 1, "Invalid level"
         return [j[2] for j in get_scheduled_jobs_specs(manager, job_ids)]
 
-    def run(self, manager, retries=False):
+    def run(self, manager, retries=False, index=None):
+        command = self.get_command(index)
         self.start_callback(manager, retries)
-        jobname = "{}/{}".format(manager.name, self.task_id)
+        if index is None:
+            jobname = f"{manager.name}/{self.task_id}"
+        else:
+            jobname = f"{manager.name}/{self.task_id}_{index}"
         if retries:
             logger.info('Will retry task "%s"', jobname)
         else:
             logger.info('Will start task "%s"', jobname)
         if retries:
-            cmd = [self.command] + self.retry_args
+            cmd = command + self.retry_args
         else:
-            cmd = [self.command] + self.init_args
+            cmd = command + self.init_args
         jobid = manager.schedule_script(cmd, tags=self.tags, units=self.units, project_id=self.project_id)
         if jobid:
             logger.info('Scheduled task "%s" (%s)', jobname, jobid)

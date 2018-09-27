@@ -31,7 +31,6 @@ class GraphManager(WorkFlowManager):
     jobs_graph = {}
     base_failed_outcomes = ('failed', 'killed by oom', 'cancelled', 'cancel_timeout', 'memusage_exceeded',
                             'cancelled (stalled)')
-    parallelization = None
 
     def __init__(self):
         self.__failed_outcomes = list(self.base_failed_outcomes)
@@ -47,7 +46,8 @@ class GraphManager(WorkFlowManager):
             self._add_task(task)
 
     def _add_task(self, task):
-        assert task.task_id not in self.jobs_graph, "Workflow inconsistency detected: task %s referenced twice." % task.task_id
+        assert task.task_id not in self.jobs_graph,\
+            "Workflow inconsistency detected: task %s referenced twice." % task.task_id
         self.jobs_graph[task.task_id] = task.as_jobgraph_dict()
         self.__tasks[task.task_id] = task
         for ntask in task.get_next_tasks():
@@ -138,18 +138,31 @@ class GraphManager(WorkFlowManager):
         self._add_pending_job(job, wait_for=tuple(wait_for))
 
     def _add_pending_job(self, job, wait_for=(), retries=0):
-        basejobconf = self.get_job(job)
-        wait_time = basejobconf.get('wait_time')
-        required_resources_sets = basejobconf.get('required_resources', [])
-        parallel_arg = self.get_job(job).pop('parallel_arg', None)
-        if parallel_arg:
-            # Split "parallelized" job into N parallel instances.
-            del self.jobs_graph[job]
-            for i in range(self.parallelization):
-                parg = parallel_arg.replace('%d', '%d' % i)
+        if job in self.__tasks:
+            task = self.__tasks[job]
+            parallelization = len(task.get_commands())
+        else:
+            parallelization = 1
+        if parallelization == 1:
+            basejobconf = self.get_job(job)
+            required_resources_sets = basejobconf.get('required_resources', [])
+            self.__pending_jobs[job] = {
+                'wait_for': set(wait_for),
+                'retries': retries,
+                # This field is only added for debug logging.
+                'required_resources': required_resources_sets,
+                'wait_time': basejobconf.get('wait_time'),
+            }
+        else:
+            # Split parallelized job into N parallel instances.
+            basejobconf = self.get_job(job, pop=True)
+            required_resources_sets = basejobconf.get('required_resources', [])
+            for i in range(parallelization):
                 job_unit = "%s_%i" % (job, i)
                 job_unit_conf = deepcopy(basejobconf)
                 job_unit_conf['required_resources'] = []
+                job_unit_conf['orig_job'] = job
+                job_unit_conf['index'] = i
                 for required_resources in required_resources_sets:
                     job_unit_required_resources = {}
                     for res, res_amount in required_resources.items():
@@ -167,12 +180,9 @@ class GraphManager(WorkFlowManager):
                         #
                         # Use fraction to avoid any floating point quirks.
                         job_unit_required_resources[res] = Fraction(
-                            res_amount, self.parallelization)
+                            res_amount, parallelization)
                     job_unit_conf['required_resources'].append(job_unit_required_resources)
 
-                job_unit_conf.setdefault('init_args', []).append(parg)
-                if 'retry_args' in job_unit_conf:
-                    job_unit_conf['retry_args'].append(parg)
                 for _, nextjobs in job_unit_conf.get('on_finish', {}).items():
                     if i != 0:  # only job 0 will conserve finish targets
                         for nextjob in copy(nextjobs):
@@ -182,7 +192,7 @@ class GraphManager(WorkFlowManager):
                                     if nextjob in self.__pending_jobs:
                                         self.__pending_jobs[nextjob]['wait_for'].add(job_unit)
                                 else:
-                                    for i in range(self.parallelization):
+                                    for i in range(parallelization):
                                         nextjobp = "%s_%i" % (job, i)
                                         self.get_job(nextjobp).get('wait_for', []).append(job_unit)
                                         if nextjobp in self.__pending_jobs:
@@ -195,26 +205,18 @@ class GraphManager(WorkFlowManager):
                     # This field is only added for debug logging.
                     'required_resources': job_unit_conf.get('required_resources'),
                     'origin': job,
-                    'wait_time': wait_time,
+                    'wait_time': task.wait_time,
                 }
             for other, oconf in self.jobs_graph.items():
                 if job in oconf.get('wait_for', []):
                     oconf['wait_for'].remove(job)
                     if other in self.__pending_jobs:
                         self.__pending_jobs[other]['wait_for'].discard(job)
-                    for i in range(self.parallelization):
+                    for i in range(parallelization):
                         job_unit = "%s_%i" % (job, i)
                         oconf['wait_for'].append(job_unit)
                         if other in self.__pending_jobs:
                             self.__pending_jobs[other]['wait_for'].add(job_unit)
-        else:
-            self.__pending_jobs[job] = {
-                'wait_for': set(wait_for),
-                'retries': retries,
-                # This field is only added for debug logging.
-                'required_resources': required_resources_sets,
-                'wait_time': wait_time,
-            }
 
     def add_argparser_options(self):
         super(GraphManager, self).add_argparser_options()
@@ -267,21 +269,10 @@ class GraphManager(WorkFlowManager):
             return task.run(self, retries)
 
         jobconf = self.get_job(job)
-        hidden_args = jobconf.get('hidden_args')
-        tags = jobconf.get('tags')
-        units = jobconf.get('units')
-        target_project_id = jobconf.get('project_id')
-        version = "{}/{}".format(self.name, job)
-        if retries:
-            logger.info('Will retry job "%s/%s"', self.name, job)
-        else:
-            logger.info('Will start job "%s/%s"', self.name, job)
-        cmd = self.get_command_line(job, retries)
-
-        jobid = self.schedule_script(cmd, tags=tags, units=units, project_id=target_project_id)
-        if jobid:
-            logger.info('Scheduled job "%s/%s" (%s)', self.name, job, jobid)
-            return jobid
+        task = self.__tasks.get(jobconf['orig_job'])
+        if task is not None:
+            idx = jobconf['index']
+            return task.run(self, retries, index=idx)
 
     def _must_wait_time(self, job):
         conf = self.__pending_jobs[job]
