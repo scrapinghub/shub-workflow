@@ -136,12 +136,12 @@ class GraphManager(WorkFlowManager):
         self._add_pending_job(job, wait_for=tuple(wait_for))
 
     def _add_pending_job(self, job, wait_for=(), retries=0):
-        basejobconf = self.get_job(job)
         if job in self.__tasks:
             task = self.__tasks[job]
             parallelization = len(task.get_commands())
         else:
-            task = self.__tasks[basejobconf['origin']]
+            task_id = self.get_job(job).get('origin', job)
+            task = self.__tasks[task_id]
             parallelization = 1
         if parallelization == 1:
             self.__pending_jobs[job] = {
@@ -151,7 +151,7 @@ class GraphManager(WorkFlowManager):
             }
         else:
             # Split parallelized task into N parallel jobs.
-            self.get_job(job, pop=True)
+            basejobconf = self.get_job(job, pop=True)
             for i in range(parallelization):
                 job_unit = "%s_%i" % (job, i)
                 job_unit_conf = deepcopy(basejobconf)
@@ -353,7 +353,7 @@ class GraphManager(WorkFlowManager):
 
     def _try_acquire_resources(self, job):
         result = True
-        task_id = job if job in self.__tasks else self.get_job(job)['origin']
+        task_id = self.get_job(job).get('origin', job)
         for required_resources in self.__tasks[task_id].get_required_resources(partial=True):
             for resource, req_amount in required_resources.items():
                 if self._available_resources[resource] < req_amount:
