@@ -59,7 +59,7 @@ class BaseTask(object):
         if not partial:
             return self.__required_resources
         required_resources = []
-        parallelization = len(self.get_commands())
+        parallelization = self.get_parallel_jobs()
         for reqset in self.__required_resources:
             reqres = {}
             for resource, req_amount in reqset.items():
@@ -109,6 +109,12 @@ class BaseTask(object):
     def run(self, manager, retries=False):
         raise NotImplementedError()
 
+    def get_parallel_jobs(self):
+        """
+        Returns total number of parallel jobs that this task will consist on.
+        """
+        raise NotImplementedError()
+
 
 class Task(BaseTask):
     def __init__(self, task_id, command, init_args=None,
@@ -147,6 +153,12 @@ class Task(BaseTask):
     def get_command(self, index=None):
         index = index or 0
         return shlex.split(self.get_commands()[index])
+
+    def get_parallel_jobs(self):
+        """
+        Returns total number of parallel jobs that this task will consist on.
+        """
+        return len(self.get_commands())
 
     def get_scheduled_jobs(self, manager=None, level=0):
         """
@@ -201,6 +213,9 @@ class SpiderTask(BaseTask):
         })
         return jdict
 
+    def get_parallel_jobs(self):
+        return 1
+
     def run(self, manager, retries=False):
         self.start_callback(manager, retries)
         jobname = "{}/{}".format(manager.name, self.task_id)
@@ -208,7 +223,8 @@ class SpiderTask(BaseTask):
             logger.info('Will retry spider "%s"', jobname)
         else:
             logger.info('Will start spider "%s"', jobname)
-        jobid = manager.schedule_spider(self.spider, self.tags, self.units, **self.spider_args)
+        jobid = manager.schedule_spider(self.spider, tags=self.tags, units=self.units, project_id=self.project_id,
+                                        **self.spider_args)
         if jobid:
             logger.info('Scheduled spider "%s" (%s)', jobname, jobid)
             self.append_jobid(jobid)

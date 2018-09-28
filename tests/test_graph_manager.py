@@ -5,7 +5,7 @@ from unittest import TestCase
 from mock import patch, Mock, call
 
 from shub_workflow.graph import GraphManager
-from shub_workflow.graph.task import Task, Resource
+from shub_workflow.graph.task import Task, SpiderTask, Resource
 
 from .utils.contexts import script_args
 
@@ -1247,3 +1247,35 @@ class ManagerTest(BaseTestCase):
 
         # fourth loop: joB finishes, all finishes
         self.assertFalse(manager.workflow_loop())
+
+    def test_spider_task(self):
+
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = 'test'
+
+            def configure_workflow(self):
+                # define jobs
+                jobS = SpiderTask(task_id='jobS', spider='myspiderS', tags=['tag1'], units=1, argA='valA', argB='valB')
+                jobA = Task(task_id='jobA', command='commandA --optionA=A')
+                jobT = SpiderTask(task_id='jobT', spider='myspiderT', argC='valC', argD='valD')
+
+                # connect them
+                jobS.add_next_task(jobA)
+                jobA.add_next_task(jobT)
+
+                # return starting jobs
+                return jobS,
+
+        with script_args(['--starting-job=jobS']):
+            manager = _TestManager()
+        manager.schedule_spider = Mock()
+        manager.schedule_spider.side_effect = ['999/1/1']
+        manager.on_start()
+
+        # first loop, run jobS
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_spider.call_count, 1)
+        manager.schedule_spider.assert_any_call('myspiderS', tags=['tag1'], units=1,
+                                                project_id=None, argA='valA', argB='valB')

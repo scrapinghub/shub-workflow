@@ -138,7 +138,7 @@ class GraphManager(WorkFlowManager):
     def _add_pending_job(self, job, wait_for=(), retries=0):
         if job in self.__tasks:
             task = self.__tasks[job]
-            parallelization = len(task.get_commands())
+            parallelization = task.get_parallel_jobs()
         else:
             task_id = self.get_job(job).get('origin', job)
             task = self.__tasks[task_id]
