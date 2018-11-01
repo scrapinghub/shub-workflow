@@ -43,8 +43,7 @@ class WorkFlowManager(object):
         self.argparser.add_argument('--loop-mode', help='If provided, manager will run in loop mode, with a cycle\
                                     each given number of seconds.', type=int, metavar='SECONDS')
         self.argparser.add_argument('--max-running-jobs', type=int,
-                                    help='If given, don\'t allow more than the given jobs running at once. Useful'
-                                         'for debug.')
+                                    help='If given, don\'t allow more than the given jobs running at once.')
 
     def parse_args(self):
         self.argparser = ArgumentParser()
