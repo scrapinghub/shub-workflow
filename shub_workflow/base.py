@@ -53,8 +53,6 @@ class WorkFlowManager(object):
         args = self.argparser.parse_args()
         self.project_id = args.project_id or self.project_id
         self.name = args.name or self.name
-        if not self.name:
-            self.argparser.error('Manager name not set.')
         return args
 
     def schedule_script(self, cmd, tags=None, project_id=None, **kwargs):

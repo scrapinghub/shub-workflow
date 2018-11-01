@@ -210,6 +210,8 @@ class GraphManager(WorkFlowManager):
         self.jobs_graph = yaml.load(args.jobs_graph) or deepcopy(self.jobs_graph)
 
         self.__failed_outcomes.extend(args.failed_outcomes)
+        if not self.name:
+            self.argparser.error('Manager name not set.')
         return args
 
     def workflow_loop(self):
