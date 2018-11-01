@@ -32,12 +32,19 @@ class WorkFlowManager(object):
         if not self.project_id:
             self.argparser.error('Project id not provided.')
 
+    @property
+    def max_running_jobs(self):
+        return self.args.max_running_jobs or float('inf')
+
     def add_argparser_options(self):
         self.argparser.add_argument('--project-id', help='Overrides target project id.', type=int)
         self.argparser.add_argument('--name', help='Manager name.')
         self.argparser.add_argument('--apikey', help='Use specified apikey instead of autodetect.')
         self.argparser.add_argument('--loop-mode', help='If provided, manager will run in loop mode, with a cycle\
                                     each given number of seconds.', type=int, metavar='SECONDS')
+        self.argparser.add_argument('--max-running-jobs', type=int,
+                                    help='If given, don\'t allow more than the given jobs running at once. Useful'
+                                         'for debug.')
 
     def parse_args(self):
         self.argparser = ArgumentParser()

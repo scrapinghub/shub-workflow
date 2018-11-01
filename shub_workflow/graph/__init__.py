@@ -198,9 +198,6 @@ class GraphManager(WorkFlowManager):
                                     help='Set starting jobs. Can be given multiple times.')
         self.argparser.add_argument('--failed-outcomes', action='append', default=[],
                                     help='Add failed outcomes to the default ones. Can be given multiple times.')
-        self.argparser.add_argument('--max-running-jobs', type=int,
-                                    help='If given, don\'t allow more than the given jobs running at once. Useful'
-                                         'for debug.')
         self.argparser.add_argument('--only-starting-jobs', action='store_true',
                                     help='If given, only run the starting jobs (don\'t follow on finish next jobs)')
         self.argparser.add_argument('--comment', help='Can be used for differentiate command line and avoid scheduling '
@@ -270,9 +267,8 @@ class GraphManager(WorkFlowManager):
         """
 
         # Normal mode: start jobs without dependencies.
-        max_running_jobs = self.args.max_running_jobs or float('inf')
         for job in sorted(self.__pending_jobs.keys()):
-            if len(self.__running_jobs) >= max_running_jobs:
+            if len(self.__running_jobs) >= self.max_running_jobs:
                 break
             conf = self.__pending_jobs[job]
 
@@ -295,7 +291,7 @@ class GraphManager(WorkFlowManager):
         # only has "unseen" dependencies to try to break the "stalemate."
         origin_job = None
         for job in sorted(self.__pending_jobs.keys()):
-            if len(self.__running_jobs) >= max_running_jobs:
+            if len(self.__running_jobs) >= self.max_running_jobs:
                 break
             conf = self.__pending_jobs[job]
             job_can_run = (
