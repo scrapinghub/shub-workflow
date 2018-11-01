@@ -67,7 +67,7 @@ class GraphManager(WorkFlowManager):
 
     def _get_starting_jobs_from_resumed_job(self):
         starting_jobs = []
-        job = self.project.jobs.get(self.args.resume_from_jobid)
+        job = self.get_project().jobs.get(self.args.resume_from_jobid)
         next_option_is_task = False
         for option in job.metadata.get('job_cmd'):
             if next_option_is_task:

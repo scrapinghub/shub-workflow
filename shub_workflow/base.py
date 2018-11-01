@@ -62,7 +62,7 @@ class WorkFlowManager(object):
         Schedules an external script
         """
         logger.info('Starting: {}'.format(cmd))
-        project = self.client.get_project(project_id or self.project_id)
+        project = self.get_project(project_id)
         return schedule_script_in_dash(project, [str(x) for x in cmd], tags=tags, **kwargs).key
 
     @dash_retry_decorator
@@ -70,7 +70,7 @@ class WorkFlowManager(object):
         schedule_kwargs = dict(spider=spider, add_tag=tags, units=units, **spiderargs)
         logger.info("Scheduling a spider:\n%s", schedule_kwargs)
         try:
-            project = self.client.get_project(project_id or self.project_id)
+            project = self.get_project(project_id)
             return project.jobs.run(**schedule_kwargs).key
         except APIError as e:
             if 'already scheduled' in e.message:
@@ -78,12 +78,15 @@ class WorkFlowManager(object):
             else:
                 raise e
 
+    def get_project(self, project_id=None):
+        return self.client.get_project(project_id or self.project_id)
+
     @dash_retry_decorator
     def is_running(self, jobkey, project_id=None):
         """
         Checks whether a job is running (or pending)
         """
-        project = self.client.get_project(project_id or self.project_id)
+        project = self.get_project(project_id)
         job = project.jobs.get(jobkey)
         if job.metadata.get('state') in ('running', 'pending'):
             return True
@@ -94,7 +97,7 @@ class WorkFlowManager(object):
         """
         Checks whether a job is running. if so, return close_reason. Otherwise return None.
         """
-        project = self.client.get_project(project_id or self.project_id)
+        project = self.get_project(project_id)
         job = project.jobs.get(jobkey)
         if job.metadata.get('state') == 'finished':
             return job.metadata.get('close_reason')
@@ -127,7 +130,7 @@ class WorkFlowManager(object):
     @dash_retry_decorator
     def get_job_metadata(self, jobid=None, project_id=None):
         jobid = jobid or os.getenv('SHUB_JOBKEY')
-        project = self.client.get_project(project_id or self.project_id)
+        project = self.get_project(project_id)
         job = project.jobs.get(jobid)
         return dict(job.metadata.list())
 
