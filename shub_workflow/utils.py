@@ -90,7 +90,7 @@ def schedule_script_in_dash(shubproject, cmd, tags=None, units=None, meta=None):
         schedule_kwargs = dict(
             spider=scriptname, cmd_args=cmd_args, add_tag=tags, units=units, meta=None)
         logger.info("Scheduling script:\n%s", schedule_kwargs)
-        return shubproject.schedule(**schedule_kwargs)
+        return shubproject.jobs.run(**schedule_kwargs)
     except APIError as e:
         raise RuntimeError(
             "Error scheduling script %s in %s: %s",

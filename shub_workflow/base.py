@@ -62,7 +62,7 @@ class WorkFlowManager(object):
         """
         logger.info('Starting: {}'.format(cmd))
         project = self.client.get_project(project_id or self.project_id)
-        return schedule_script_in_dash(project, [str(x) for x in cmd], tags=tags, **kwargs)
+        return schedule_script_in_dash(project, [str(x) for x in cmd], tags=tags, **kwargs).key
 
     @dash_retry_decorator
     def schedule_spider(self, spider, tags=None, units=None, project_id=None, **spiderargs):
@@ -70,7 +70,7 @@ class WorkFlowManager(object):
         logger.info("Scheduling a spider:\n%s", schedule_kwargs)
         try:
             project = self.client.get_project(project_id or self.project_id)
-            return project.schedule(**schedule_kwargs)
+            return project.jobs.run(**schedule_kwargs).key
         except APIError as e:
             if 'already scheduled' in e.message:
                 logger.error(e.message)
