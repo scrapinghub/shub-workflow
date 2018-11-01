@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 class WorkFlowManager(object):
     project_id = None
     name = None
-    period = 60
 
     def __init__(self):
         self.workflow_loop_enabled = False
@@ -37,8 +36,8 @@ class WorkFlowManager(object):
         self.argparser.add_argument('--project-id', help='Overrides target project id.', type=int)
         self.argparser.add_argument('--name', help='Manager name.')
         self.argparser.add_argument('--apikey', help='Use specified apikey instead of autodetect.')
-        self.argparser.add_argument('--period', help='Scheduling loop period in seconds. Default: %(default)s.',
-                                    type=int, default=self.period)
+        self.argparser.add_argument('--loop-mode', help='If provided, manager will run in loop mode, with a cycle\
+                                    each given number of seconds.', type=int, metavar='SECONDS')
 
     def parse_args(self):
         self.argparser = ArgumentParser()
@@ -143,8 +142,8 @@ class WorkFlowManager(object):
     def _run_loops(self):
         while self.workflow_loop_enabled:
             try:
-                if self.workflow_loop():
-                    time.sleep(self.args.period)
+                if self.workflow_loop() and self.args.loop_mode:
+                    time.sleep(self.args.loop_mode)
                 else:
                     self.__close()
                     logger.info("No more tasks")
