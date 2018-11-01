@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 class WorkFlowManager(object):
     project_id = None
     name = None
+    default_max_jobs = float('inf')
 
     def __init__(self):
         self.workflow_loop_enabled = False
@@ -34,7 +35,7 @@ class WorkFlowManager(object):
 
     @property
     def max_running_jobs(self):
-        return self.args.max_running_jobs or float('inf')
+        return self.args.max_running_jobs
 
     def add_argparser_options(self):
         self.argparser.add_argument('--project-id', help='Overrides target project id.', type=int)
@@ -42,8 +43,9 @@ class WorkFlowManager(object):
         self.argparser.add_argument('--apikey', help='Use specified apikey instead of autodetect.')
         self.argparser.add_argument('--loop-mode', help='If provided, manager will run in loop mode, with a cycle\
                                     each given number of seconds.', type=int, metavar='SECONDS')
-        self.argparser.add_argument('--max-running-jobs', type=int,
-                                    help='If given, don\'t allow more than the given jobs running at once.')
+        self.argparser.add_argument('--max-running-jobs', type=int, default=self.default_max_jobs,
+                                    help='If given, don\'t allow more than the given jobs running at once.\
+                                    Default: %(default)s')
 
     def parse_args(self):
         self.argparser = ArgumentParser()
