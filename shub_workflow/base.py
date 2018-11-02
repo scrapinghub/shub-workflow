@@ -138,7 +138,7 @@ class WorkFlowManager(object):
         return dict(job.metadata.list())
 
     def on_start(self):
-        pass
+        self.workflow_loop_enabled = True
 
     def workflow_loop(self):
         pass
