@@ -33,8 +33,8 @@ class CrawlManager(WorkFlowManager):
     def schedule_spider(self, spider_args_override=None, job_settings_override=None):
         spider_args = self.get_spider_args(spider_args_override)
         job_settings = self.get_job_settings(job_settings_override)
-        spider_args['job_settings'] = job_settings()
-        return super().schedule_spider(self.args.spider, tags=self.args.tags, units=self.args.units, **spider_args)
+        spider_args['job_settings'] = job_settings
+        return super().schedule_spider(self.args.spider, tags=self.args.tag, units=self.args.units, **spider_args)
 
     def workflow_loop(self):
         self.schedule_spider()
