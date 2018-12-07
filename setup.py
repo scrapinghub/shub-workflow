@@ -16,6 +16,8 @@ setup(
         'retrying>=1.3.3',
         'scrapinghub>=2.0.0',
         'jinja2>=2.7.3',
+        'sqlitedict==1.6.0',
+        's3fs==0.2.0',
     ),
     scripts = [],
     classifiers = [

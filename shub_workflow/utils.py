@@ -14,7 +14,7 @@ logger.setLevel(logging.INFO)
 
 def resolve_project_id(project_id=None):
     """
-    Gets hs auth and project id, from following sources in following order of precedence:
+    Gets project id from following sources in following order of precedence:
     - default parameter values
     - environment variables
     - sh_scrapy.hsref (kumo)
@@ -96,3 +96,11 @@ def schedule_script_in_dash(shubproject, cmd, tags=None, units=None, meta=None):
             "Error scheduling script %s in %s: %s",
             scriptname, shubproject.id, e.message,
         )
+
+
+def kumo_settings():
+    if os.environ.get('SHUB_SETTINGS'):
+        from sh_scrapy.env import decode_uri
+        return decode_uri(os.environ.get('SHUB_SETTINGS')).get('project_settings', {})
+    logging.info("Couldn't find Dash project settings, probably not running in Dash")
+    return {}
