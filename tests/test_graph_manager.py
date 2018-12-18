@@ -2,7 +2,7 @@ import os
 import re
 
 from unittest import TestCase
-from mock import patch, Mock, call
+from unittest.mock import patch, Mock, call
 
 from shub_workflow.graph import GraphManager
 from shub_workflow.graph.task import Task, SpiderTask, Resource

@@ -28,10 +28,14 @@ class WorkFlowManager(object):
     def __init__(self):
         self.workflow_loop_enabled = False
         self.args = self.parse_args()
-        self.client = ScrapinghubClient(self.args.apikey)
+        self.client = ScrapinghubClient(self.apikey)
         self.project_id = resolve_project_id(self.args.project_id or self.project_id)
         if not self.project_id:
             self.argparser.error('Project id not provided.')
+
+    @property
+    def apikey(self):
+        return self.args.apikey
 
     @property
     def max_running_jobs(self):
