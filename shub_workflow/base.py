@@ -175,7 +175,7 @@ class WorkFlowManager(object):
             if update:
                 metadata = self.get_job_metadata(jobid, project_id)
                 if metadata:
-                    metadata.update({'tags', job_tags})
+                    metadata.update({'tags': job_tags})
 
     def get_own_flowid_from_tags(self):
         for tag in self.get_job_tags():
