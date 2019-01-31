@@ -78,6 +78,11 @@ class TestManager3(GraphManager):
         # return root jobs
         return (jobA,)
 
+    def get_job_metadata(self, jobid=None, project_id=None):
+        if jobid == None:
+            return {'tags': ['FLOW_ID=mytagsflowid']}
+        return super().get_job_metadata(jobid, project_id)
+
 
 class BaseTestCase(TestCase):
 
@@ -307,6 +312,40 @@ class ManagerTest(BaseTestCase):
                                                     tags=['tag1', 'tag2'], units=None, project_id=None)
         self.assertEqual(set(manager._make_tags(['tag1', 'tag2'])), set(['tag1', 'tag2', 'tag3', 'tag4',
                                                                          f'FLOW_ID={manager.flow_id}']))
+
+    def test_flow_id_from_command_line(self):
+        with script_args(['--starting-job=jobA', '--flow-id=myflowid']):
+            manager = TestManager3()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/1/2', '999/1/3', '999/1/4']
+        manager.on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 4)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandA', f'--parg={i}', 'argA', '--optionA'],
+                                                    tags=['tag1', 'tag2'], units=None, project_id=None)
+        self.assertEqual(set(manager._make_tags(['tag1', 'tag2'])), set(['tag1', 'tag2', f'FLOW_ID=myflowid']))
+
+    def test_flow_id_from_job_tags(self):
+        with script_args(['--starting-job=jobA']):
+            manager = TestManager3()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/1/2', '999/1/3', '999/1/4']
+        manager.on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 4)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandA', f'--parg={i}', 'argA', '--optionA'],
+                                                    tags=['tag1', 'tag2'], units=None, project_id=None)
+        self.assertEqual(set(manager._make_tags(['tag1', 'tag2'])), set(['tag1', 'tag2', f'FLOW_ID=mytagsflowid']))
 
     def test_skip_job(self):
         with script_args(['--starting-job=jobA', '--skip-job=jobC']):

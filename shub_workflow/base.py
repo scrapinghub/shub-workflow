@@ -33,7 +33,7 @@ class WorkFlowManager(object):
         self.project_id = resolve_project_id(self.args.project_id or self.project_id)
         if not self.project_id:
             self.argparser.error('Project id not provided.')
-        self._flow_id = self.args.flow_id or str(uuid4())
+        self._flow_id = self.args.flow_id or self.get_own_flowid_from_tags() or str(uuid4())
 
     @property
     def flow_id(self):
@@ -57,7 +57,7 @@ class WorkFlowManager(object):
                                     help='If given, don\'t allow more than the given jobs running at once.\
                                     Default: %(default)s')
         self.argparser.add_argument('--tag', help='Add given tag to the scheduled jobs. Can be given multiple times.',
-                                    action='append')
+                                    action='append', default=[])
         self.argparser.add_argument('--flow-id', help='If given, use the given flow id. Otherwise autogenerate.')
 
     def parse_args(self):
@@ -151,9 +151,21 @@ class WorkFlowManager(object):
     @dash_retry_decorator
     def get_job_metadata(self, jobid=None, project_id=None):
         jobid = jobid or os.getenv('SHUB_JOBKEY')
-        project = self.get_project(project_id)
-        job = project.jobs.get(jobid)
-        return dict(job.metadata.list())
+        if jobid:
+            project = self.get_project(project_id)
+            job = project.jobs.get(jobid)
+            return dict(job.metadata.list())
+        else:
+            logger.warning('SHUB_JOBKEY not set: not running on ScrapyCloud.')
+            return dict()
+
+    def get_own_tags(self):
+        return self.get_job_metadata().get('tags', [])
+
+    def get_own_flowid_from_tags(self):
+        for tag in self.get_own_tags():
+            if tag.startswith('FLOW_ID='):
+                return tag.replace('FLOW_ID=', '')
 
     def on_start(self):
         self.workflow_loop_enabled = True
