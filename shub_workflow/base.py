@@ -4,6 +4,7 @@ Implements common methods for any workflow manager
 import os
 import time
 import logging
+from uuid import uuid4
 
 from argparse import ArgumentParser
 
@@ -32,6 +33,11 @@ class WorkFlowManager(object):
         self.project_id = resolve_project_id(self.args.project_id or self.project_id)
         if not self.project_id:
             self.argparser.error('Project id not provided.')
+        self._flow_id = self.args.flow_id or str(uuid4())
+
+    @property
+    def flow_id(self):
+        return self._flow_id
 
     @property
     def apikey(self):
@@ -52,6 +58,7 @@ class WorkFlowManager(object):
                                     Default: %(default)s')
         self.argparser.add_argument('--tag', help='Add given tag to the scheduled jobs. Can be given multiple times.',
                                     action='append')
+        self.argparser.add_argument('--flow-id', help='If given, use the given flow id. Otherwise autogenerate.')
 
     def parse_args(self):
         self.argparser = ArgumentParser()
@@ -64,6 +71,7 @@ class WorkFlowManager(object):
     def _make_tags(self, tags):
         tags = tags or []
         tags.extend(self.args.tag)
+        tags.append(f'FLOW_ID={self.flow_id}')
         return list(set(tags)) or None
 
     def schedule_script(self, cmd, tags=None, project_id=None, **kwargs):

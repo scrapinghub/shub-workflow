@@ -305,7 +305,8 @@ class ManagerTest(BaseTestCase):
         for i in range(4):
             manager.schedule_script.assert_any_call(['commandA', f'--parg={i}', 'argA', '--optionA'],
                                                     tags=['tag1', 'tag2'], units=None, project_id=None)
-        self.assertEqual(set(manager._make_tags(['tag1', 'tag2'])), set(['tag1', 'tag2', 'tag3', 'tag4']))
+        self.assertEqual(set(manager._make_tags(['tag1', 'tag2'])), set(['tag1', 'tag2', 'tag3', 'tag4',
+                                                                         f'FLOW_ID={manager.flow_id}']))
 
     def test_skip_job(self):
         with script_args(['--starting-job=jobA', '--skip-job=jobC']):
