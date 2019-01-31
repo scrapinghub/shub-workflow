@@ -14,10 +14,11 @@ setup(
     install_requires = (
         'pyyaml==3.12',
         'retrying>=1.3.3',
-        'scrapinghub>=2.0.0',
+        'scrapinghub>=2.0.3',
         'jinja2>=2.7.3',
         'sqlitedict==1.6.0',
         's3fs==0.2.0',
+        'msgpack-python',
     ),
     scripts = [],
     classifiers = [
