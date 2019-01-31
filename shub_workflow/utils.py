@@ -2,8 +2,6 @@ import os
 import logging
 import json
 import subprocess
-from traceback import format_exc
-
 from retrying import retry
 
 from scrapinghub import APIError
@@ -57,7 +55,7 @@ ONE_MIN_IN_S = 60
 
 
 def just_log_exception(exception):
-    logger.error(format_exc())
+    logger.error(str(exception))
     for etype in (KeyboardInterrupt, SystemExit, ImportError):
         if isinstance(exception, etype):
             return False
@@ -94,7 +92,7 @@ def schedule_script_in_dash(shubproject, cmd, tags=None, units=None, meta=None):
     except APIError as e:
         raise RuntimeError(
             "Error scheduling script %s in %s: %s",
-            scriptname, shubproject.id, e.message,
+            scriptname, shubproject.id, str(e),
         )
 
 

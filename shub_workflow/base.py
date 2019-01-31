@@ -8,7 +8,7 @@ import logging
 from argparse import ArgumentParser
 
 from scrapinghub import ScrapinghubClient
-from scrapinghub import APIError
+from scrapinghub import DuplicateJobError
 
 from .utils import (
     resolve_project_id,
@@ -79,11 +79,10 @@ class WorkFlowManager(object):
             job = project.jobs.run(**schedule_kwargs)
             logger.info(f"Scheduled spider job {job.key}")
             return job.key
-        except APIError as e:
-            if 'already scheduled' in e.message:
-                logger.error(e.message)
-            else:
-                raise e
+        except DuplicateJobError as e:
+            logger.error(str(e))
+        except:
+            raise
 
     def get_project(self, project_id=None):
         return self.client.get_project(project_id or self.project_id)

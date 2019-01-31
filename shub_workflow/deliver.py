@@ -310,7 +310,7 @@ class DeliverScript(object):
                 first_keyprefix = first_keyprefix or keyprefix
             except KeyError as e:
                 if first_keyprefix is None:
-                    _LOG.info("Skipped job: %s. %s", spider_job.key, e.message)
+                    _LOG.info("Skipped job: %s. %s", spider_job.key, str(e))
                     return
                 keyprefix = first_keyprefix
             self.output_files[keyprefix].write(item)
