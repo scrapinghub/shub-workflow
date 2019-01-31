@@ -50,6 +50,8 @@ class WorkFlowManager(object):
         self.argparser.add_argument('--max-running-jobs', type=int, default=self.default_max_jobs,
                                     help='If given, don\'t allow more than the given jobs running at once.\
                                     Default: %(default)s')
+        self.argparser.add_argument('--tag', help='Add given tag to the scheduled jobs. Can be given multiple times.',
+                                    action='append')
 
     def parse_args(self):
         self.argparser = ArgumentParser()
@@ -59,20 +61,25 @@ class WorkFlowManager(object):
         self.name = args.name or self.name
         return args
 
+    def _make_tags(self, tags):
+        tags = tags or []
+        tags.extend(self.args.tag)
+        return list(set(tags)) or None
+
     def schedule_script(self, cmd, tags=None, project_id=None, **kwargs):
         """
         Schedules an external script
         """
         logger.info('Starting: {}'.format(cmd))
         project = self.get_project(project_id)
-        job = schedule_script_in_dash(project, [str(x) for x in cmd], tags=tags, **kwargs)
+        job = schedule_script_in_dash(project, [str(x) for x in cmd], tags=self._make_tags(tags), **kwargs)
         logger.info(f"Scheduled script job {job.key}")
         return job.key
 
 
     @dash_retry_decorator
     def schedule_spider(self, spider, tags=None, units=None, project_id=None, **spiderargs):
-        schedule_kwargs = dict(spider=spider, add_tag=tags, units=units, **spiderargs)
+        schedule_kwargs = dict(spider=spider, add_tag=self._make_tags(tags), units=units, **spiderargs)
         logger.info("Scheduling a spider:\n%s", schedule_kwargs)
         try:
             project = self.get_project(project_id)

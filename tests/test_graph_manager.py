@@ -290,6 +290,23 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.assert_any_call(['commandC', 'argC'], tags=None, units=None, project_id=None)
         manager.schedule_script.assert_any_call(['commandD'], tags=None, units=None, project_id=None)
 
+    def test_tags(self):
+        with script_args(['--starting-job=jobA', '--tag=tag3', '--tag=tag4']):
+            manager = TestManager3()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/1/2', '999/1/3', '999/1/4']
+        manager.on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 4)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandA', f'--parg={i}', 'argA', '--optionA'],
+                                                    tags=['tag1', 'tag2'], units=None, project_id=None)
+        self.assertEqual(set(manager._make_tags(['tag1', 'tag2'])), set(['tag1', 'tag2', 'tag3', 'tag4']))
+
     def test_skip_job(self):
         with script_args(['--starting-job=jobA', '--skip-job=jobC']):
             manager = TestManager3()
