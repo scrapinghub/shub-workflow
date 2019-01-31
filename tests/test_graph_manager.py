@@ -78,10 +78,10 @@ class TestManager3(GraphManager):
         # return root jobs
         return (jobA,)
 
-    def get_job_metadata(self, jobid=None, project_id=None):
+    def get_job_tags(self, jobid=None, project_id=None):
         if jobid == None:
-            return {'tags': ['FLOW_ID=mytagsflowid']}
-        return super().get_job_metadata(jobid, project_id)
+            return ['FLOW_ID=mytagsflowid']
+        return super().get_job_tags(jobid, project_id)
 
 
 class BaseTestCase(TestCase):

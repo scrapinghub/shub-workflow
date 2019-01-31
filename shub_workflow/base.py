@@ -34,6 +34,7 @@ class WorkFlowManager(object):
         if not self.project_id:
             self.argparser.error('Project id not provided.')
         self._flow_id = self.args.flow_id or self.get_own_flowid_from_tags() or str(uuid4())
+        self.add_job_tags(tags=[f'FLOW_ID={self.flow_id}'])
 
     @property
     def flow_id(self):
@@ -83,7 +84,6 @@ class WorkFlowManager(object):
         job = schedule_script_in_dash(project, [str(x) for x in cmd], tags=self._make_tags(tags), **kwargs)
         logger.info(f"Scheduled script job {job.key}")
         return job.key
-
 
     @dash_retry_decorator
     def schedule_spider(self, spider, tags=None, units=None, project_id=None, **spiderargs):
@@ -154,16 +154,31 @@ class WorkFlowManager(object):
         if jobid:
             project = self.get_project(project_id)
             job = project.jobs.get(jobid)
-            return dict(job.metadata.list())
+            return job.metadata
         else:
             logger.warning('SHUB_JOBKEY not set: not running on ScrapyCloud.')
-            return dict()
 
-    def get_own_tags(self):
-        return self.get_job_metadata().get('tags', [])
+    def get_job_tags(self, jobid=None, project_id=None):
+        metadata = self.get_job_metadata(jobid, project_id)
+        if metadata:
+            return dict(metadata.list()).get('tags', [])
+        return []
+
+    def add_job_tags(self, jobid=None, project_id=None, tags=None):
+        if tags:
+            update = False
+            job_tags = self.get_job_tags(jobid, project_id)
+            for tag in tags:
+                if tag not in job_tags:
+                    job_tags.append(tag)
+                    update = True
+            if update:
+                metadata = self.get_job_metadata(jobid, project_id)
+                if metadata:
+                    metadata.update({'tags', job_tags})
 
     def get_own_flowid_from_tags(self):
-        for tag in self.get_own_tags():
+        for tag in self.get_job_tags():
             if tag.startswith('FLOW_ID='):
                 return tag.replace('FLOW_ID=', '')
 
