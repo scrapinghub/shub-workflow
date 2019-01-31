@@ -136,6 +136,8 @@ class GraphManager(WorkFlowManager):
         self._add_pending_job(job, wait_for=tuple(wait_for))
 
     def _add_pending_job(self, job, wait_for=(), retries=0):
+        if job in self.args.skip_job:
+            return
         if job in self.__tasks:
             task = self.__tasks[job]
             parallelization = task.get_parallel_jobs()
@@ -203,6 +205,9 @@ class GraphManager(WorkFlowManager):
         self.argparser.add_argument('--comment', help='Can be used for differentiate command line and avoid scheduling '
                                     'fail when a graph manager job is scheduled when another one with same option '
                                     'signature is running. Doesn\'t do anything else.')
+        self.argparser.add_argument('--skip-job', default=[], action='append',
+                                    help='Skip given job. Can be given multiple times. Also next jobs for the skipped'
+                                         'one will be skipped.')
         self.argparser.add_argument('--resume-from-jobid', help='Resume from the given graph manager jobid')
 
     def parse_args(self):

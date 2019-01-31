@@ -27,7 +27,7 @@ class TestManager(GraphManager):
         jobC.add_next_task(jobD)
         jobC.add_wait_for(jobB)
 
-        # return starting jobs
+        # return root jobs
         return jobA, jobB
 
 
@@ -50,7 +50,7 @@ class TestManager2(GraphManager):
         jobB.add_next_task(jobC)
         jobD.add_wait_for(jobB)
 
-        # return starting jobs
+        # return root jobs
         return (jobA,)
 
 
@@ -75,7 +75,7 @@ class TestManager3(GraphManager):
         jobD.add_next_task(jobE)
         jobE.add_wait_for(jobB)
 
-        # return starting jobs
+        # return root jobs
         return (jobA,)
 
 
@@ -290,6 +290,38 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.assert_any_call(['commandC', 'argC'], tags=None, units=None, project_id=None)
         manager.schedule_script.assert_any_call(['commandD'], tags=None, units=None, project_id=None)
 
+    def test_skip_job(self):
+        with script_args(['--starting-job=jobA', '--skip-job=jobC']):
+            manager = TestManager3()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/1/2', '999/1/3', '999/1/4']
+        manager.on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 4)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandA', f'--parg={i}', 'argA', '--optionA'],
+                                                    tags=['tag1', 'tag2'], units=None, project_id=None)
+
+        # second loop, jobA finishes, jobB is scheduled, not jobC or next ones as it was skipped
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/2/1', '999/2/2', '999/2/3', '999/2/4']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandB', f'--parg={i}', 'argB', '--optionB'],
+                                                    tags=None, units=None, project_id=None)
+
+        # last loop, jobB finished, workflow finished
+        manager.is_finished = lambda x: 'finished' if x.startswith('999/2') else None
+        manager.schedule_script.reset_mock()
+        result = manager.workflow_loop()
+        self.assertFalse(result)
+        self.assertFalse(manager.schedule_script.called)
+
     def test_wait_for_already_finished_job(self):
         with script_args(['--starting-job=jobA']):
             manager = TestManager3()
@@ -352,6 +384,43 @@ class ManagerTest(BaseTestCase):
         # second loop, jobD finishes, jobE is scheduled, regardless it should wait for jobB to finish.
         # However, as defined in the start jobs, jobB will never be scheduled (i.e. could have been
         # already scheduled/finished by another instance of the manager)
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/5/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandE'], tags=None, units=None, project_id=None)
+
+    def test_skip_job_no_wait_for_skipped(self):
+        with script_args(['--starting-job=jobA', '--skip-job=jobB']):
+            manager = TestManager3()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/1/1', '999/1/2', '999/1/3', '999/1/4']
+        manager.on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 4)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(['commandA', f'--parg={i}', 'argA', '--optionA'],
+                                                    tags=['tag1', 'tag2'], units=None, project_id=None)
+
+        # second loop, jobA finishes, jobC is scheduled, but not jobB as it is skipped.
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/3/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandC', 'argC'], tags=None, units=None, project_id=None)
+
+        # third loop, jobC finishes, jobD is scheduled
+        manager.is_finished = lambda x: 'finished'
+        manager.schedule_script.side_effect = ['999/4/1']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        manager.schedule_script.assert_any_call(['commandD'], tags=None, units=None, project_id=None)
+
+        # fourth loop, jobD finishes, jobE is scheduled (will not wait for B as it was skipped)
         manager.is_finished = lambda x: 'finished'
         manager.schedule_script.side_effect = ['999/5/1']
         result = manager.workflow_loop()
