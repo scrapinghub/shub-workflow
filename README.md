@@ -3,3 +3,7 @@ A set of tools for controlling processing workflow with spiders and script runni
 # Installation
 
 pip install shub-workflow
+
+# Usage
+
+See tests for examples of usage
