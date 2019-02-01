@@ -3,6 +3,7 @@ Implements common methods for any workflow manager
 """
 import time
 import logging
+from uuid import uuid4
 
 from scrapinghub import DuplicateJobError
 
@@ -25,6 +26,10 @@ class WorkFlowManager(BaseScript):
     def __init__(self):
         self.workflow_loop_enabled = False
         super().__init__()
+
+    def _set_flow_id(self):
+        super()._set_flow_id()
+        self._flow_id = self._flow_id or str(uuid4())
 
     @property
     def max_running_jobs(self):

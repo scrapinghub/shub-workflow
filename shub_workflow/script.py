@@ -4,7 +4,6 @@ Implements common methods for any workflow manager
 import os
 import abc
 import logging
-from uuid import uuid4
 
 from argparse import ArgumentParser
 
@@ -32,8 +31,12 @@ class BaseScript(object):
         self.project_id = resolve_project_id(self.args.project_id or self.project_id)
         if not self.project_id:
             self.argparser.error('Project id not provided.')
-        self._flow_id = self.args.flow_id or self.get_own_flowid_from_tags() or str(uuid4())
+        self._set_flow_id()
+        assert self.flow_id, "Could not detect flow_id. Please set with --flow-id."
         self.add_job_tags(tags=[f'FLOW_ID={self.flow_id}'])
+
+    def _set_flow_id(self):
+        self._flow_id = self.args.flow_id or self.get_own_flowid_from_tags()
 
     @property
     def flow_id(self):
@@ -45,9 +48,9 @@ class BaseScript(object):
 
     def add_argparser_options(self):
         self.argparser.add_argument('--project-id', help='Overrides target project id.', type=int)
-        self.argparser.add_argument('--name', help='Manager name.')
+        self.argparser.add_argument('--name', help='Script name.')
         self.argparser.add_argument('--apikey', help='Use specified apikey instead of autodetect.')
-        self.argparser.add_argument('--flow-id', help='If given, use the given flow id. Otherwise autogenerate.')
+        self.argparser.add_argument('--flow-id', help='If given, use the given flow id.')
 
     def parse_args(self):
         self.argparser = ArgumentParser()
