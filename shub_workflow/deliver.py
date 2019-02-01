@@ -217,7 +217,7 @@ class DeliverScript(object):
 
     def set_output_files(self):
         self.output_files = OutputFileDict(self.args.test_mode)
-        
+
     def set_fileformat(self):
         filetime_format = settings.get('S3_FILE_TIMEFORMAT', '%Y-%m-%dT%H:%M:%S')
         self.__datetime = datetime.datetime.now().strftime(filetime_format)
@@ -239,7 +239,7 @@ class DeliverScript(object):
         project = self.client.get_project(self.project_id)
         all_spiders = [s['id'] for s in project.spiders.iter()]
 
-        self.argparser.add_argument('scrapername', help='Indicate scraper name', choices=sorted(all_spiders), nargs='*')
+        self.argparser.add_argument('scrapername', help='Indicate target scraper names', choices=sorted(all_spiders), nargs='*')
         self.argparser.add_argument('--filter-dupes-by-field', default=[],
                                     help='Dedupe by any of the given item field. Can be given multiple times')
         self.argparser.add_argument('--one-file-per-job', action='store_true', help='Generate one file per job.')
