@@ -36,7 +36,7 @@ class BaseScript(object):
         self.add_job_tags(tags=[f'FLOW_ID={self.flow_id}'])
 
     def _set_flow_id(self):
-        self._flow_id = self.args.flow_id or self.get_own_flowid_from_tags()
+        self._flow_id = self.args.flow_id or self.get_flowid_from_tags()
 
     @property
     def flow_id(self):
@@ -65,6 +65,8 @@ class BaseScript(object):
 
     @dash_retry_decorator
     def get_job_metadata(self, jobid=None, project_id=None):
+        """If jobid is None, get own metadata
+        """
         jobid = jobid or os.getenv('SHUB_JOBKEY')
         if jobid:
             project = self.get_project(project_id)
@@ -74,12 +76,16 @@ class BaseScript(object):
             logger.warning('SHUB_JOBKEY not set: not running on ScrapyCloud.')
 
     def get_job_tags(self, jobid=None, project_id=None):
+        """If jobid is None, get own tags
+        """
         metadata = self.get_job_metadata(jobid, project_id)
         if metadata:
             return dict(metadata.list()).get('tags', [])
         return []
 
     def add_job_tags(self, jobid=None, project_id=None, tags=None):
+        """If jobid is None, add tags to own list of tags.
+        """
         if tags:
             update = False
             job_tags = self.get_job_tags(jobid, project_id)
@@ -92,8 +98,10 @@ class BaseScript(object):
                 if metadata:
                     metadata.update({'tags': job_tags})
 
-    def get_own_flowid_from_tags(self):
-        for tag in self.get_job_tags():
+    def get_flowid_from_tags(self, jobid=None, project_id=None):
+        """If jobid is None, get flowid from own tags
+        """
+        for tag in self.get_job_tags(jobid, project_id):
             if tag.startswith('FLOW_ID='):
                 return tag.replace('FLOW_ID=', '')
 

@@ -63,9 +63,7 @@ import os
 import gzip
 import datetime
 import logging
-import time
 import tempfile
-from argparse import ArgumentParser
 from tempfile import mktemp
 
 from s3fs import S3FileSystem
@@ -74,9 +72,8 @@ from sqlitedict import SqliteDict
 from scrapy.utils.project import get_project_settings
 from scrapy.utils.conf import init_env
 
-from scrapinghub import ScrapinghubClient
-
-from .utils import resolve_project_id, kumo_settings
+from .utils import kumo_settings
+from .script import BaseScript
 
 
 _LOG = logging.getLogger(__name__)
@@ -197,12 +194,10 @@ class OutputFileDict(object):
         return self.__outputfiles.pop(key)
 
 
-class DeliverScript(object):
+class DeliverScript(BaseScript):
 
     def __init__(self):
-        self.project_id = resolve_project_id()
-        self.client = ScrapinghubClient()
-        self.args = self.parse_args()
+        super().__init__()
 
         for scrapername in self.args.scrapername:
             _LOG.info("Delivery folder template for spider %s: %s", scrapername,
@@ -222,33 +217,19 @@ class DeliverScript(object):
         filetime_format = settings.get('S3_FILE_TIMEFORMAT', '%Y-%m-%dT%H:%M:%S')
         self.__datetime = datetime.datetime.now().strftime(filetime_format)
 
-    def parse_args(self):
-        self.argparser = ArgumentParser(description=__doc__)
-        try:
-            _LOG.info("Project selected: %d (if this is not the correct project, set it via PROJECT_ID\
-                      environment variable)", int(self.project_id))
-        except:
-            self.argparser.error("Wrong project %s" % self.project_id)
-
-        self.add_argparser_options()
-        args = self.argparser.parse_args()
-        return args
-
     def add_argparser_options(self):
+        super().add_argparser_options()
 
-        project = self.client.get_project(self.project_id)
-        all_spiders = [s['id'] for s in project.spiders.iter()]
+        all_spiders = [s['id'] for s in self.get_project().spiders.iter()]
 
-        self.argparser.add_argument('scrapername', help='Indicate target scraper names', choices=sorted(all_spiders), nargs='*')
+        self.argparser.add_argument('scrapername', help='Indicate target scraper names', choices=sorted(all_spiders),
+                                    nargs='*')
         self.argparser.add_argument('--filter-dupes-by-field', default=[],
                                     help='Dedupe by any of the given item field. Can be given multiple times')
         self.argparser.add_argument('--one-file-per-job', action='store_true', help='Generate one file per job.')
         self.argparser.add_argument('--test-mode', action='store_true',
                                     help='Run in test mode (performs all processes, but doesn\'t\
                                           upload files nor tag jobs)')
-        self.argparser.add_argument('--name',
-                                    help='Use the given value as replacement text for {name}. By default \
-                                    uses spider name.')
 
     def get_fileprefix_template(self, scrapername):
         root_prefix = settings.get('S3_FILE_ROOT', '')
@@ -320,16 +301,11 @@ class DeliverScript(object):
         _LOG.info("Processed spider job %s", spider_job.key)
 
     def run(self):
-        hsc = self.client._hsclient
-        hsp = hsc.get_project(self.project_id)
-
         success_files = set()
         all_jobs_to_tag = set()
         for scrapername in self.args.scrapername:
             _LOG.info("Processing spider %s", scrapername)
-            jobs_to_tag = self.process_crawlmanager_jobs(scrapername, hsp)
-            if not jobs_to_tag:
-                jobs_to_tag = self.process_spider_jobs(scrapername, hsp)
+            jobs_to_tag = self.process_spider_jobs(scrapername)
             all_jobs_to_tag.update(jobs_to_tag)
 
             for ofile in self.output_files.values():
@@ -343,11 +319,7 @@ class DeliverScript(object):
         if self.args.test_mode:
             all_jobs_to_tag = set()
         for jkey in all_jobs_to_tag:
-            j = hsp.get_job(jkey)
-            tags = j.metadata.get("tags", [])
-            if 'delivered' not in tags:
-                tags.append("delivered")
-                j.update_metadata(tags=tags)
+            self.add_job_tags(jkey, tags=['delivered'])
             jcount += 1
             if jcount % 100 == 0:
                 _LOG.info("Marked %d jobs as delivered", jcount)
@@ -362,48 +334,13 @@ class DeliverScript(object):
     def close(self, success_files):
         pass
 
-    def process_spider_jobs(self, scrapername, hsp):
+    def process_spider_jobs(self, scrapername):
         jobs_to_tag = []
-        for spider_job in hsp.jobq.list(spider=scrapername, count=100, state="finished", lacks_tag="delivered"):
-            sj = hsp.get_job(spider_job['key'])
+        for spider_job in self.get_project().jobs.iter(spider=scrapername, state="finished", lacks_tag="delivered",
+                                                       has_tag=f"FLOW_ID={self.flow_id}"):
+            sj = self.get_project().jobs.get(spider_job['key'])
             self._process_job_items(scrapername, sj)
             jobs_to_tag.append(spider_job['key'])
-        return jobs_to_tag
-
-    def process_crawlmanager_jobs(self, scrapername, hsp):
-        jobs_to_tag = []
-        schedule_re = re.compile(r"%s: scheduled (\d+/\d+/\d+)" % scrapername)
-        running = list(hsp.jobq.list(spider="py:crawl_manager.py", count=100, state="running"))
-        finished = list(hsp.jobq.list(spider="py:crawl_manager.py", count=100, state="finished", lacks_tag="delivered"))
-        for crawler_job in finished + running:
-            cj = hsp.get_job(crawler_job['key'])
-            for option in cj.metadata['job_cmd'][1:]:
-                if re.match(r"--spider\s*=?\s*{}($|\s)".format(scrapername), option.strip()):
-                    while cj.metadata['state'] == 'running':
-                        _LOG.info("Crawl manager job %s is still running. Waiting 5 mins before continue...")
-                        time.sleep(300)
-                        cj = hsp.get_job(crawler_job['key'])
-                    _LOG.info("Processing crawler job %s", crawler_job['key'])
-                    for logline in cj.logs.iter_values():
-                        if isinstance(logline, dict):
-                            m = schedule_re.search(logline.get('message', ''))
-                            if m:
-                                sjkey = m.groups()[0]
-                                sj = hsp.get_job(sjkey)
-                                if sj.metadata['state'] == 'finished':
-                                    self._process_job_items(scrapername, sj)
-                                    # job will be tagged as delivered in order to avoid to be processed again as
-                                    # standalone job, but if crawl manager is untagged, it will (and must) be
-                                    # processed again. That is why we don't check in this method whether the job is
-                                    # already tagged.
-                                    jobs_to_tag.append(sjkey)
-                                    if self.args.one_file_per_job:
-                                        for val in self.output_files.values():
-                                            val.flush(new_file=True)
-                    jobs_to_tag.append(crawler_job['key'])
-                    break
-            else:
-                _LOG.info("Skipped jobid %s", crawler_job['key'])
         return jobs_to_tag
 
 
