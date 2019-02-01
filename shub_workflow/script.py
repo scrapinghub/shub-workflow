@@ -91,7 +91,10 @@ class BaseScript(object):
             job_tags = self.get_job_tags(jobid, project_id)
             for tag in tags:
                 if tag not in job_tags:
-                    job_tags.append(tag)
+                    if tag.startswith('FLOW_ID='):
+                        job_tags.insert(0, tag)
+                    else:
+                        job_tags.append(tag)
                     update = True
             if update:
                 metadata = self.get_job_metadata(jobid, project_id)
