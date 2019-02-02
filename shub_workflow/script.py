@@ -26,8 +26,8 @@ class BaseScript(object):
     name = None
 
     def __init__(self):
+        self.client = ScrapinghubClient()
         self.args = self.parse_args()
-        self.client = ScrapinghubClient(self.apikey)
         self.project_id = resolve_project_id(self.args.project_id or self.project_id)
         if not self.project_id:
             self.argparser.error('Project id not provided.')
@@ -42,14 +42,9 @@ class BaseScript(object):
     def flow_id(self):
         return self._flow_id
 
-    @property
-    def apikey(self):
-        return self.args.apikey
-
     def add_argparser_options(self):
         self.argparser.add_argument('--project-id', help='Overrides target project id.', type=int)
         self.argparser.add_argument('--name', help='Script name.')
-        self.argparser.add_argument('--apikey', help='Use specified apikey instead of autodetect.')
         self.argparser.add_argument('--flow-id', help='If given, use the given flow id.')
 
     def parse_args(self):
