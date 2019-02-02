@@ -31,7 +31,7 @@ DeliverScript.gen_keyprefix() - Returns key prefix
 
 Following environment variables are also required:
 
-AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SH_APIKEY
 
 
 """
@@ -146,7 +146,7 @@ class OutputFile(object):
         self.__items_count += 1
         self.__size_bytes += sys.getsizeof(line)
         if self.max_filesize_items > 0 and self.__items_count == self.max_filesize_items or \
-                self.max_filesize_bytes > 0 and self.__size >= self.max_filesize_bytes:
+                self.max_filesize_bytes > 0 and self.__size_bytes >= self.max_filesize_bytes:
             self.flush(new_file=True)
 
     def flush(self, new_file=False):
@@ -216,15 +216,12 @@ class DeliverScript(BaseScript):
         return self.__start_datetime
 
     def set_output_files(self):
-        self.output_files = OutputFileDict(self.s3_bucket_name, self.args.test_mode)
+        return OutputFileDict(self.s3_bucket_name, self.args.test_mode)
 
     def add_argparser_options(self):
         super().add_argparser_options()
 
-        all_spiders = [s['id'] for s in self.get_project().spiders.iter()]
-
-        self.argparser.add_argument('scrapername', help='Indicate target scraper names', choices=sorted(all_spiders),
-                                    nargs='*')
+        self.argparser.add_argument('scrapername', help='Indicate target scraper names', nargs='*')
         self.argparser.add_argument('--filter-dupes-by-field', default=[],
                                     help='Dedupe by any of the given item field. Can be given multiple times')
         self.argparser.add_argument('--one-file-per-job', action='store_true', help='Generate one file per job.')
@@ -240,7 +237,7 @@ class DeliverScript(BaseScript):
 
     def _process_job_items(self, scrapername, spider_job):
         first_keyprefix = None
-        for item in spider_job.items.iter_values():
+        for item in spider_job.items.iter():
             seen = False
             for field in self.dupes_filter.keys():
                 if field in item:
@@ -269,7 +266,7 @@ class DeliverScript(BaseScript):
         success_files = set()
         all_jobs_to_tag = set()
         for scrapername in self.args.scrapername:
-            _LOG.info("Processing spider %s", scrapername)
+            _LOG.info(f"Processing spider {scrapername}")
             jobs_to_tag = self.process_spider_jobs(scrapername)
             all_jobs_to_tag.update(jobs_to_tag)
 
@@ -313,7 +310,7 @@ class DeliverScript(BaseScript):
                 sj = self.get_project().jobs.get(spider_job['key'])
                 self._process_job_items(scrapername, sj)
                 jobs_to_tag.append(spider_job['key'])
-            if jobs_count % 1000 != 0:
+            if jobs_count == 0 or jobs_count % 1000 != 0:
                 break
             start += 1000
 
