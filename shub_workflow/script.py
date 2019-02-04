@@ -20,9 +20,7 @@ logger.setLevel(logging.INFO)
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s')
 
 
-class BaseScript(object):
-
-    __metaclass__ = abc.ABCMeta
+class BaseScript(abc.ABC):
 
     name = None  # optional, may be needed for some applications
     flow_id_required = True  # if True, script can only run in the context of a flow_id
