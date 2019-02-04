@@ -27,9 +27,9 @@ class WorkFlowManager(BaseScript):
         self.workflow_loop_enabled = False
         super().__init__()
 
-    def set_flow_id(self, args):
-        super()._set_flow_id(args)
-        self._flow_id = self._flow_id or str(uuid4())
+    def set_flow_id(self, args, default=None):
+        default = default or str(uuid4())
+        super().set_flow_id(args, default)
 
     @property
     def max_running_jobs(self):

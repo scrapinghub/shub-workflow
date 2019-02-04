@@ -11,7 +11,7 @@ from .utils.contexts import script_args
 
 
 class TestManager(GraphManager):
-    project_id = 999
+
     name = 'test'
 
     def configure_workflow(self):
@@ -32,7 +32,7 @@ class TestManager(GraphManager):
 
 
 class TestManager2(GraphManager):
-    project_id = 999
+
     name = 'test'
 
     def configure_workflow(self):
@@ -55,7 +55,7 @@ class TestManager2(GraphManager):
 
 
 class TestManager3(GraphManager):
-    project_id = 999
+
     name = 'test'
 
     def configure_workflow(self):
@@ -88,6 +88,7 @@ class BaseTestCase(TestCase):
 
     def setUp(self):
         os.environ['SH_APIKEY'] = 'ffff'
+        os.environ['PROJECT_ID'] = '999'
 
 
 class ManagerTest(BaseTestCase):

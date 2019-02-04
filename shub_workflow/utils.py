@@ -28,13 +28,9 @@ def resolve_project_id(project_id=None):
     if os.environ.get('PROJECT_ID'):
         return os.environ.get('PROJECT_ID')
 
-    # read from sh_scrapy.hsref
-    try:
-        from sh_scrapy.hsref import hsref
-        if hsref.projectid:
-            return hsref.projectid
-    except Exception:
-        pass
+    # for ScrapyCloud jobs:
+    if os.environ.get('SHUB_JOBKEY'):
+        return os.environ['SHUB_JOBKEY'].split('/')[0]
 
     # read from scrapinghub.yml
     try:

@@ -1,5 +1,6 @@
 import logging
 import shlex
+import abc
 from collections import namedtuple
 from fractions import Fraction
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 Resource = namedtuple('Resource', ['name'])
 
 
-class BaseTask(object):
+class BaseTask(abc.ABC):
     def __init__(self, task_id, tags=None, units=None, retries=1, project_id=None, wait_time=None):
         assert task_id != 'retry', "Reserved word 'retry' can't be used as task id"
         self.task_id = task_id
@@ -106,14 +107,16 @@ class BaseTask(object):
     def start_callback(self, manager, retries):
         pass
 
+    @abc.abstractmethod
     def run(self, manager, retries=False):
         raise NotImplementedError()
 
+    @abc.abstractmethod
     def get_parallel_jobs(self):
         """
         Returns total number of parallel jobs that this task will consist on.
         """
-        raise NotImplementedError()
+        pass
 
 
 class Task(BaseTask):

@@ -30,8 +30,8 @@ class BaseScript(abc.ABC):
         self.client = ScrapinghubClient()
         self.args = self.parse_args()
 
-    def set_flow_id(self, args):
-        self._flow_id = args.flow_id or self.get_flowid_from_tags()
+    def set_flow_id(self, args, default=None):
+        self._flow_id = args.flow_id or self.get_flowid_from_tags() or default
         if self.flow_id_required:
             assert not self.flow_id_required or self.flow_id, "Could not detect flow_id. Please set with --flow-id."
         if self.flow_id:
