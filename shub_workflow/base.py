@@ -27,8 +27,8 @@ class WorkFlowManager(BaseScript):
         self.workflow_loop_enabled = False
         super().__init__()
 
-    def _set_flow_id(self):
-        super()._set_flow_id()
+    def set_flow_id(self, args):
+        super()._set_flow_id(args)
         self._flow_id = self._flow_id or str(uuid4())
 
     @property

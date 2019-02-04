@@ -24,21 +24,20 @@ class BaseScript(object):
 
     __metaclass__ = abc.ABCMeta
 
-    project_id = None
-    name = None
+    name = None  # optional, may be needed for some applications
+    flow_id_required = True  # if True, script can only run in the context of a flow_id
 
     def __init__(self):
+        self.project_id = None
         self.client = ScrapinghubClient()
         self.args = self.parse_args()
-        self.project_id = resolve_project_id(self.args.project_id or self.project_id)
-        if not self.project_id:
-            self.argparser.error('Project id not provided.')
-        self._set_flow_id()
-        assert self.flow_id, "Could not detect flow_id. Please set with --flow-id."
-        self.add_job_tags(tags=[f'FLOW_ID={self.flow_id}'])
 
-    def _set_flow_id(self):
-        self._flow_id = self.args.flow_id or self.get_flowid_from_tags()
+    def set_flow_id(self, args):
+        self._flow_id = args.flow_id or self.get_flowid_from_tags()
+        if self.flow_id_required:
+            assert not self.flow_id_required or self.flow_id, "Could not detect flow_id. Please set with --flow-id."
+        if self.flow_id:
+            self.add_job_tags(tags=[f'FLOW_ID={self.flow_id}'])
 
     @property
     def description(self):
@@ -57,7 +56,13 @@ class BaseScript(object):
         self.argparser = ArgumentParser(self.description)
         self.add_argparser_options()
         args = self.argparser.parse_args()
-        self.project_id = args.project_id or self.project_id
+
+        self.project_id = resolve_project_id(args.project_id)
+        if not self.project_id:
+            self.argparser.error('Project id not provided.')
+
+        self.set_flow_id(args)
+
         self.name = args.name or self.name
         return args
 
