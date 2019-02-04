@@ -18,16 +18,11 @@ This script does the following:
 Deliver class is meant to be subclasses for overriding default behaviors, either via overriding of configuration class
 attributes or instance methods.
 
-configuration class attributes
-------------------------------
+required configuration class attributes
+---------------------------------------
 
 DeliverScript.s3_bucket_name - Target s3 bucket
 DeliverScript.success_file - A boolean. Whether or not to generate a finall _SUCCESS file
-
-instance methods
-----------------
-
-DeliverScript.gen_keyprefix() - Returns key prefix
 
 Following environment variables are also required:
 
@@ -210,6 +205,10 @@ class DeliverScript(BaseScript):
         self.itemcount = 0
         self.filecount = 0
         self.dupes_filter = {i: SqliteDictDupesFilter() for i in self.args.filter_dupes_by_field}
+
+    @property
+    def description(self):
+        return __doc__
 
     @property
     def start_datetime(self):

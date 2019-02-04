@@ -43,6 +43,10 @@ class GraphManager(WorkFlowManager):
         for task in self.configure_workflow() or ():
             self._add_task(task)
 
+    @property
+    def description(self):
+        return f"Workflow manager for {self.name!r}"
+
     def _add_task(self, task):
         assert task.task_id not in self.jobs_graph,\
             "Workflow inconsistency detected: task %s referenced twice." % task.task_id

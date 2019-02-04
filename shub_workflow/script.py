@@ -1,5 +1,5 @@
 """
-Implements common methods for any workflow manager
+Implements common methods for ScrapyCloud scripts.
 """
 import os
 import abc
@@ -41,6 +41,10 @@ class BaseScript(object):
         self._flow_id = self.args.flow_id or self.get_flowid_from_tags()
 
     @property
+    def description(self):
+        return "You didn't set description for this script. Please set description property accordingly."
+
+    @property
     def flow_id(self):
         return self._flow_id
 
@@ -50,7 +54,7 @@ class BaseScript(object):
         self.argparser.add_argument('--flow-id', help='If given, use the given flow id.')
 
     def parse_args(self):
-        self.argparser = ArgumentParser()
+        self.argparser = ArgumentParser(self.description)
         self.add_argparser_options()
         args = self.argparser.parse_args()
         self.project_id = args.project_id or self.project_id

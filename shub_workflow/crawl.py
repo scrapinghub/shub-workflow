@@ -1,6 +1,5 @@
 """
-Script for easy managing of consumer spiders from multiple slots. It checks available slots and schedules
-a job for each one.
+Base script class for spiders crawl managers.
 """
 import json
 
