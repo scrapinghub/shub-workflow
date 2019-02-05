@@ -206,13 +206,16 @@ class SpiderTask(BaseTask):
                  **spider_args):
         super(SpiderTask, self).__init__(task_id, tags, units, retries, None, wait_time)
         self.spider = spider
-        self.spider_args = spider_args
+        self.__spider_args = spider_args
+
+    def get_spider_args(self):
+        return self.__spider_args
 
     def as_jobgraph_dict(self):
         jdict = super(SpiderTask, self).as_jobgraph_dict()
         jdict.update({
             'spider': self.spider,
-            'spider_args': self.spider_args,
+            'spider_args': self.get_spider_args(),
         })
         return jdict
 
@@ -227,7 +230,7 @@ class SpiderTask(BaseTask):
         else:
             logger.info('Will start spider "%s"', jobname)
         jobid = manager.schedule_spider(self.spider, tags=self.tags, units=self.units, project_id=self.project_id,
-                                        **self.spider_args)
+                                        **self.get_spider_args())
         if jobid:
             logger.info('Scheduled spider "%s" (%s)', jobname, jobid)
             self.append_jobid(jobid)
