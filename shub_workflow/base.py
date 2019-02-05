@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class WorkFlowManager(BaseScript):
 
     default_max_jobs = float('inf')
-    loop_mode = None
+    loop_mode = 0
 
     def __init__(self):
         self.workflow_loop_enabled = False
@@ -38,7 +38,8 @@ class WorkFlowManager(BaseScript):
     def add_argparser_options(self):
         super().add_argparser_options()
         self.argparser.add_argument('--loop-mode', help='If provided, manager will run in loop mode, with a cycle\
-                                    each given number of seconds.', type=int, metavar='SECONDS', default=self.loop_mode)
+                                    each given number of seconds. Default: %(default)s', type=int, metavar='SECONDS',
+                                    default=self.loop_mode)
         self.argparser.add_argument('--max-running-jobs', type=int, default=self.default_max_jobs,
                                     help='If given, don\'t allow more than the given jobs running at once.\
                                     Default: %(default)s')
