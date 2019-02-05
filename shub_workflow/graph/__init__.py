@@ -347,7 +347,8 @@ class GraphManager(WorkFlowManager):
                         if retries > 0:
                             self._add_pending_job(job, retries=1)
                             jobconf['retries'] -= 1
-                            logger.warning('Will retry job %s (outcome: %s)', job, outcome)
+                            logger.warning('Will retry job %s (outcome: %s, number of retries left: %s)',
+                                           job, outcome, jobconf['retries'])
                     elif nextjob in self.__pending_jobs:
                         logger.error('Job %s already pending', nextjob)
                     else:
