@@ -18,6 +18,7 @@ setup(
         'jinja2>=2.7.3',
         'sqlitedict==1.6.0',
         's3fs==0.2.0',
+        'botocore==1.12.91',
         'msgpack-python',
     ),
     scripts = [],
