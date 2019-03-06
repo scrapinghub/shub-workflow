@@ -1,6 +1,8 @@
 """
 Utility for cloning ScrapyCloud jobs
 Features tagging of cloned from/to jobs (both source and destination) and avoids to clone source jobs already cloned.
+By default cloned jobs are scheduled in the same project as source job. If --project-id is given, target project
+is overriden.
 """
 import logging
 from shub_workflow.script import BaseScript
@@ -59,12 +61,21 @@ class CloneJobScript(BaseScript):
                 job_params['units'] = self.args.units
 
         project_id, spider_id, job_id = job_key.split('/')
-        project = self.client.get_project(self.args.target_project or project_id)
+        project = self.client.get_project(self.args.project_id or project_id)
         new_job = project.jobs.run(spider, **job_params)
         _LOG.info("Cloned %s to %s", job_key, new_job.key)
         jobtags = job.metadata.get('tags')
         jobtags.append(f'ClonedTo={new_job.key}')
         job.metadata.update({'tags': jobtags})
+
+    def parse_project_id(self, args):
+        project_id = super().parse_project_id(args)
+        if project_id:
+            return project_id
+        if args.key:
+            return args.key.split('/')[0]
+        if args.tag_spider:
+            return args.tag_spider.split('/')[0]
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -72,8 +83,6 @@ class CloneJobScript(BaseScript):
                                     action='append', default=[])
         self.argparser.add_argument('--tag-spider', help='In format <project_id>/<tag>/<spider name>,'
                                     'clone given spider from given project id, by tag')
-        self.argparser.add_argument('--target-project', help='Schedule in the given target project instead of the'
-                                    'original one.')
         self.argparser.add_argument('--units', help='Set number of units. Default is the same as cloned job.', type=int)
 
     def run(self):

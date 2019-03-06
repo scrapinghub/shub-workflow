@@ -50,12 +50,15 @@ class BaseScript(abc.ABC):
         self.argparser.add_argument('--name', help='Script name.')
         self.argparser.add_argument('--flow-id', help='If given, use the given flow id.')
 
+    def parse_project_id(self, args):
+        return args.project_id
+
     def parse_args(self):
         self.argparser = ArgumentParser(self.description)
         self.add_argparser_options()
         args = self.argparser.parse_args()
 
-        self.project_id = resolve_project_id(args.project_id)
+        self.project_id = resolve_project_id(self.parse_project_id(args))
         if not self.project_id:
             self.argparser.error('Project id not provided.')
 
