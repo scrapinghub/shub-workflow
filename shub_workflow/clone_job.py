@@ -24,13 +24,17 @@ _COPIED_FROM_META = {'job_cmd':     ('cmd_args', _transform_cmd),
                      'tags':        ('add_tag',  None)}
 
 
-def is_cloned(jobkey, client):
-    job = client.get_job(jobkey)
+def is_cloned(job):
     for tag in job.metadata.get('tags'):
         if tag.startswith('ClonedTo='):
             _LOG.warning(f'Job {job.key} already cloned. Skipped.')
             return True
     return False
+
+
+def is_cloned_by_jobkey(jobkey, client):
+    job = client.get_job(jobkey)
+    return is_cloned(job)
 
 
 def clone_job(job_key, client, units=None, default_project_id=None, extra_tags=None):
@@ -95,12 +99,12 @@ class CloneJobScript(BaseScript):
 
     def run(self):
         if self.args.key:
-            keys = filter(lambda x: not is_cloned(x, self.client), self.args.key)
+            keys = filter(lambda x: not is_cloned_by_jobkey(x, self.client), self.args.key)
         elif self.args.tag_spider:
             keys = []
             project_id, tag, spider = self.args.tag_spider.split('/')
             for job in self.client.get_project(project_id).jobs.iter(spider=spider, status=['finished'], has_tag=tag):
-                if not is_cloned(job['key'], self.client):
+                if not is_cloned_by_jobkey(job['key'], self.client):
                     keys.append(job['key'])
 
         for job_key in keys:
