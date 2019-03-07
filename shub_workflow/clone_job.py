@@ -103,7 +103,7 @@ class CloneJobScript(BaseScript):
         elif self.args.tag_spider:
             keys = []
             project_id, tag, spider = self.args.tag_spider.split('/')
-            for job in self.client.get_project(project_id).jobs.iter(spider=spider, status=['finished'], has_tag=tag):
+            for job in self.client.get_project(project_id).jobs.iter(spider=spider, state=['finished'], has_tag=tag):
                 if not is_cloned_by_jobkey(job['key'], self.client):
                     keys.append(job['key'])
 
