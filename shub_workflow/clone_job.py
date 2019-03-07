@@ -73,14 +73,14 @@ class CloneJobScript(BaseScript):
         if project_id:
             return project_id
         if args.key:
-            return args.key.split('/')[0]
+            return args.key[0].split('/')[0]
         if args.tag_spider:
             return args.tag_spider.split('/')[0]
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument('--key', help='Target job key. Can be given multiple times', type=str,
-                                    action='append', default=[])
+        self.argparser.add_argument('--key', type=str, action='append', default=[],
+                                    help='Target job key. Can be given multiple times. All must be in same project.')
         self.argparser.add_argument('--tag-spider', help='In format <project_id>/<tag>/<spider name>,'
                                     'clone given spider from given project id, by tag')
         self.argparser.add_argument('--units', help='Set number of units. Default is the same as cloned job.', type=int)
