@@ -33,6 +33,36 @@ def is_cloned(jobkey, client):
     return False
 
 
+def clone_job(job_key, client, units=None, default_project_id=None, extra_tags=None):
+    extra_tags = extra_tags or []
+    job = client.get_job(job_key)
+
+    spider = job.metadata.get('spider')
+
+    job_params = dict()
+    for key, (target_key, transform) in _COPIED_FROM_META.items():
+
+        if target_key is None:
+            target_key = key
+
+        if transform is None:
+            transform = lambda x: x
+
+        job_params[target_key] = transform(job.metadata.get(key))
+        job_params.setdefault('add_tag', []).append(f'ClonedFrom={job_key}')
+        job_params['add_tag'].extend(extra_tags)
+        if units is not None:
+            job_params['units'] = units
+
+    project_id, spider_id, job_id = job_key.split('/')
+    project = client.get_project(default_project_id or project_id)
+    new_job = project.jobs.run(spider, **job_params)
+    _LOG.info("Cloned %s to %s", job_key, new_job.key)
+    jobtags = job.metadata.get('tags')
+    jobtags.append(f'ClonedTo={new_job.key}')
+    job.metadata.update({'tags': jobtags})
+
+
 class CloneJobScript(BaseScript):
 
     flow_id_required = False
@@ -42,31 +72,7 @@ class CloneJobScript(BaseScript):
         return __doc__
 
     def _clone_job(self, job_key):
-        job = self.client.get_job(job_key)
-
-        spider = job.metadata.get('spider')
-
-        job_params = dict()
-        for key, (target_key, transform) in _COPIED_FROM_META.items():
-
-            if target_key is None:
-                target_key = key
-
-            if transform is None:
-                transform = lambda x: x
-
-            job_params[target_key] = transform(job.metadata.get(key))
-            job_params.setdefault('add_tag', []).append(f'ClonedFrom={job_key}')
-            if self.args.units is not None:
-                job_params['units'] = self.args.units
-
-        project_id, spider_id, job_id = job_key.split('/')
-        project = self.client.get_project(self.args.project_id or project_id)
-        new_job = project.jobs.run(spider, **job_params)
-        _LOG.info("Cloned %s to %s", job_key, new_job.key)
-        jobtags = job.metadata.get('tags')
-        jobtags.append(f'ClonedTo={new_job.key}')
-        job.metadata.update({'tags': jobtags})
+        return clone_job(job_key, self.client, self.args.units, self.project_id, self.args.tag)
 
     def parse_project_id(self, args):
         project_id = super().parse_project_id(args)
@@ -84,6 +90,8 @@ class CloneJobScript(BaseScript):
         self.argparser.add_argument('--tag-spider', help='In format <project_id>/<tag>/<spider name>,'
                                     'clone given spider from given project id, by tag')
         self.argparser.add_argument('--units', help='Set number of units. Default is the same as cloned job.', type=int)
+        self.argparser.add_argument('--tag', help='Additional tag added to the newly created jobs. Can be multiple.',
+                                    default=[])
 
     def run(self):
         if self.args.key:
