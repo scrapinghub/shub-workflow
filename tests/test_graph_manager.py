@@ -79,7 +79,7 @@ class TestManager3(GraphManager):
         return (jobA,)
 
     def get_job_tags(self, jobid=None, project_id=None):
-        if jobid == None:
+        if jobid is None:
             return ['FLOW_ID=mytagsflowid']
         return super().get_job_tags(jobid, project_id)
 
@@ -248,31 +248,22 @@ class ManagerTest(BaseTestCase):
 
         manager.is_finished = lambda x: None
         manager.schedule_script = Mock()
-        manager.schedule_script.side_effect = ['999/3/1', '999/3/2']
+        manager.schedule_script.side_effect = ['999/3/1']
         manager.on_start()
 
         # first loop
         result = manager.workflow_loop()
         self.assertTrue(result)
-        self.assertEqual(manager.schedule_script.call_count, 4)
-        manager.schedule_script.assert_any_call(['commandC', 'argC')
-        for i in range(4):
-            manager.schedule_script.assert_any_call(['commandA', f'--parg={i}', 'argA', '--optionA'],
-                                                    tags=['tag1', 'tag2'], units=None, project_id=None)
+        self.assertEqual(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_any_call(['commandC', 'argC'], tags=None, units=None, project_id=None)
 
-        # second loop still running job A
-        manager.schedule_script.reset_mock()
+        # second loop, job C fails, must be retried.
+        manager.is_finished = lambda x: 'failed' if x == '999/3/1' else None
+        manager.schedule_script.side_effect = ['999/3/2']
         result = manager.workflow_loop()
         self.assertTrue(result)
-        self.assertFalse(manager.schedule_script.called)
-
-        # third loop, job A_0 fails, must be retried
-        manager.is_finished = lambda x: 'failed' if x == '999/1/1' else None
-        manager.schedule_script.side_effect = ['999/1/5']
-        result = manager.workflow_loop()
-        self.assertTrue(result)
-        manager.schedule_script.assert_called_with(['commandA', '--parg=0', 'argA'], tags=['tag1', 'tag2'],
-                                                   units=None, project_id=None)
+        self.assertEqual(manager.schedule_script.call_count, 2)
+        manager.schedule_script.assert_called_with(['commandC', 'argC'], tags=None, units=None, project_id=None)
 
     def test_parallel_job(self):
         """

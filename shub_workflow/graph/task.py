@@ -176,7 +176,7 @@ class Task(BaseTask):
         assert level == 1, "Invalid level"
         return [j[2] for j in get_scheduled_jobs_specs(manager, job_ids)]
 
-    def run(self, manager, retries=False, index=None):
+    def run(self, manager, retries=0, index=None):
         command = self.get_command(index)
         self.start_callback(manager, retries)
         if index is None:
@@ -188,7 +188,8 @@ class Task(BaseTask):
         else:
             logger.info('Will start task "%s"', jobname)
         if retries:
-            cmd = command + self.retry_args
+            retry_args = self.retry_args or self.init_args
+            cmd = command + retry_args
         else:
             cmd = command + self.init_args
         jobid = manager.schedule_script(cmd, tags=self.tags, units=self.units, project_id=self.project_id)

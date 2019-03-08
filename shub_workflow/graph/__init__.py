@@ -235,16 +235,7 @@ class GraphManager(WorkFlowManager):
             return False
         return True
 
-    def get_command_line(self, job, retries):
-        jobconf = self.get_job(job)
-        command = jobconf['command']
-        init_args = jobconf.get('init_args', [])
-        retry_args = jobconf.get('retry_args', init_args)
-        if retries:
-            return [command] + retry_args
-        return [command] + init_args
-
-    def run_job(self, job, retries=False):
+    def run_job(self, job, retries=0):
         task = self.__tasks.get(job)
         if task is not None:
             return task.run(self, retries)
