@@ -104,11 +104,11 @@ class BaseTask(abc.ABC):
 
         return jdict
 
-    def start_callback(self, manager, retries):
+    def start_callback(self, manager, is_retry):
         pass
 
     @abc.abstractmethod
-    def run(self, manager, retries=False):
+    def run(self, manager, is_retry=False):
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -131,7 +131,7 @@ class Task(BaseTask):
                      specified in init_args.
         tags - List of strings. tags to add to the scheduled job.
         units - Int. units to use for this scheduled job.
-        retries - Int. Number of retries in case job failed.
+        retries - Int. Max number of retries in case job failed.
         project_id - Int. Run task in given project. If not given, just run in the actual project.
         wait_time - Int. Don't run the task before the given number of seconds after workflow started.
         """
@@ -176,18 +176,18 @@ class Task(BaseTask):
         assert level == 1, "Invalid level"
         return [j[2] for j in get_scheduled_jobs_specs(manager, job_ids)]
 
-    def run(self, manager, retries=0, index=None):
+    def run(self, manager, is_retry=False, index=None):
         command = self.get_command(index)
-        self.start_callback(manager, retries)
+        self.start_callback(manager, is_retry)
         if index is None:
             jobname = f"{manager.name}/{self.task_id}"
         else:
             jobname = f"{manager.name}/{self.task_id}_{index}"
-        if retries:
+        if is_retry:
             logger.info('Will retry task "%s"', jobname)
         else:
             logger.info('Will start task "%s"', jobname)
-        if retries:
+        if is_retry:
             retry_args = self.retry_args or self.init_args
             cmd = command + retry_args
         else:
@@ -223,10 +223,10 @@ class SpiderTask(BaseTask):
     def get_parallel_jobs(self):
         return 1
 
-    def run(self, manager, retries=False):
-        self.start_callback(manager, retries)
+    def run(self, manager, is_retry=False):
+        self.start_callback(manager, is_retry)
         jobname = "{}/{}".format(manager.name, self.task_id)
-        if retries:
+        if is_retry:
             logger.info('Will retry spider "%s"', jobname)
         else:
             logger.info('Will start spider "%s"', jobname)

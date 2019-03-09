@@ -41,7 +41,7 @@ class TestManager2(GraphManager):
                     init_args=['argA', '--optionA'], retry_args=['argA'], tags=['tag1', 'tag2'], retries=2)
         jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }} {% endfor %}',
                     init_args=['argB', '--optionB'])
-        jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
+        jobC = Task(task_id='jobC', command='commandC', init_args=['argC'], retries=2)
         jobD = Task(task_id='jobD', command='commandD')
 
         # connect them
@@ -264,6 +264,45 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_called_with(['commandC', 'argC'], tags=None, units=None, project_id=None)
+
+    def test_max_retries(self):
+        """
+        Test max retries
+        """
+        with script_args(['--starting-job=jobC']):
+            manager = TestManager2()
+
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ['999/3/1']
+        manager.on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 1)
+
+        # second loop, job C fails, must be retried.
+        manager.is_finished = lambda x: 'failed' if x == '999/3/1' else None
+        manager.schedule_script.side_effect = ['999/3/2']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 2)
+        manager.schedule_script.assert_called_with(['commandC', 'argC'], tags=None, units=None, project_id=None)
+
+        # third loop, job C fails again, must be retried (last retry).
+        manager.is_finished = lambda x: 'failed' if x == '999/3/2' else None
+        manager.schedule_script.side_effect = ['999/3/3']
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 3)
+        manager.schedule_script.assert_called_with(['commandC', 'argC'], tags=None, units=None, project_id=None)
+
+        # fourth loop, job C fails again, give up.
+        manager.is_finished = lambda x: 'failed' if x == '999/3/3' else None
+        result = manager.workflow_loop()
+        self.assertFalse(result)
+        self.assertEqual(manager.schedule_script.call_count, 3)
 
     def test_parallel_job(self):
         """

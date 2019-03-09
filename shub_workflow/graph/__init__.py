@@ -139,7 +139,7 @@ class GraphManager(WorkFlowManager):
         wait_for = self.get_job(job).get('wait_for', [])
         self._add_pending_job(job, wait_for=tuple(wait_for))
 
-    def _add_pending_job(self, job, wait_for=(), retries=0):
+    def _add_pending_job(self, job, wait_for=(), is_retry=False):
         if job in self.args.skip_job:
             return
         if job in self.__tasks:
@@ -152,7 +152,7 @@ class GraphManager(WorkFlowManager):
         if parallelization == 1:
             self.__pending_jobs[job] = {
                 'wait_for': set(wait_for),
-                'retries': retries,
+                'is_retry': is_retry,
                 'wait_time': task.wait_time,
             }
         else:
@@ -182,7 +182,7 @@ class GraphManager(WorkFlowManager):
                 self.jobs_graph[job_unit] = job_unit_conf
                 self.__pending_jobs[job_unit] = {
                     'wait_for': set(wait_for),
-                    'retries': retries,
+                    'is_retry': is_retry,
                     'origin': job,
                     'wait_time': task.wait_time,
                 }
@@ -235,21 +235,21 @@ class GraphManager(WorkFlowManager):
             return False
         return True
 
-    def run_job(self, job, retries=0):
+    def run_job(self, job, is_retry=False):
         task = self.__tasks.get(job)
         if task is not None:
-            return task.run(self, retries)
+            return task.run(self, is_retry)
 
         jobconf = self.get_job(job)
         task = self.__tasks.get(jobconf['origin'])
         if task is not None:
             idx = jobconf['index']
-            return task.run(self, retries, index=idx)
+            return task.run(self, is_retry, index=idx)
 
     def _must_wait_time(self, job):
-        conf = self.__pending_jobs[job]
-        if conf['wait_time'] is not None:
-            wait_time = conf['wait_time'] - time() + self.__start_time
+        status = self.__pending_jobs[job]
+        if status['wait_time'] is not None:
+            wait_time = status['wait_time'] - time() + self.__start_time
             if wait_time > 0:
                 logger.info("Job %s must wait %d seconds for running", job, wait_time)
                 return True
@@ -272,12 +272,12 @@ class GraphManager(WorkFlowManager):
         for job in sorted(self.__pending_jobs.keys()):
             if len(self.__running_jobs) >= self.max_running_jobs:
                 break
-            conf = self.__pending_jobs[job]
+            status = self.__pending_jobs[job]
 
-            job_can_run = not conf['wait_for'] and not self._must_wait_time(job) and self._try_acquire_resources(job)
+            job_can_run = not status['wait_for'] and not self._must_wait_time(job) and self._try_acquire_resources(job)
             if job_can_run:
                 try:
-                    jobid = self.run_job(job, conf['retries'])
+                    jobid = self.run_job(job, status['is_retry'])
                 except:
                     self._release_resources(job)
                     raise
@@ -285,7 +285,7 @@ class GraphManager(WorkFlowManager):
                 self.__running_jobs[job] = jobid
 
         if not self.__pending_jobs or self.__running_jobs or \
-                any(conf['wait_time'] is not None for conf in self.__pending_jobs.values()):
+                any(status['wait_time'] is not None for status in self.__pending_jobs.values()):
             return
 
         # At this point, there are pending jobs, but none were started because
@@ -295,15 +295,15 @@ class GraphManager(WorkFlowManager):
         for job in sorted(self.__pending_jobs.keys()):
             if len(self.__running_jobs) >= self.max_running_jobs:
                 break
-            conf = self.__pending_jobs[job]
+            status = self.__pending_jobs[job]
             job_can_run = (
-                all(w not in self.__pending_jobs for w in conf['wait_for']) and
-                (not origin_job or conf.get('origin') == origin_job) and
+                all(w not in self.__pending_jobs for w in status['wait_for']) and
+                (not origin_job or status.get('origin') == origin_job) and
                 self._try_acquire_resources(job))
-            origin_job = conf.get('origin')
+            origin_job = status.get('origin')
             if job_can_run:
                 try:
-                    jobid = self.run_job(job, conf['retries'])
+                    jobid = self.run_job(job, status['is_retry'])
                 except:
                     self._release_resources(job)
                     raise
@@ -326,9 +326,9 @@ class GraphManager(WorkFlowManager):
             outcome = self.is_finished(jobid)
             if outcome is not None:
                 logger.info('Job "%s/%s" (%s) finished', self.name, job, jobid)
-                for _, conf in self.__pending_jobs.items():
-                    conf['wait_for'].discard(job)
-                for _, conf in self.jobs_graph.items():
+                for st in self.__pending_jobs.values():
+                    st['wait_for'].discard(job)
+                for conf in self.jobs_graph.values():
                     if job in conf.get('wait_for', []):
                         conf['wait_for'].remove(job)
                 for nextjob in self._get_next_jobs(job, outcome):
@@ -336,7 +336,7 @@ class GraphManager(WorkFlowManager):
                         jobconf = self.get_job(job)
                         retries = jobconf.get('retries', 0)
                         if retries > 0:
-                            self._add_pending_job(job, retries=1)
+                            self._add_pending_job(job, is_retry=True)
                             jobconf['retries'] -= 1
                             logger.warning('Will retry job %s (outcome: %s, number of retries left: %s)',
                                            job, outcome, jobconf['retries'])
