@@ -37,7 +37,7 @@ def is_cloned_by_jobkey(jobkey, client):
     return is_cloned(job)
 
 
-def clone_job(job_key, client, units=None, default_project_id=None, extra_tags=None):
+def clone_job(job_key, client, units=None, default_project_id=None, extra_tags=None, job_params_hook=None):
     extra_tags = extra_tags or []
     job = client.get_job(job_key)
 
@@ -57,6 +57,9 @@ def clone_job(job_key, client, units=None, default_project_id=None, extra_tags=N
         job_params['add_tag'].extend(extra_tags)
         if units is not None:
             job_params['units'] = units
+
+    if job_params_hook is not None:
+        job_params_hook(job_params)
 
     project_id, spider_id, job_id = job_key.split('/')
     project = client.get_project(default_project_id or project_id)
