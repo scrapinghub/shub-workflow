@@ -44,15 +44,12 @@ def clone_job(job_key, client, units=None, default_project_id=None, extra_tags=N
     spider = job.metadata.get('spider')
 
     job_params = dict()
-    for key, (target_key, transform) in _COPIED_FROM_META.items():
+    for key, (target_key, _) in _COPIED_FROM_META.items():
 
         if target_key is None:
             target_key = key
 
-        if transform is None:
-            transform = lambda x: x
-
-        job_params[target_key] = transform(job.metadata.get(key))
+        job_params[target_key] = job.metadata.get(key)
         job_params.setdefault('add_tag', []).append(f'ClonedFrom={job_key}')
         job_params['add_tag'].extend(extra_tags)
         if units is not None:
@@ -60,6 +57,15 @@ def clone_job(job_key, client, units=None, default_project_id=None, extra_tags=N
 
     if job_params_hook is not None:
         job_params_hook(job_params)
+
+    for key, (target_key, transform) in _COPIED_FROM_META.items():
+
+        target_key = target_key or key
+
+        if transform is None:
+            transform = lambda x: x
+
+        job_params[target_key] = transform(job_params[target_key])
 
     project_id, spider_id, job_id = job_key.split('/')
     project = client.get_project(default_project_id or project_id)
