@@ -6,6 +6,8 @@ is overriden.
 """
 import logging
 from shub_workflow.script import BaseScript
+from shub_workflow.utils import dash_retry_decorator
+
 
 _LOG = logging.getLogger(__name__)
 _LOG.setLevel(logging.INFO)
@@ -70,11 +72,15 @@ class BaseClonner(BaseScript):
 
         project_id, _, _ = job_key.split('/')
         project = self.client.get_project(self.project_id or project_id)
-        new_job = project.jobs.run(spider, **job_params)
+        new_job = self.schedule_generic(project, spider, **job_params)
         _LOG.info("Cloned %s to %s", job_key, new_job.key)
         jobtags = job.metadata.get('tags')
         jobtags.append(f'ClonedTo={new_job.key}')
         job.metadata.update({'tags': jobtags})
+
+    @dash_retry_decorator
+    def schedule_generic(self, project, spider, **job_params):
+        return project.jobs.run(spider, **job_params)
 
 
 class CloneJobScript(BaseClonner):
