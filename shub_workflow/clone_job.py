@@ -53,8 +53,11 @@ class BaseClonner(BaseScript):
                 target_key = key
 
             job_params[target_key] = job.metadata.get(key)
-            job_params.setdefault('add_tag', []).append(f'ClonedFrom={job_key}')
-            job_params['add_tag'].extend(extra_tags)
+            add_tag = job_params.setdefault('add_tag', [])
+            add_tag = list(filter(lambda x: not x.startswith('ClonedFrom='), add_tag))
+            add_tag.append(f'ClonedFrom={job_key}')
+            add_tag.extend(extra_tags)
+            job_params['add_tag'] = add_tag
             if units is not None:
                 job_params['units'] = units
 
