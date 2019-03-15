@@ -7,11 +7,12 @@ import logging
 
 from argparse import ArgumentParser
 
-from scrapinghub import ScrapinghubClient
+from scrapinghub import ScrapinghubClient, DuplicateJobError
 
 from .utils import (
     resolve_project_id,
     dash_retry_decorator,
+    schedule_script_in_dash,
 )
 
 
@@ -79,8 +80,7 @@ class BaseScript(abc.ABC):
             project = self.get_project(project_id)
             job = project.jobs.get(jobid)
             return job.metadata
-        else:
-            logger.warning('SHUB_JOBKEY not set: not running on ScrapyCloud.')
+        logger.warning('SHUB_JOBKEY not set: not running on ScrapyCloud.')
 
     def get_job_tags(self, jobid=None, project_id=None):
         """If jobid is None, get own tags
@@ -114,6 +114,58 @@ class BaseScript(abc.ABC):
         for tag in self.get_job_tags(jobid, project_id):
             if tag.startswith('FLOW_ID='):
                 return tag.replace('FLOW_ID=', '')
+
+    def _make_tags(self, tags):
+        tags = tags or []
+        tags.extend(self.args.tag)
+        if self.flow_id:
+            tags.append(f'FLOW_ID={self.flow_id}')
+        return list(set(tags)) or None
+
+    def schedule_script(self, cmd, tags=None, project_id=None, **kwargs):
+        """
+        Schedules an external script
+        """
+        logger.info('Starting: {}'.format(cmd))
+        project = self.get_project(project_id)
+        job = schedule_script_in_dash(project, [str(x) for x in cmd], tags=self._make_tags(tags), **kwargs)
+        logger.info(f"Scheduled script job {job.key}")
+        return job.key
+
+    @dash_retry_decorator
+    def schedule_spider(self, spider, tags=None, units=None, project_id=None, **spiderargs):
+        schedule_kwargs = dict(spider=spider, add_tag=self._make_tags(tags), units=units, **spiderargs)
+        logger.info("Scheduling a spider:\n%s", schedule_kwargs)
+        try:
+            project = self.get_project(project_id)
+            job = project.jobs.run(**schedule_kwargs)
+            logger.info(f"Scheduled spider job {job.key}")
+            return job.key
+        except DuplicateJobError as e:
+            logger.error(str(e))
+        except:
+            raise
+
+    @dash_retry_decorator
+    def is_running(self, jobkey, project_id=None):
+        """
+        Checks whether a job is running (or pending)
+        """
+        project = self.get_project(project_id)
+        job = project.jobs.get(jobkey)
+        if job.metadata.get('state') in ('running', 'pending'):
+            return True
+        return False
+
+    @dash_retry_decorator
+    def is_finished(self, jobkey, project_id=None):
+        """
+        Checks whether a job is running. if so, return close_reason. Otherwise return None.
+        """
+        project = self.get_project(project_id)
+        job = project.jobs.get(jobkey)
+        if job.metadata.get('state') == 'finished':
+            return job.metadata.get('close_reason')
 
     @abc.abstractmethod
     def run(self):

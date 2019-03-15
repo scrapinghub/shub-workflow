@@ -5,13 +5,6 @@ import time
 import logging
 from uuid import uuid4
 
-from scrapinghub import DuplicateJobError
-
-from .utils import (
-    schedule_script_in_dash,
-    dash_retry_decorator,
-)
-
 from .script import BaseScript
 
 
@@ -45,58 +38,6 @@ class WorkFlowManager(BaseScript):
                                     Default: %(default)s')
         self.argparser.add_argument('--tag', help='Add given tag to the scheduled jobs. Can be given multiple times.',
                                     action='append', default=[])
-
-    def _make_tags(self, tags):
-        tags = tags or []
-        tags.extend(self.args.tag)
-        tags.append(f'FLOW_ID={self.flow_id}')
-        return list(set(tags)) or None
-
-    def schedule_script(self, cmd, tags=None, project_id=None, **kwargs):
-        """
-        Schedules an external script
-        """
-        logger.info('Starting: {}'.format(cmd))
-        project = self.get_project(project_id)
-        job = schedule_script_in_dash(project, [str(x) for x in cmd], tags=self._make_tags(tags), **kwargs)
-        logger.info(f"Scheduled script job {job.key}")
-        return job.key
-
-    @dash_retry_decorator
-    def schedule_spider(self, spider, tags=None, units=None, project_id=None, **spiderargs):
-        schedule_kwargs = dict(spider=spider, add_tag=self._make_tags(tags), units=units, **spiderargs)
-        logger.info("Scheduling a spider:\n%s", schedule_kwargs)
-        try:
-            project = self.get_project(project_id)
-            job = project.jobs.run(**schedule_kwargs)
-            logger.info(f"Scheduled spider job {job.key}")
-            return job.key
-        except DuplicateJobError as e:
-            logger.error(str(e))
-        except:
-            raise
-
-    @dash_retry_decorator
-    def is_running(self, jobkey, project_id=None):
-        """
-        Checks whether a job is running (or pending)
-        """
-        project = self.get_project(project_id)
-        job = project.jobs.get(jobkey)
-        if job.metadata.get('state') in ('running', 'pending'):
-            return True
-        return False
-
-    @dash_retry_decorator
-    def is_finished(self, jobkey, project_id=None):
-        """
-        Checks whether a job is running. if so, return close_reason. Otherwise return None.
-        """
-        project = self.get_project(project_id)
-        job = project.jobs.get(jobkey)
-        if job.metadata.get('state') == 'finished':
-            return job.metadata.get('close_reason')
-        return
 
     def wait_for(self, jobs_keys, interval=60, timeout=float('inf'), heartbeat=None):
         """Waits until all given jobs are not running anymore or until the
