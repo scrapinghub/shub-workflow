@@ -74,7 +74,7 @@ class BaseClonner(BaseScript):
             job_params[target_key] = transform(job_params[target_key])
 
         project_id, _, _ = job_key.split('/')
-        project = self.client.get_project(self.project_id or project_id)
+        project = self.get_project(self.project_id or project_id)
         new_job = self.schedule_generic(project, spider, **job_params)
         _LOG.info("Cloned %s to %s", job_key, new_job.key)
         jobtags = job.metadata.get('tags')
@@ -119,7 +119,7 @@ class CloneJobScript(BaseClonner):
         elif self.args.tag_spider:
             keys = []
             project_id, tag, spider = self.args.tag_spider.split('/')
-            for job in self.client.get_project(project_id).jobs.iter(spider=spider, state=['finished'], has_tag=tag):
+            for job in self.get_project(project_id).jobs.iter(spider=spider, state=['finished'], has_tag=tag):
                 if not self.is_cloned_by_jobkey(job['key']):
                     keys.append(job['key'])
 
