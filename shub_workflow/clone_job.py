@@ -36,6 +36,7 @@ class BaseClonner(BaseScript):
                 return True
         return False
 
+    @dash_retry_decorator
     def is_cloned_by_jobkey(self, jobkey):
         job = self.client.get_job(jobkey)
         return self.is_cloned(job)
