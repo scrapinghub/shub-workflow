@@ -1,0 +1,16 @@
+spider: baxterboo.com
+input_file: baxterboo.csv
+frequency: 4
+---
+spider: petmeds.com
+input_file: petmeds_urls.csv
+frequency: 2
+---
+spider: wayfair.com, petco.com
+input_file: wayfair.csv
+frequency: 2
+---
+spider: ALL
+input_file: wayfair.csv
+frequency: 2
+exclude: jet.com, petflow.com, walmart.com
