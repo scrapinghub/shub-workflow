@@ -64,6 +64,10 @@ class WorkFlowManager(BaseScript):
                     still_running[key] = False
 
     def on_start(self):
+        pass
+
+    def __on_start(self):
+        self.on_start()
         self.workflow_loop_enabled = True
 
     def workflow_loop(self):
@@ -76,7 +80,7 @@ class WorkFlowManager(BaseScript):
         self.on_close()
 
     def run(self):
-        self.on_start()
+        self.__on_start()
         self._run_loops()
 
     def _run_loops(self):
