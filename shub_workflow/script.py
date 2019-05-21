@@ -25,6 +25,7 @@ class BaseScript(abc.ABC):
 
     name = None  # optional, may be needed for some applications
     flow_id_required = True  # if True, script can only run in the context of a flow_id
+    children_tags = None
 
     def __init__(self):
         self.project_id = None
@@ -50,6 +51,8 @@ class BaseScript(abc.ABC):
         self.argparser.add_argument('--project-id', help='Overrides target project id.', type=int)
         self.argparser.add_argument('--name', help='Script name.')
         self.argparser.add_argument('--flow-id', help='If given, use the given flow id.')
+        self.argparser.add_argument('--tag', help='Add given tag to the scheduled jobs. Can be given multiple times.',
+                                    action='append', default=self.children_tags or [])
 
     def parse_project_id(self, args):
         return args.project_id

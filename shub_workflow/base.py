@@ -36,8 +36,6 @@ class WorkFlowManager(BaseScript):
         self.argparser.add_argument('--max-running-jobs', type=int, default=self.default_max_jobs,
                                     help='If given, don\'t allow more than the given jobs running at once.\
                                     Default: %(default)s')
-        self.argparser.add_argument('--tag', help='Add given tag to the scheduled jobs. Can be given multiple times.',
-                                    action='append', default=[])
 
     def wait_for(self, jobs_keys, interval=60, timeout=float('inf'), heartbeat=None):
         """Waits until all given jobs are not running anymore or until the
