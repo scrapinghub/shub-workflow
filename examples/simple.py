@@ -35,9 +35,6 @@ class TestManager(GraphManager):
         - We then set the `root_tasks` as the starting_jobs for this manager
           remember that the `root_tasks` is the 1st task in a chain
         """
-        import pdb
-
-        pdb.set_trace()
         config = self.load_config("examples/config.yml")
         config = self.process_config(config)
         root_task_ids = []
