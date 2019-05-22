@@ -6,4 +6,4 @@ pip install shub-workflow
 
 # Usage
 
-See tests for examples of usage
+Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for documentation. You can also see code tests for lots of examples of usage.
