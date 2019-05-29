@@ -155,6 +155,16 @@ class BaseScript(abc.ABC):
             raise
 
     @dash_retry_decorator
+    def get_jobs(self, project_id=None, **kwargs):
+        return self.get_project(project_id).jobs.iter(**kwargs)
+
+    def get_owned_jobs(self, project_id, **kwargs):
+        assert self.flow_id, "This job doesn't have a flow id."
+        assert 'has_tag' not in kwargs, "Filtering by flow id requires no extra has_tag."
+        kwargs['has_tag'] = [f'FLOW_ID={self.flow_id}']
+        return self.get_jobs(project_id, **kwargs)
+
+    @dash_retry_decorator
     def is_running(self, jobkey, project_id=None):
         """
         Checks whether a job is running (or pending)
