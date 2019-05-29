@@ -13,7 +13,11 @@ logger = logging.getLogger(__name__)
 
 class WorkFlowManager(BaseScript):
 
+    # --max-running-job command line option overrides it
     default_max_jobs = float('inf')
+
+    # If 0, don't loop. If positive number, repeat loop every given number of seconds
+    # --loop-mode command line option overrides it
     loop_mode = 0
 
     def __init__(self):
@@ -69,6 +73,10 @@ class WorkFlowManager(BaseScript):
         self.workflow_loop_enabled = True
 
     def workflow_loop(self):
+        """Implement here your loop code. Return True if want to continue looping,
+        False for immediate stop of the job. For continuous looping you also need
+        to set `loop_mode`
+        """
         pass
 
     def on_close(self):
