@@ -93,6 +93,11 @@ class BaseScript(abc.ABC):
             return dict(metadata.list()).get('tags', [])
         return []
 
+    @staticmethod
+    @dash_retry_decorator
+    def update_metadata(metadata, data):
+        metadata.update(data)
+
     def add_job_tags(self, jobid=None, project_id=None, tags=None):
         """If jobid is None, add tags to own list of tags.
         """
@@ -109,7 +114,7 @@ class BaseScript(abc.ABC):
             if update:
                 metadata = self.get_job_metadata(jobid, project_id)
                 if metadata:
-                    metadata.update({'tags': job_tags})
+                    self.update_metadata(metadata, {'tags': job_tags})
 
     def get_flowid_from_tags(self, jobid=None, project_id=None):
         """If jobid is None, get flowid from own tags
