@@ -39,7 +39,7 @@ class GraphManager(WorkFlowManager):
         self._acquired_resources = defaultdict(list)  # map resource : list of (job, ammount)
         self.__tasks = {}
         super(GraphManager, self).__init__()
-        self.__start_time = time()
+        self.__start_time = defaultdict(time)
         for task in self.configure_workflow() or ():
             self._add_task(task)
 
@@ -249,7 +249,7 @@ class GraphManager(WorkFlowManager):
     def _must_wait_time(self, job):
         status = self.__pending_jobs[job]
         if status['wait_time'] is not None:
-            wait_time = status['wait_time'] - time() + self.__start_time
+            wait_time = status['wait_time'] - time() + self.__start_time[job]
             if wait_time > 0:
                 logger.info("Job %s must wait %d seconds for running", job, wait_time)
                 return True

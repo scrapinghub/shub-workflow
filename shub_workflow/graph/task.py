@@ -133,7 +133,7 @@ class Task(BaseTask):
         units - Int. units to use for this scheduled job.
         retries - Int. Max number of retries in case job failed.
         project_id - Int. Run task in given project. If not given, just run in the actual project.
-        wait_time - Int. Don't run the task before the given number of seconds after workflow started.
+        wait_time - Int. Don't run the task before the given number of seconds after job goes to pending status.
         """
         super(Task, self).__init__(task_id, tags, units, retries, project_id, wait_time)
         self.command = command

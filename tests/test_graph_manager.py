@@ -1407,7 +1407,7 @@ class ManagerTest(BaseTestCase):
 
                 return (jobA, jobB)
 
-        mocked_time.side_effect = [0] + [900] * 4
+        mocked_time.side_effect = [0] * 8
         with script_args(['--starting-job=jobA', '--starting-job=jobB']):
             manager = _TestManager()
 
