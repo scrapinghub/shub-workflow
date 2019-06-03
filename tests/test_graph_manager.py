@@ -109,7 +109,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.assert_any_call(['commandB', 'argB', '--optionB'], tags=None, units=None,
                                                 project_id=None)
 
-        # second loop, something went wrong with jobA
+        # second loop, something went wrong with jobA, retry with retry_args instead
         manager.is_finished = lambda x: 'failed' if x == '999/1/1' else None
         manager.schedule_script.reset_mock()
         manager.schedule_script.side_effect = ['999/1/3']

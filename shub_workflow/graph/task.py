@@ -16,7 +16,7 @@ Resource = namedtuple('Resource', ['name'])
 
 
 class BaseTask(abc.ABC):
-    def __init__(self, task_id, tags=None, units=None, retries=1, project_id=None, wait_time=None):
+    def __init__(self, task_id, tags=None, units=None, retries=1, project_id=None, wait_time=None, on_finish=None):
         assert task_id != 'retry', "Reserved word 'retry' can't be used as task id"
         self.task_id = task_id
         self.tags = tags
@@ -24,6 +24,7 @@ class BaseTask(abc.ABC):
         self.retries = retries
         self.project_id = project_id
         self.wait_time = wait_time
+        self.on_finish = on_finish or {}
 
         self.__next_tasks = []
         self.__wait_for = []
@@ -88,7 +89,7 @@ class BaseTask(abc.ABC):
         jdict = {
             'tags': self.tags,
             'units': self.units,
-            'on_finish': {},
+            'on_finish': self.on_finish,
             'wait_for': [t.task_id for t in self.get_wait_for()],
         }
         next_tasks = self.get_next_tasks()
@@ -122,7 +123,7 @@ class BaseTask(abc.ABC):
 class Task(BaseTask):
     def __init__(self, task_id, command, init_args=None,
                  retry_args=None, tags=None, units=None, retries=1,
-                 project_id=None, wait_time=None):
+                 project_id=None, wait_time=None,on_finish=None):
         """
         id - String. identifies the task.
         command - String. script name or jinja2 template string.
@@ -135,7 +136,7 @@ class Task(BaseTask):
         project_id - Int. Run task in given project. If not given, just run in the actual project.
         wait_time - Int. Don't run the task before the given number of seconds after job goes to pending status.
         """
-        super(Task, self).__init__(task_id, tags, units, retries, project_id, wait_time)
+        super(Task, self).__init__(task_id, tags, units, retries, project_id, wait_time, on_finish)
         self.command = command
         self.init_args = init_args or []
         self.retry_args = retry_args or []
@@ -203,9 +204,9 @@ class SpiderTask(BaseTask):
     """
     A simple spider task.
     """
-    def __init__(self, task_id, spider, tags=None, units=None, retries=1, wait_time=None,
+    def __init__(self, task_id, spider, tags=None, units=None, retries=1, wait_time=None, on_finish=None,
                  **spider_args):
-        super(SpiderTask, self).__init__(task_id, tags, units, retries, None, wait_time)
+        super(SpiderTask, self).__init__(task_id, tags, units, retries, None, wait_time, on_finish)
         self.spider = spider
         self.__spider_args = spider_args
 
