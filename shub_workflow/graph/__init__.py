@@ -202,8 +202,6 @@ class GraphManager(WorkFlowManager):
         self.argparser.add_argument('--jobs-graph', help='Define jobs graph_dict on command line', default='{}')
         self.argparser.add_argument('--starting-job', action='append', default=[],
                                     help='Set starting jobs. Can be given multiple times.')
-        self.argparser.add_argument('--failed-outcomes', action='append', default=[],
-                                    help='Add failed outcomes to the default ones. Can be given multiple times.')
         self.argparser.add_argument('--only-starting-jobs', action='store_true',
                                     help='If given, only run the starting jobs (don\'t follow on finish next jobs)')
         self.argparser.add_argument('--comment', help='Can be used for differentiate command line and avoid scheduling '
@@ -218,7 +216,6 @@ class GraphManager(WorkFlowManager):
         args = super(GraphManager, self).parse_args()
         self.jobs_graph = yaml.load(args.jobs_graph) or deepcopy(self.jobs_graph)
 
-        self.__failed_outcomes.extend(args.failed_outcomes)
         if not self.name:
             self.argparser.error('Manager name not set.')
         return args
