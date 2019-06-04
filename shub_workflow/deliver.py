@@ -13,20 +13,29 @@ This script does the following:
 * searches for untagged finished jobs that corresponds to the given spiders and same flow id as inherited or passed
   to the delivery job.
 * gets all their items generated and uploads to customer s3 bucket in files of given max size (either in items or bytes)
-* tags processed jobs with 'delivery' tag, so they are not processed again
+* tags processed jobs with 'delivered' tag, so they are not processed again
 
 Deliver class is meant to be subclasses for overriding default behaviors, either via overriding of configuration class
 attributes or instance methods.
 
-required configuration class attributes
----------------------------------------
+configuration class attributes
+------------------------------
 
-DeliverScript.s3_bucket_name - Target s3 bucket
-DeliverScript.success_file - A boolean. Whether or not to generate a finall _SUCCESS file
+DeliverScript.s3_bucket_name - Target s3 bucket (required)
+DeliverScript.success_file - A boolean. Whether or not to generate a finall _SUCCESS file (optional, False by default)
 
 Following environment variables are also required:
 
 AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SH_APIKEY
+
+The default file format are gzipped json list. The default file name format will be:
+
+s3://<bucket_name>/<spider name>/<formatted timestamp>/<file number>.jsonl.gz
+
+The formatted timestamp corresponds to the time where the delivery script starts to run.
+
+These defaults are only there for providing a fast deployable delivery script. But mosts project has its own
+requirements, so the DeliverScript is designed for easy overriding of methods for very flexible customization.
 
 
 """
@@ -227,12 +236,10 @@ class DeliverScript(BaseScript):
         self.argparser.add_argument('--test-mode', action='store_true',
                                     help='Run in test mode (performs all processes, but doesn\'t\
                                           upload files nor tag jobs)')
-        self.argparser.add_argument('--add-tag', action='append', default=[],
-                                    help='Extra tag that target job needs to match. Can be given multiple times.')
 
     def gen_keyprefix(self, scrapername, job, item):
         formatted_datetime = self.start_datetime.strftime('%Y-%m-%dT%H:%M:%S')
-        return os.path.join(self.args.name or scrapername, formatted_datetime)
+        return os.path.join(scrapername, formatted_datetime)
 
     def _process_job_items(self, scrapername, spider_job):
         first_keyprefix = None
@@ -299,7 +306,6 @@ class DeliverScript(BaseScript):
         jobs_to_tag = []
         start = 0
         has_tag = [f"FLOW_ID={self.flow_id}"]
-        has_tag.extend(self.args.add_tag)
         jobs_count = 0
 
         while True:
