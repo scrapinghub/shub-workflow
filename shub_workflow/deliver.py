@@ -200,7 +200,7 @@ class OutputFileDict(object):
         return self.__outputfiles.pop(key)
 
 
-class DeliverScript(BaseScript):
+class S3DeliverScript(BaseScript):
 
     s3_success_file = False
     s3_bucket_name = None
@@ -323,5 +323,5 @@ class DeliverScript(BaseScript):
 
 
 if __name__ == '__main__':
-    deliver = DeliverScript()
+    deliver = S3DeliverScript()
     deliver.run()
