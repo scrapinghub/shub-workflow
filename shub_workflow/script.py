@@ -85,6 +85,17 @@ class BaseScript(abc.ABC):
             return job.metadata
         logger.warning('SHUB_JOBKEY not set: not running on ScrapyCloud.')
 
+    @dash_retry_decorator
+    def get_job(self, jobid=None):
+        """If jobid is None, get own metadata
+        """
+        jobid = jobid or os.getenv('SHUB_JOBKEY')
+        if jobid:
+            project_id = jobid.split('/', 1)[0]
+            project = self.get_project(project_id)
+            return project.jobs.get(jobid)
+        logger.warning('SHUB_JOBKEY not set: not running on ScrapyCloud.')
+
     def get_job_tags(self, jobid=None, project_id=None):
         """If jobid is None, get own tags
         """
@@ -184,6 +195,17 @@ class BaseScript(abc.ABC):
         job = project.jobs.get(jobkey)
         if job.metadata.get('state') == 'finished':
             return job.metadata.get('close_reason')
+
+    @dash_retry_decorator
+    def finish(self, jobid=None, close_reason='finished'):
+        jobid = jobid or os.getenv('SHUB_JOBKEY')
+        if jobid:
+            project_id = jobid.split('/', 1)[0]
+            hsp = self.client._hsclient.get_project(project_id)
+            hsj = hsp.get_job(jobid)
+            hsp.jobq.finish(hsj, close_reason=close_reason)
+        else:
+            logger.warning('SHUB_JOBKEY not set: not running on ScrapyCloud.')
 
     @abc.abstractmethod
     def run(self):
