@@ -197,7 +197,8 @@ class BaseScript(abc.ABC):
             return job.metadata.get('close_reason')
 
     @dash_retry_decorator
-    def finish(self, jobid=None, close_reason='finished'):
+    def finish(self, jobid=None, close_reason=None):
+        close_reason = close_reason or 'finished'
         jobid = jobid or os.getenv('SHUB_JOBKEY')
         if jobid:
             project_id = jobid.split('/', 1)[0]
