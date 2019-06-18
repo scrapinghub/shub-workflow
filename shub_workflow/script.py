@@ -51,7 +51,7 @@ class BaseScript(abc.ABC):
         self.argparser.add_argument('--project-id', help='Overrides target project id.', type=int)
         self.argparser.add_argument('--name', help='Script name.')
         self.argparser.add_argument('--flow-id', help='If given, use the given flow id.')
-        self.argparser.add_argument('--tag', help='Add given tag to the scheduled jobs. Can be given multiple times.',
+        self.argparser.add_argument('--tag', help='Additional tag added to the scheduled jobs. Can be given multiple times.',
                                     action='append', default=self.children_tags or [])
 
     def parse_project_id(self, args):

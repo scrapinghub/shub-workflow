@@ -111,8 +111,6 @@ class CloneJobScript(BaseClonner):
         self.argparser.add_argument('--tag-spider', help='In format <project_id>/<tag>/<spider name>,'
                                     'clone given spider from given project id, by tag')
         self.argparser.add_argument('--units', help='Set number of units. Default is the same as cloned job.', type=int)
-        self.argparser.add_argument('--tag', help='Additional tag added to the newly created jobs. Can be multiple.',
-                                    default=[])
 
     def run(self):
         if self.args.key:
