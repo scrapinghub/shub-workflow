@@ -30,7 +30,7 @@ class BaseClonner(BaseScript):
 
     @staticmethod
     def is_cloned(job):
-        for tag in job.metadata.get('tags'):
+        for tag in job.metadata.get('tags') or []:
             if tag.startswith('ClonedTo='):
                 _LOG.warning(f'Job {job.key} already cloned. Skipped.')
                 return True
