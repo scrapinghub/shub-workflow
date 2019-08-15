@@ -23,7 +23,8 @@ def _transform_cmd(job_cmd):
 _COPIED_FROM_META = {'job_cmd': ('cmd_args', _transform_cmd),
                      'units': (None, None),
                      'spider_args': ('job_args', None),
-                     'tags': ('add_tag', None)}
+                     'tags': ('add_tag', None),
+                     'job_settings': (None, None)}
 
 
 class BaseClonner(BaseScript):
