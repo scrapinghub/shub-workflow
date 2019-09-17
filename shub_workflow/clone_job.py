@@ -42,7 +42,10 @@ class BaseClonner(BaseScript):
         job = self.client.get_job(jobkey)
         return self.is_cloned(job)
 
-    def clone_job(self, job_key, units=None, extra_tags=None, job_params_hook=None):
+    def job_params_hook(self, job_params):
+        pass
+
+    def clone_job(self, job_key, units=None, extra_tags=None):
         extra_tags = extra_tags or []
         job = self.client.get_job(job_key)
 
@@ -63,8 +66,7 @@ class BaseClonner(BaseScript):
             if units is not None:
                 job_params['units'] = units
 
-        if job_params_hook is not None:
-            job_params_hook(job_params)
+        self.job_params_hook(job_params)
 
         for key, (target_key, transform) in _COPIED_FROM_META.items():
 
