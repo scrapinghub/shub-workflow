@@ -4,6 +4,7 @@ Implements common methods for ScrapyCloud scripts.
 import os
 import abc
 import logging
+from typing import List
 
 from argparse import ArgumentParser
 
@@ -141,7 +142,7 @@ class BaseScript(abc.ABC):
             tags.append(f'FLOW_ID={self.flow_id}')
         return list(set(tags)) or None
 
-    def schedule_script(self, cmd, tags=None, project_id=None, **kwargs):
+    def schedule_script(self, cmd: List[str], tags=None, project_id=None, **kwargs):
         """
         Schedules an external script
         """
@@ -152,7 +153,7 @@ class BaseScript(abc.ABC):
         return job.key
 
     @dash_retry_decorator
-    def schedule_spider(self, spider, tags=None, units=None, project_id=None, **spiderargs):
+    def schedule_spider(self, spider: str, tags=None, units=None, project_id=None, **spiderargs):
         schedule_kwargs = dict(spider=spider, add_tag=self._make_tags(tags), units=units, **spiderargs)
         logger.info("Scheduling a spider:\n%s", schedule_kwargs)
         try:
