@@ -85,6 +85,8 @@ class BaseClonner(BaseScript):
         jobtags.append(f'ClonedTo={new_job.key}')
         job.metadata.update({'tags': jobtags})
 
+        return job, new_job
+
     @dash_retry_decorator
     def schedule_generic(self, project, spider, **job_params):
         return project.jobs.run(spider, **job_params)
