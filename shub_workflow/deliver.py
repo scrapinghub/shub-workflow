@@ -243,6 +243,7 @@ class S3DeliverScript(BaseScript):
 
     def _process_job_items(self, scrapername, spider_job):
         first_keyprefix = None
+        job_item_count = 0
         for item in spider_job.items.iter():
             seen = False
             for field in self.dupes_filter.keys():
@@ -264,9 +265,10 @@ class S3DeliverScript(BaseScript):
                 keyprefix = first_keyprefix
             self.output_files[keyprefix].write(item)
             self.itemcount += 1
+            job_item_count += 1
             if self.itemcount % 100000 == 0:
                 _LOG.info("Processed %d items.", self.itemcount)
-        _LOG.info("Processed spider job %s", spider_job.key)
+        _LOG.info("Processed all %d items of spider job %s", job_item_count, spider_job.key)
 
     def run(self):
         success_files = set()
