@@ -3,8 +3,6 @@ import os
 
 from retrying import retry
 
-from scrapinghub import APIError
-from scrapinghub.client.exceptions import DuplicateJobError
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -39,7 +37,7 @@ def resolve_project_id(project_id=None):
         project_id = cfg.get_project_id('default')
         if project_id:
             return project_id
-    except:
+    except Exception:
         logger.warning("Install shub package if want to access scrapinghub.yml")
 
     if not project_id:

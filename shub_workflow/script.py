@@ -159,7 +159,7 @@ class BaseScript(abc.ABC):
             job = project.jobs.run(**schedule_kwargs)
         except DuplicateJobError as e:
             logger.error(str(e))
-        except:
+        except Exception:
             raise
         else:
             logger.info(f"Scheduled job {job.key}")
