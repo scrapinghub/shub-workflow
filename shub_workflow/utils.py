@@ -48,12 +48,6 @@ MINS_IN_A_DAY = 24 * 60
 ONE_MIN_IN_S = 60
 
 
-class _DontRetry(RuntimeError):
-
-    def __init__(self, exception):
-        self.exception = exception
-
-
 def just_log_exception(exception):
     logger.error(repr(exception))
     for etype in (KeyboardInterrupt, SystemExit, ImportError):
