@@ -1,19 +1,20 @@
 """
 Implements common methods for ScrapyCloud scripts.
 """
-import os
-import abc
-import logging
-from typing import List
 
+import abc
+import json
+import logging
+import os
+import subprocess
 from argparse import ArgumentParser
+from typing import List
 
 from scrapinghub import ScrapinghubClient, DuplicateJobError
 
 from .utils import (
     resolve_project_id,
     dash_retry_decorator,
-    schedule_script_in_dash,
 )
 
 
@@ -144,29 +145,48 @@ class BaseScript(abc.ABC):
             tags.append(f'FLOW_ID={self.flow_id}')
         return list(set(tags)) or None
 
-    def schedule_script(self, cmd: List[str], tags=None, project_id=None, **kwargs):
-        """
-        Schedules an external script
-        """
-        logger.info('Starting: {}'.format(cmd))
-        project = self.get_project(project_id)
-        job = schedule_script_in_dash(project, [str(x) for x in cmd], tags=self._make_tags(tags), **kwargs)
-        logger.info(f"Scheduled script job {job.key}")
-        return job.key
-
     @dash_retry_decorator
-    def schedule_spider(self, spider: str, tags=None, units=None, project_id=None, **spiderargs):
-        schedule_kwargs = dict(spider=spider, add_tag=self._make_tags(tags), units=units, **spiderargs)
-        logger.info("Scheduling a spider:\n%s", schedule_kwargs)
+    def _schedule_job(self, spider: str, tags=None, units=None, project_id=None, **kwargs):
+        project = self.get_project(project_id)
+        schedule_kwargs = dict(
+            spider=spider,
+            add_tag=self._make_tags(tags),
+            units=units,
+            **kwargs,
+        )
+        logger.info("Scheduling a job:\n%s", schedule_kwargs)
         try:
-            project = self.get_project(project_id)
             job = project.jobs.run(**schedule_kwargs)
-            logger.info(f"Scheduled spider job {job.key}")
-            return job.key
         except DuplicateJobError as e:
             logger.error(str(e))
-        except:
+        except Exception:
             raise
+        else:
+            logger.info(f"Scheduled job {job.key}")
+            return job.key
+
+    def schedule_script(self, cmd: List[str], tags=None, project_id=None, units=None, meta=None):
+        cmd = [str(x) for x in cmd]
+        scriptname = cmd[0]
+        if not scriptname.startswith('py:'):
+            scriptname = 'py:' + scriptname
+        return self._schedule_job(
+            spider=scriptname,
+            tags=tags,
+            units=units,
+            project_id=project_id,
+            cmd_args=subprocess.list2cmdline(cmd[1:]),
+            meta=json.dumps(meta) if meta else None,
+        )
+
+    def schedule_spider(self, spider: str, tags=None, units=None, project_id=None, **kwargs):
+        return self._schedule_job(
+            spider=spider,
+            tags=tags,
+            units=units,
+            project_id=project_id,
+            **kwargs,
+        )
 
     @dash_retry_decorator
     def get_jobs(self, project_id=None, **kwargs):
