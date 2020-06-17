@@ -205,6 +205,8 @@ class S3DeliverScript(BaseScript):
     s3_success_file = False
     s3_bucket_name = None
 
+    default_sh_chunk_size = 1_000
+
     def __init__(self):
         super().__init__()
 
@@ -236,6 +238,10 @@ class S3DeliverScript(BaseScript):
         self.argparser.add_argument('--test-mode', action='store_true',
                                     help='Run in test mode (performs all processes, but doesn\'t\
                                           upload files nor tag jobs)')
+        self.argparser.add_argument('--sh-chunk-size', type=int, default=self.default_sh_chunk_size, help=(
+            'Chunk/page size for downloading items from Scrapy Cloud. For tweaking memory consumption and speed.'
+            ' Note that the performance will depend on the sizes of individual items in the cloud.'
+        ))
 
     def gen_keyprefix(self, scrapername, job, item):
         formatted_datetime = self.start_datetime.strftime('%Y-%m-%dT%H:%M:%S')
@@ -244,7 +250,9 @@ class S3DeliverScript(BaseScript):
     def _process_job_items(self, scrapername, spider_job):
         first_keyprefix = None
         job_item_count = 0
-        for item in spider_job.items.iter():
+        chunks = spider_job.items.list_iter(chunksize=self.args.sh_chunk_size)
+        items_iter = (item for chunk in chunks for item in chunk)
+        for item in items_iter:
             seen = False
             for field in self.dupes_filter.keys():
                 if field in item:
