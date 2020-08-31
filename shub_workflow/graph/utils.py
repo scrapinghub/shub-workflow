@@ -31,7 +31,8 @@ def get_scheduled_jobs_specs(manager, job_ids):
     """
     scheduled_jobs = []
     for jobid in job_ids:
-        job = manager.project.jobs.get(jobid)
+        project_id = jobid.split('/')[0]
+        job = manager.get_project(project_id).jobs.get(jobid)
         for l in job.logs.iter_values():
             if 'message' not in l:
                 continue
