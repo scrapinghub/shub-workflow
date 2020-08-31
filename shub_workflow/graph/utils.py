@@ -33,7 +33,7 @@ def get_scheduled_jobs_specs(manager, job_ids):
     for jobid in job_ids:
         project_id = jobid.split('/')[0]
         job = manager.get_project(project_id).jobs.get(jobid)
-        for l in job.logs.iter_values():
+        for l in job.logs.iter():
             if 'message' not in l:
                 continue
             m = _search_scheduled_line(l['message'])
