@@ -37,9 +37,9 @@ class TestManager2(GraphManager):
 
     def configure_workflow(self):
         # define jobs
-        jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}',
+        jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}',
                     init_args=['argA', '--optionA'], retry_args=['argA'], tags=['tag1', 'tag2'], retries=2)
-        jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }} {% endfor %}',
+        jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }}\n{% endfor %}',
                     init_args=['argB', '--optionB'])
         jobC = Task(task_id='jobC', command='commandC', init_args=['argC'], retries=2)
         jobD = Task(task_id='jobD', command='commandD')
@@ -60,9 +60,9 @@ class TestManager3(GraphManager):
 
     def configure_workflow(self):
         # define jobs
-        jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}',
+        jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}',
                     init_args=['argA', '--optionA'], retry_args=['argA'], tags=['tag1', 'tag2'])
-        jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }} {% endfor %}',
+        jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }}\n{% endfor %}',
                     init_args=['argB', '--optionB'])
         jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
         jobD = Task(task_id='jobD', command='commandD')
@@ -605,9 +605,9 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self):
                 # define jobs
-                jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}',
+                jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}',
                             init_args=['argA', '--optionA'], retry_args=['argA'], tags=['tag1', 'tag2'])
-                jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }} {% endfor %}',
+                jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }}\n{% endfor %}',
                             init_args=['argB', '--optionB'])
                 jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
                 jobD = Task(task_id='jobD', command='commandD')
@@ -659,9 +659,9 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self):
                 # define jobs
-                jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}',
+                jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}',
                             init_args=['argA', '--optionA'], retry_args=['argA'], tags=['tag1', 'tag2'])
-                jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }} {% endfor %}',
+                jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }}\n{% endfor %}',
                             init_args=['argB', '--optionB'])
                 jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
                 jobD = Task(task_id='jobD', command='commandD')
@@ -721,9 +721,9 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self):
                 # define jobs
-                jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}',
+                jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}',
                             init_args=['argA', '--optionA'], retry_args=['argA'], tags=['tag1', 'tag2'])
-                jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }} {% endfor %}',
+                jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }}\n{% endfor %}',
                             init_args=['argB', '--optionB'])
                 jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
                 jobD = Task(task_id='jobD', command='commandD')
@@ -785,9 +785,9 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self):
                 # define jobs
-                jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}',
+                jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}',
                             init_args=['argA', '--optionA'], retry_args=['argA'], tags=['tag1', 'tag2'])
-                jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }} {% endfor %}',
+                jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }}\n{% endfor %}',
                             init_args=['argB', '--optionB'])
                 jobC = Task(task_id='jobC', command='commandC', init_args=['argC'])
                 jobD = Task(task_id='jobD', command='commandD')
@@ -850,7 +850,7 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self):
                 # define jobs
-                jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}',
+                jobA = Task(task_id='jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}',
                             init_args=['argA', '--optionA'])
                 jobB = Task(task_id='jobB', command='commandB', init_args=['argB', '--optionB'])
                 jobC = Task(task_id='jobC', command='commandC', init_args=['argC', '--optionC'])
@@ -907,7 +907,7 @@ class ManagerTest(BaseTestCase):
             def configure_workflow(self):
                 # define jobs
                 jobA = Task(task_id='jobA', command='commandA')
-                jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }} {% endfor %}',
+                jobB = Task(task_id='jobB', command='{% for i in range(4) %}commandB --parg={{ i }}\n{% endfor %}',
                             init_args=['argB', '--optionB'])
                 jobC = Task(task_id='jobC', command='commandC')
                 jobD = Task(task_id='jobD', command='commandD')
@@ -1074,7 +1074,7 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self):
                 # define tasks
-                jobA = Task('jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}')
+                jobA = Task('jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}')
                 jobB = Task('jobB', command='commandB')
 
                 # set required resources
@@ -1131,9 +1131,9 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self):
                 # define tasks
-                jobA = Task('jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}')
+                jobA = Task('jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}')
                 jobB = Task('jobB', command='commandB')
-                jobC = Task('jobC', command='{% for i in range(4) %}commandC --parg={{ i }} {% endfor %}')
+                jobC = Task('jobC', command='{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}')
 
                 # set required resources
                 jobA.add_required_resources({self.fooR: 1})
@@ -1193,9 +1193,9 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self):
                 # define tasks
-                jobA = Task('jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}')
+                jobA = Task('jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}')
                 jobB = Task('jobB', command='commandB')
-                jobC = Task('jobC', command='{% for i in range(4) %}commandC --parg={{ i }} {% endfor %}')
+                jobC = Task('jobC', command='{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}')
 
                 # set required resources
                 jobA.add_required_resources({self.fooR: 1})
@@ -1250,8 +1250,8 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self):
                 # define tasks
-                jobA = Task('jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}')
-                jobC = Task('jobC', command='{% for i in range(4) %}commandC --parg={{ i }} {% endfor %}')
+                jobA = Task('jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}')
+                jobC = Task('jobC', command='{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}')
 
                 # set required resources
                 jobA.add_required_resources({self.fooR: 1})
@@ -1305,7 +1305,7 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self):
                 # define tasks
-                jobA = Task('jobA', command='{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}')
+                jobA = Task('jobA', command='{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}')
                 jobB = Task('jobB', command='commandB')
 
                 return jobA, jobB
@@ -1351,9 +1351,7 @@ class ManagerTest(BaseTestCase):
             name = 'test'
 
             def configure_workflow(self):
-                command = '''{% for i in range(4) %}
-                                commandB --config='{"topic": {{ i }}, "file": "ds_dump_{{ i }}"}'
-                             {% endfor %}'''
+                command = '''{% for i in range(4) %}commandB --config='{"topic": {{ i }}, "file": "ds_dump_{{ i }}"}'\n{% endfor %}'''
                 jobB = Task('jobB', command=command, init_args=['argB', '--optionB'])
                 return (jobB,)
 
@@ -1375,9 +1373,7 @@ class ManagerTest(BaseTestCase):
             name = 'test'
 
             def configure_workflow(self):
-                jobB = Task('jobB', command='''{% for i in range(4) %}
-                                                    commandB --config='{"topic": {{ i }}, "file": "ds_dump_{{ i }}"}'
-                                            {% endfor %}''',
+                jobB = Task('jobB', command='''{% for i in range(4) %}commandB --config='{"topic": {{ i }}, "file": "ds_dump_{{ i }}"}'\n{% endfor %}''',
                             init_args=['argB', '--optionB'], project_id=1999)
                 return (jobB,)
 
@@ -1401,7 +1397,7 @@ class ManagerTest(BaseTestCase):
             name = 'test'
 
             def configure_workflow(self):
-                jobA = Task('jobA', '{% for i in range(4) %}commandA --parg={{ i }} {% endfor %}', wait_time=3600)
+                jobA = Task('jobA', '{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}', wait_time=3600)
                 jobB = Task('jobB', 'commandB')
                 jobB.add_wait_for(jobA)
 

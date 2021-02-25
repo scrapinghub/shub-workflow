@@ -152,7 +152,7 @@ class Task(BaseTask):
         return jdict
 
     def get_commands(self):
-        return list(self.__template.generate())
+        return self.__template.render().splitlines()
 
     def get_command(self, index=None):
         index = index or 0

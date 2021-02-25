@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name         = 'shub-workflow',
-    version      = '1.6.7.1',
+    version      = '1.6.8',
     description  = 'Workflow manager for scrapinghub ScrapyCloud tasks.',
     long_description = open('README.md').read(),
     license      = 'BSD',
@@ -28,5 +28,6 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
     ]
 )
