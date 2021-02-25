@@ -2,7 +2,7 @@ import os
 from unittest import TestCase
 from unittest.mock import patch
 
-from shub_workflow.crawl import CrawlManager, PeriodicCrawlManager, ListCrawlManager
+from shub_workflow.crawl import CrawlManager, PeriodicCrawlManager, GeneratorCrawlManager
 
 from .utils.contexts import script_args
 
@@ -17,17 +17,19 @@ class PeriodicTestManager(PeriodicCrawlManager):
     name = "test"
 
 
-class ListTestManager(ListCrawlManager):
+class ListTestManager(GeneratorCrawlManager):
 
     name = "test"
     default_max_jobs = 2
 
-    def set_parameters_list(self):
-        self.parameters_list = [
+    def set_parameters_gen(self):
+        parameters_list = [
             {"argA": "valA"},
             {"argA": "valB"},
             {"argB": "valC"},
         ]
+        for args in parameters_list:
+            yield args
 
 
 class CrawlManagerTest(TestCase):

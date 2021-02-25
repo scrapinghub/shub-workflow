@@ -105,35 +105,31 @@ class PeriodicCrawlManager(CrawlManager):
         pass
 
 
-class ListCrawlManager(PeriodicCrawlManager):
+class GeneratorCrawlManager(PeriodicCrawlManager):
     """
-    Schedule a spider periodically, each time with different parameters taken from a list, until emptied.
+    Schedule a spider periodically, each time with different parameters yielded by a generator, until stop.
     Number of simultaneos spider jobs will be limited by max running jobs (see WorkFlowManager).
     Instructions:
-    - Override set_parameters_list() method.
+    - Override set_parameters_gen() method. It must implement a generator of dictionaries, each one being
+      the spider arguments passed to the spider on each successive job.
     - Don't forget to set loop mode and max jobs (which defaults to infinite).
-    - The parameters list is a list of dictionaries, each one being the spider arguments passed to the spider
-      on each successive job.
     """
 
     def __init__(self):
         super().__init__()
-        self.parameters_list = None
+        self.parameters_gen = self.set_parameters_gen()
 
-    def set_parameters_list(self):
-        pass
-
-    def on_start(self):
-        self.set_parameters_list()
-        assert (
-            self.parameters_list is not None
-        ), "You must implement set_parameters_list() method."
+    def set_parameters_gen(self):
+        for i in []:
+            yield i
 
     def workflow_loop(self):
         self.check_running_jobs()
-        if self.parameters_list:
-            if len(self._running_job_keys) < self.max_running_jobs:
-                self.schedule_spider(spider_args_override=self.parameters_list.pop(0))
-        elif not self._running_job_keys:
-            return False
+        if len(self._running_job_keys) < self.max_running_jobs:
+            try:
+                next_params = next(self.parameters_gen)
+                self.schedule_spider(spider_args_override=next_params)
+            except StopIteration:
+                if not self._running_job_keys:
+                    return False
         return True
