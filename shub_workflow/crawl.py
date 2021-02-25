@@ -12,6 +12,10 @@ _LOG = logging.getLogger(__name__)
 
 
 class CrawlManager(WorkFlowManager):
+    """
+    Schedules a single spider job. If loop mode is enabled, it will shutdown only after the scheduled spider
+    finished. Close reason of the manager will be inherited from spider one.
+    """
 
     def __init__(self):
         super().__init__()
@@ -20,10 +24,16 @@ class CrawlManager(WorkFlowManager):
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument('spider', help='Spider name')
-        self.argparser.add_argument('--spider-args', help='Spider arguments dict in json format', default='{}')
-        self.argparser.add_argument('--job-settings', help='Job settings dict in json format', default='{}')
-        self.argparser.add_argument('--units', help='Set number of ScrapyCloud units for each job', type=int)
+        self.argparser.add_argument("spider", help="Spider name")
+        self.argparser.add_argument(
+            "--spider-args", help="Spider arguments dict in json format", default="{}"
+        )
+        self.argparser.add_argument(
+            "--job-settings", help="Job settings dict in json format", default="{}"
+        )
+        self.argparser.add_argument(
+            "--units", help="Set number of ScrapyCloud units for each job", type=int
+        )
 
     def get_spider_args(self, override=None):
         spider_args = json.loads(self.args.spider_args)
@@ -40,8 +50,12 @@ class CrawlManager(WorkFlowManager):
     def schedule_spider(self, spider_args_override=None, job_settings_override=None):
         spider_args = self.get_spider_args(spider_args_override)
         job_settings = self.get_job_settings(job_settings_override)
-        spider_args['job_settings'] = job_settings
-        self._running_job_keys.append(super().schedule_spider(self.args.spider, units=self.args.units, **spider_args))
+        spider_args["job_settings"] = job_settings
+        self._running_job_keys.append(
+            super().schedule_spider(
+                self.args.spider, units=self.args.units, **spider_args
+            )
+        )
 
     def check_running_jobs(self):
         outcomes = {}
@@ -50,7 +64,7 @@ class CrawlManager(WorkFlowManager):
             if outcome is None:
                 continue
             _LOG.info(f"Job {jobkey} finished with outcome {outcome}.")
-            if outcome == 'finished':
+            if outcome == "finished":
                 self._running_job_keys.remove(jobkey)
             else:
                 self._bad_outcomes[jobkey] = outcome
@@ -61,7 +75,8 @@ class CrawlManager(WorkFlowManager):
         outcomes = self.check_running_jobs()
         if outcomes:
             return False
-        self.schedule_spider()
+        elif not self._running_job_keys:
+            self.schedule_spider()
         return True
 
     def on_close(self):
@@ -72,3 +87,19 @@ class CrawlManager(WorkFlowManager):
                 close_reason = outcome
                 break
             self.finish(job.key, close_reason=close_reason)
+
+
+class PeriodicCrawlManager(CrawlManager):
+    """
+    Schedule a spider periodically, waiting for the previous job to finish before scheduling it again with same
+    parameters. Don't forget to set loop_mode.
+    """
+
+    def workflow_loop(self):
+        self.check_running_jobs()
+        if not self._running_job_keys:
+            self.schedule_spider()
+        return True
+
+    def on_close(self):
+        pass
