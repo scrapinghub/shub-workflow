@@ -92,7 +92,7 @@ class CrawlManager(WorkFlowManager):
 class PeriodicCrawlManager(CrawlManager):
     """
     Schedule a spider periodically, waiting for the previous job to finish before scheduling it again with same
-    parameters. Don't forget to set loop_mode.
+    parameters. Don't forget to set loop mode.
     """
 
     def workflow_loop(self):
@@ -103,3 +103,37 @@ class PeriodicCrawlManager(CrawlManager):
 
     def on_close(self):
         pass
+
+
+class ListCrawlManager(PeriodicCrawlManager):
+    """
+    Schedule a spider periodically, each time with different parameters taken from a list, until emptied.
+    Number of simultaneos spider jobs will be limited by max running jobs (see WorkFlowManager).
+    Instructions:
+    - Override set_parameters_list() method.
+    - Don't forget to set loop mode and max jobs (which defaults to infinite).
+    - The parameters list is a list of dictionaries, each one being the spider arguments passed to the spider
+      on each successive job.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.parameters_list = None
+
+    def set_parameters_list(self):
+        pass
+
+    def on_start(self):
+        self.set_parameters_list()
+        assert (
+            self.parameters_list is not None
+        ), "You must implement set_parameters_list() method."
+
+    def workflow_loop(self):
+        self.check_running_jobs()
+        if self.parameters_list:
+            if len(self._running_job_keys) < self.max_running_jobs:
+                self.schedule_spider(spider_args_override=self.parameters_list.pop(0))
+        elif not self._running_job_keys:
+            return False
+        return True
