@@ -61,47 +61,16 @@ class GraphManager(WorkFlowManager):
     def on_start(self):
         if not self.jobs_graph:
             self.argparser.error('Jobs graph configuration is empty.')
-        if not self.args.starting_job and not self.args.resume_from_jobid:
-            self.argparser.error('You must provide either --starting-job or --resume-from-jobid.')
+        if not self.args.starting_job:
+            self.argparser.error('You must provide --starting-job')
         self._fill_available_resources()
-        ran_tasks = self._maybe_setup_resume()
+        ran_tasks = []
         self._setup_starting_jobs(ran_tasks)
         self.workflow_loop_enabled = True
         logger.info("Starting '%s' workflow", self.name)
 
-    def _get_starting_jobs_from_resumed_job(self):
-        starting_jobs = []
-        job = self.get_project().jobs.get(self.args.resume_from_jobid)
-        next_option_is_task = False
-        for option in job.metadata.get('job_cmd'):
-            if next_option_is_task:
-                starting_jobs.append(option)
-            else:
-                m = _STARTING_JOB_RE.match(option)
-                if m:
-                    task = m.groups()[0]
-                    if m:
-                        starting_jobs.append(task)
-                    else:
-                        next_option_is_task = True
-        return starting_jobs
-
-    def _maybe_setup_resume(self):
-        ran_tasks = []
-        if self.args.resume_from_jobid:
-            # fill tasks job ids
-            logger.info("Will Resume from job (%s)", self.args.resume_from_jobid)
-            for _, name, jobid in get_scheduled_jobs_specs(self, [self.args.resume_from_jobid]):
-                mname, taskid = name.split('/')
-                assert mname == self.name, "Resuming from wrong manager job: %s" % self.args.resume_from_jobid
-                self.__tasks[taskid].append_jobid(jobid)
-                ran_tasks.append(taskid)
-        return ran_tasks
-
     def _setup_starting_jobs(self, ran_tasks, candidates=None):
         candidates = candidates or self.args.starting_job
-        if not candidates:  # resuming
-            candidates = self._get_starting_jobs_from_resumed_job()
         for taskid in candidates:
             if taskid in ran_tasks:
                 logger.info("Task %s already done %s.", taskid, tuple(self.__tasks[taskid].get_scheduled_jobs()))
@@ -210,7 +179,6 @@ class GraphManager(WorkFlowManager):
         self.argparser.add_argument('--skip-job', default=[], action='append',
                                     help='Skip given job. Can be given multiple times. Also next jobs for the skipped'
                                          'one will be skipped.')
-        self.argparser.add_argument('--resume-from-jobid', help='Resume from the given graph manager jobid')
 
     def parse_args(self):
         args = super(GraphManager, self).parse_args()
