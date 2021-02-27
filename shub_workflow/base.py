@@ -4,6 +4,7 @@ Implements common methods for any workflow manager
 import time
 import logging
 from uuid import uuid4
+import abc
 
 from .script import BaseScript
 
@@ -11,7 +12,7 @@ from .script import BaseScript
 logger = logging.getLogger(__name__)
 
 
-class WorkFlowManager(BaseScript):
+class WorkFlowManager(BaseScript, abc.ABC):
 
     # --max-running-job command line option overrides it
     default_max_jobs = float('inf')
@@ -19,6 +20,8 @@ class WorkFlowManager(BaseScript):
     # If 0, don't loop. If positive number, repeat loop every given number of seconds
     # --loop-mode command line option overrides it
     loop_mode = 0
+
+    flow_id_required = True
 
     def __init__(self):
         self.workflow_loop_enabled = False
@@ -40,6 +43,8 @@ class WorkFlowManager(BaseScript):
         self.argparser.add_argument('--max-running-jobs', type=int, default=self.default_max_jobs,
                                     help='If given, don\'t allow more than the given jobs running at once.\
                                     Default: %(default)s')
+        self.argparser.add_argument('--resume-workflow', help='Resume workflow. You must use it in combination with\
+                                    --flow-id in order to set the flow id of the worklow you want to resume.', action='store_true')
 
     def wait_for(self, jobs_keys, interval=60, timeout=float('inf'), heartbeat=None):
         """Waits until all given jobs are not running anymore or until the
@@ -65,13 +70,28 @@ class WorkFlowManager(BaseScript):
                 else:
                     still_running[key] = False
 
+    def collect_running_jobs(self):
+        """
+        Get all running jobs with same flow id
+        """
+
     def on_start(self):
         pass
 
+    @abc.abstractmethod
+    def resume_workflow(self):
+        """
+        Implement resume logic
+        """
+        pass
+
     def __on_start(self):
+        if self.args.resume_workflow:
+            self.resume_workflow()
         self.on_start()
         self.workflow_loop_enabled = True
 
+    @abc.abstractmethod
     def workflow_loop(self):
         """Implement here your loop code. Return True if want to continue looping,
         False for immediate stop of the job. For continuous looping you also need
