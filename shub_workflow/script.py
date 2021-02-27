@@ -26,7 +26,7 @@ logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s')
 class BaseScript(abc.ABC):
 
     name = None  # optional, may be needed for some applications
-    flow_id_required = True  # if True, script can only run in the context of a flow_id
+    flow_id_required = False  # if True, script can only run in the context of a flow_id
     children_tags = None
     default_project_id = None
 
@@ -192,9 +192,10 @@ class BaseScript(abc.ABC):
     def get_jobs(self, project_id=None, **kwargs):
         return self.get_project(project_id).jobs.iter(**kwargs)
 
-    def get_owned_jobs(self, project_id, **kwargs):
+    def get_owned_jobs(self, project_id=None, **kwargs):
         assert self.flow_id, "This job doesn't have a flow id."
         assert 'has_tag' not in kwargs, "Filtering by flow id requires no extra has_tag."
+        assert 'state' in kwargs, "'state' parameter must be provided."
         kwargs['has_tag'] = [f'FLOW_ID={self.flow_id}']
         return self.get_jobs(project_id, **kwargs)
 

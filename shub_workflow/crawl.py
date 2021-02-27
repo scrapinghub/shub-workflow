@@ -19,8 +19,10 @@ class CrawlManager(WorkFlowManager):
 
     def __init__(self):
         super().__init__()
-        self._running_job_keys = []
         self._bad_outcomes = {}
+
+        # running jobs represents the state of a crawl manager.
+        self._running_job_keys = []
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -78,6 +80,10 @@ class CrawlManager(WorkFlowManager):
         elif not self._running_job_keys:
             self.schedule_spider()
         return True
+
+    def resume_workflow(self):
+        for job in self.get_owned_jobs(state=['running']):
+            self._running_job_keys.append(job['key'])
 
     def on_close(self):
         job = self.get_job()

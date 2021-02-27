@@ -1,6 +1,6 @@
 import os
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from shub_workflow.crawl import CrawlManager, PeriodicCrawlManager, GeneratorCrawlManager
 
@@ -43,7 +43,7 @@ class CrawlManagerTest(TestCase):
             manager = TestManager()
 
         mocked_super_schedule_spider.side_effect = ["999/1/1"]
-        manager.on_start()
+        manager._WorkFlowManager__on_start()
 
         # first loop: schedule spider
         result = manager.workflow_loop()
@@ -68,12 +68,34 @@ class CrawlManagerTest(TestCase):
         self.assertFalse(mocked_super_schedule_spider.called)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_schedule_spider_with_resume(self, mocked_super_schedule_spider):
+        with script_args(["myspider", "--flow-id=3a20", "--resume-workflow"]):
+            manager = TestManager()
+
+        manager.get_owned_jobs = Mock()
+        manager.get_owned_jobs.side_effect = [[{"key": "999/1/1"}]]
+        manager._WorkFlowManager__on_start()
+        self.assertEqual(manager.get_owned_jobs.call_count, 1)
+
+        # first loop: spider still running in workflow. Continue.
+        manager.is_finished = lambda x: None
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+
+        # second loop: spider is finished. Stop.
+        manager.is_finished = lambda x: "finished" if x == "999/1/1" else None
+        result = manager.workflow_loop()
+
+        self.assertFalse(result)
+        self.assertFalse(mocked_super_schedule_spider.called)
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_schedule_spider_periodic(self, mocked_super_schedule_spider):
         with script_args(["myspider"]):
             manager = PeriodicTestManager()
 
         mocked_super_schedule_spider.side_effect = ["999/1/1"]
-        manager.on_start()
+        manager._WorkFlowManager__on_start()
 
         # first loop: schedule spider
         result = manager.workflow_loop()
@@ -106,7 +128,7 @@ class CrawlManagerTest(TestCase):
             manager = ListTestManager()
 
         mocked_super_schedule_spider.side_effect = ["999/1/1", "999/1/2", "999/1/3"]
-        manager.on_start()
+        manager._WorkFlowManager__on_start()
 
         # first loop: schedule spider with first set of arguments
         result = manager.workflow_loop()
