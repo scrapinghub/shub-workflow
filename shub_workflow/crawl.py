@@ -64,16 +64,17 @@ class CrawlManager(WorkFlowManager):
         for jobkey in list(self._running_job_keys):
             outcome = self.is_finished(jobkey)
             if outcome is None:
+                _LOG.debug(f"Job {jobkey} still running.")
                 continue
             _LOG.info(f"Job {jobkey} finished with outcome {outcome}.")
-            if outcome == "finished":
-                self._running_job_keys.remove(jobkey)
-            else:
+            self._running_job_keys.remove(jobkey)
+            if outcome in self.base_failed_outcomes:
                 self._bad_outcomes[jobkey] = outcome
             outcomes[jobkey] = outcome
             return outcomes
 
     def workflow_loop(self):
+        _LOG.info("Executing loop.")
         outcomes = self.check_running_jobs()
         if outcomes:
             return False
