@@ -68,6 +68,37 @@ class CrawlManagerTest(TestCase):
         self.assertFalse(mocked_super_schedule_spider.called)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_schedule_spider_badoutcome(self, mocked_super_schedule_spider):
+        with script_args(["myspider"]):
+            manager = TestManager()
+
+        mocked_super_schedule_spider.side_effect = ["999/1/1"]
+        manager._WorkFlowManager__on_start()
+
+        # first loop: schedule spider
+        result = manager.workflow_loop()
+
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 1)
+        mocked_super_schedule_spider.assert_any_call(
+            "myspider", units=None, job_settings={}
+        )
+
+        # second loop: spider still running. Continue.
+        manager.is_finished = lambda x: None
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+
+        # third loop: spider is finished. Stop.
+        manager.is_finished = lambda x: "cancelled" if x == "999/1/1" else None
+        mocked_super_schedule_spider.reset_mock()
+        result = manager.workflow_loop()
+
+        self.assertFalse(result)
+        self.assertFalse(mocked_super_schedule_spider.called)
+
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_schedule_spider_with_resume(self, mocked_super_schedule_spider):
         with script_args(["myspider", "--flow-id=3a20", "--resume-workflow"]):
             manager = TestManager()
@@ -122,6 +153,18 @@ class CrawlManagerTest(TestCase):
             "myspider", units=None, job_settings={}
         )
 
+        # four loop: spider is cancelled. Schedule again.
+        manager.is_finished = lambda x: "cancelled" if x == "999/1/2" else None
+        mocked_super_schedule_spider.reset_mock()
+        mocked_super_schedule_spider.side_effect = ["999/1/3"]
+        result = manager.workflow_loop()
+
+        self.assertTrue(result)
+        mocked_super_schedule_spider.assert_any_call(
+            "myspider", units=None, job_settings={}
+        )
+
+
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_schedule_spider_list(self, mocked_super_schedule_spider):
         with script_args(["myspider"]):
@@ -168,7 +211,7 @@ class CrawlManagerTest(TestCase):
         self.assertEqual(mocked_super_schedule_spider.call_count, 3)
 
         # fourth loop: second job finished
-        manager.is_finished = lambda x: "finished" if x == "999/1/2" else None
+        manager.is_finished = lambda x: "cancelled" if x == "999/1/2" else None
         result = manager.workflow_loop()
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 3)

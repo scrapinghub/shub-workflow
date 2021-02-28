@@ -23,6 +23,15 @@ class WorkFlowManager(BaseScript, abc.ABC):
 
     flow_id_required = True
 
+    base_failed_outcomes = (
+        "failed",
+        "killed by oom",
+        "cancelled",
+        "cancel_timeout",
+        "memusage_exceeded",
+        "cancelled (stalled)",
+    )
+
     def __init__(self):
         self.workflow_loop_enabled = False
         super().__init__()

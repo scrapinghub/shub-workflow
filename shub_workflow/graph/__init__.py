@@ -25,14 +25,6 @@ _STARTING_JOB_RE = re.compile("--starting-job(?:=(.+))?")
 class GraphManager(WorkFlowManager):
 
     jobs_graph = {}
-    base_failed_outcomes = (
-        "failed",
-        "killed by oom",
-        "cancelled",
-        "cancel_timeout",
-        "memusage_exceeded",
-        "cancelled (stalled)",
-    )
 
     def __init__(self):
         self.__failed_outcomes = list(self.base_failed_outcomes)
