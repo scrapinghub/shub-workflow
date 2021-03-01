@@ -20,10 +20,25 @@ from .utils import (
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s')
+logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s")
 
 
-class BaseScript(abc.ABC):
+class ArgumentParserScript(abc.ABC):
+    def __init__(self):
+        self.args = self.parse_args()
+
+    @abc.abstractmethod
+    def add_argparser_options(self):
+        pass
+
+    def parse_args(self):
+        self.argparser = ArgumentParser(self.description)
+        self.add_argparser_options()
+        args = self.argparser.parse_args()
+        return args
+
+
+class BaseScript(ArgumentParserScript):
 
     name = None  # optional, may be needed for some applications
     flow_id_required = False  # if True, script can only run in the context of a flow_id
@@ -33,14 +48,14 @@ class BaseScript(abc.ABC):
     def __init__(self):
         self.project_id = None
         self.client = ScrapinghubClient()
-        self.args = self.parse_args()
+        super().__init__()
 
     def set_flow_id(self, args, default=None):
         self._flow_id = args.flow_id or self.get_flowid_from_tags() or default
         if self.flow_id_required:
             assert not self.flow_id_required or self.flow_id, "Could not detect flow_id. Please set with --flow-id."
         if self.flow_id:
-            self.add_job_tags(tags=[f'FLOW_ID={self.flow_id}'])
+            self.add_job_tags(tags=[f"FLOW_ID={self.flow_id}"])
 
     @property
     def description(self):
@@ -51,24 +66,27 @@ class BaseScript(abc.ABC):
         return self._flow_id
 
     def add_argparser_options(self):
-        self.argparser.add_argument('--project-id', help='Overrides target project id.', type=int,
-                                    default=self.default_project_id)
-        self.argparser.add_argument('--name', help='Script name.')
-        self.argparser.add_argument('--flow-id', help='If given, use the given flow id.')
-        self.argparser.add_argument('--tag', help='Additional tag added to the scheduled jobs. Can be given multiple times.',
-                                    action='append', default=self.children_tags or [])
+        self.argparser.add_argument(
+            "--project-id", help="Overrides target project id.", type=int, default=self.default_project_id,
+        )
+        self.argparser.add_argument("--name", help="Script name.")
+        self.argparser.add_argument("--flow-id", help="If given, use the given flow id.")
+        self.argparser.add_argument(
+            "--tag",
+            help="Additional tag added to the scheduled jobs. Can be given multiple times.",
+            action="append",
+            default=self.children_tags or [],
+        )
 
     def parse_project_id(self, args):
         return args.project_id
 
     def parse_args(self):
-        self.argparser = ArgumentParser(self.description)
-        self.add_argparser_options()
-        args = self.argparser.parse_args()
+        args = super().parse_args()
 
         self.project_id = resolve_project_id(self.parse_project_id(args))
         if not self.project_id:
-            self.argparser.error('Project id not provided.')
+            self.argparser.error("Project id not provided.")
 
         self.set_flow_id(args)
 
@@ -82,30 +100,30 @@ class BaseScript(abc.ABC):
     def get_job_metadata(self, jobid=None, project_id=None):
         """If jobid is None, get own metadata
         """
-        jobid = jobid or os.getenv('SHUB_JOBKEY')
+        jobid = jobid or os.getenv("SHUB_JOBKEY")
         if jobid:
             project = self.get_project(project_id)
             job = project.jobs.get(jobid)
             return job.metadata
-        logger.warning('SHUB_JOBKEY not set: not running on ScrapyCloud.')
+        logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
     @dash_retry_decorator
     def get_job(self, jobid=None):
         """If jobid is None, get own metadata
         """
-        jobid = jobid or os.getenv('SHUB_JOBKEY')
+        jobid = jobid or os.getenv("SHUB_JOBKEY")
         if jobid:
-            project_id = jobid.split('/', 1)[0]
+            project_id = jobid.split("/", 1)[0]
             project = self.get_project(project_id)
             return project.jobs.get(jobid)
-        logger.warning('SHUB_JOBKEY not set: not running on ScrapyCloud.')
+        logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
     def get_job_tags(self, jobid=None, project_id=None):
         """If jobid is None, get own tags
         """
         metadata = self.get_job_metadata(jobid, project_id)
         if metadata:
-            return dict(metadata.list()).get('tags', [])
+            return dict(metadata.list()).get("tags", [])
         return []
 
     @staticmethod
@@ -121,7 +139,7 @@ class BaseScript(abc.ABC):
             job_tags = self.get_job_tags(jobid, project_id)
             for tag in tags:
                 if tag not in job_tags:
-                    if tag.startswith('FLOW_ID='):
+                    if tag.startswith("FLOW_ID="):
                         job_tags.insert(0, tag)
                     else:
                         job_tags.append(tag)
@@ -129,31 +147,26 @@ class BaseScript(abc.ABC):
             if update:
                 metadata = self.get_job_metadata(jobid, project_id)
                 if metadata:
-                    self.update_metadata(metadata, {'tags': job_tags})
+                    self.update_metadata(metadata, {"tags": job_tags})
 
     def get_flowid_from_tags(self, jobid=None, project_id=None):
         """If jobid is None, get flowid from own tags
         """
         for tag in self.get_job_tags(jobid, project_id):
-            if tag.startswith('FLOW_ID='):
-                return tag.replace('FLOW_ID=', '')
+            if tag.startswith("FLOW_ID="):
+                return tag.replace("FLOW_ID=", "")
 
     def _make_tags(self, tags):
         tags = tags or []
         tags.extend(self.args.tag)
         if self.flow_id:
-            tags.append(f'FLOW_ID={self.flow_id}')
+            tags.append(f"FLOW_ID={self.flow_id}")
         return list(set(tags)) or None
 
     @dash_retry_decorator
     def _schedule_job(self, spider: str, tags=None, units=None, project_id=None, **kwargs):
         project = self.get_project(project_id)
-        schedule_kwargs = dict(
-            spider=spider,
-            add_tag=self._make_tags(tags),
-            units=units,
-            **kwargs,
-        )
+        schedule_kwargs = dict(spider=spider, add_tag=self._make_tags(tags), units=units, **kwargs,)
         logger.info("Scheduling a job:\n%s", schedule_kwargs)
         try:
             job = project.jobs.run(**schedule_kwargs)
@@ -168,8 +181,8 @@ class BaseScript(abc.ABC):
     def schedule_script(self, cmd: List[str], tags=None, project_id=None, units=None, meta=None):
         cmd = [str(x) for x in cmd]
         scriptname = cmd[0]
-        if not scriptname.startswith('py:'):
-            scriptname = 'py:' + scriptname
+        if not scriptname.startswith("py:"):
+            scriptname = "py:" + scriptname
         return self._schedule_job(
             spider=scriptname,
             tags=tags,
@@ -180,13 +193,7 @@ class BaseScript(abc.ABC):
         )
 
     def schedule_spider(self, spider: str, tags=None, units=None, project_id=None, **kwargs):
-        return self._schedule_job(
-            spider=spider,
-            tags=tags,
-            units=units,
-            project_id=project_id,
-            **kwargs,
-        )
+        return self._schedule_job(spider=spider, tags=tags, units=units, project_id=project_id, **kwargs,)
 
     @dash_retry_decorator
     def get_jobs(self, project_id=None, **kwargs):
@@ -194,9 +201,9 @@ class BaseScript(abc.ABC):
 
     def get_owned_jobs(self, project_id=None, **kwargs):
         assert self.flow_id, "This job doesn't have a flow id."
-        assert 'has_tag' not in kwargs, "Filtering by flow id requires no extra has_tag."
-        assert 'state' in kwargs, "'state' parameter must be provided."
-        kwargs['has_tag'] = [f'FLOW_ID={self.flow_id}']
+        assert "has_tag" not in kwargs, "Filtering by flow id requires no extra has_tag."
+        assert "state" in kwargs, "'state' parameter must be provided."
+        kwargs["has_tag"] = [f"FLOW_ID={self.flow_id}"]
         return self.get_jobs(project_id, **kwargs)
 
     @dash_retry_decorator
@@ -206,7 +213,7 @@ class BaseScript(abc.ABC):
         """
         project = self.get_project(project_id)
         job = project.jobs.get(jobkey)
-        if job.metadata.get('state') in ('running', 'pending'):
+        if job.metadata.get("state") in ("running", "pending"):
             return True
         return False
 
@@ -217,20 +224,20 @@ class BaseScript(abc.ABC):
         """
         project = self.get_project(project_id)
         job = project.jobs.get(jobkey)
-        if job.metadata.get('state') == 'finished':
-            return job.metadata.get('close_reason')
+        if job.metadata.get("state") == "finished":
+            return job.metadata.get("close_reason")
 
     @dash_retry_decorator
     def finish(self, jobid=None, close_reason=None):
-        close_reason = close_reason or 'finished'
-        jobid = jobid or os.getenv('SHUB_JOBKEY')
+        close_reason = close_reason or "finished"
+        jobid = jobid or os.getenv("SHUB_JOBKEY")
         if jobid:
-            project_id = jobid.split('/', 1)[0]
+            project_id = jobid.split("/", 1)[0]
             hsp = self.client._hsclient.get_project(project_id)
             hsj = hsp.get_job(jobid)
             hsp.jobq.finish(hsj, close_reason=close_reason)
         else:
-            logger.warning('SHUB_JOBKEY not set: not running on ScrapyCloud.')
+            logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
     @abc.abstractmethod
     def run(self):
