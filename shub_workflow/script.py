@@ -37,6 +37,9 @@ class ArgumentParserScript(abc.ABC):
         args = self.argparser.parse_args()
         return args
 
+    @abc.abstractmethod
+    def run(self):
+        pass
 
 class BaseScript(ArgumentParserScript):
 
@@ -238,7 +241,3 @@ class BaseScript(ArgumentParserScript):
             hsp.jobq.finish(hsj, close_reason=close_reason)
         else:
             logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
-
-    @abc.abstractmethod
-    def run(self):
-        pass
