@@ -126,6 +126,8 @@ class CloneJobScript(BaseClonner):
             for job in self.get_project(project_id).jobs.iter(spider=spider, state=['finished'], has_tag=tag):
                 if not self.is_cloned_by_jobkey(job['key']):
                     keys.append(job['key'])
+        else:
+            self.argparser.error("You must provide either --key or --tag-spider.")
 
         for job_key in keys:
             try:
