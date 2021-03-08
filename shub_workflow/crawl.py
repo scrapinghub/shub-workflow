@@ -83,7 +83,7 @@ class CrawlManager(WorkFlowManager):
         return True
 
     def resume_workflow(self):
-        for job in self.get_owned_jobs(spider=self.args.spider, state=['running']):
+        for job in self.get_owned_jobs(spider=self.args.spider, state=['running', 'pending']):
             key = job['key']
             self._running_job_keys.append(key)
             _LOG.info(f"added running job {key}")
