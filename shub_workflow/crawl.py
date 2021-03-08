@@ -1,6 +1,7 @@
 """
 Base script class for spiders crawl managers.
 """
+import abc
 import json
 import logging
 
@@ -128,6 +129,7 @@ class GeneratorCrawlManager(PeriodicCrawlManager):
         super().__init__()
         self.parameters_gen = self.set_parameters_gen()
 
+    @abc.abstractmethod
     def set_parameters_gen(self):
         for i in []:
             yield i
