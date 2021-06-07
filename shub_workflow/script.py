@@ -43,7 +43,7 @@ class ArgumentParserScript(abc.ABC):
 
 class BaseScript(ArgumentParserScript):
 
-    name = None  # optional, may be needed for some applications
+    name = ''  # optional, may be needed for some applications
     flow_id_required = False  # if True, script can only run in the context of a flow_id
     children_tags = None
     default_project_id = None
@@ -196,7 +196,7 @@ class BaseScript(ArgumentParserScript):
         )
 
     def schedule_spider(self, spider: str, tags=None, units=None, project_id=None, **kwargs):
-        return self._schedule_job(spider=spider, tags=tags, units=units, project_id=project_id, **kwargs,)
+        return self._schedule_job(spider=spider, tags=tags, units=units, project_id=project_id, **kwargs)
 
     @dash_retry_decorator
     def get_jobs(self, project_id=None, **kwargs):

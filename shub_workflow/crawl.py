@@ -121,7 +121,7 @@ class GeneratorCrawlManager(PeriodicCrawlManager):
     Number of simultaneos spider jobs will be limited by max running jobs (see WorkFlowManager).
     Instructions:
     - Override set_parameters_gen() method. It must implement a generator of dictionaries, each one being
-      the spider arguments passed to the spider on each successive job.
+      the spider arguments (argument name: argument value) passed to the spider on each successive job.
     - Don't forget to set loop mode and max jobs (which defaults to infinite).
     """
 
