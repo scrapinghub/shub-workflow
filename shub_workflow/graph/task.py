@@ -123,7 +123,7 @@ class BaseTask(abc.ABC):
 class Task(BaseTask):
     def __init__(self, task_id, command, init_args=None,
                  retry_args=None, tags=None, units=None, retries=1,
-                 project_id=None, wait_time=None,on_finish=None):
+                 project_id=None, wait_time=None, on_finish=None):
         """
         id - String. identifies the task.
         command - String. script name or jinja2 template string.
@@ -205,13 +205,17 @@ class SpiderTask(BaseTask):
     A simple spider task.
     """
     def __init__(self, task_id, spider, tags=None, units=None, retries=1, wait_time=None, on_finish=None,
-                 **spider_args):
+                 job_settings=None, **spider_args):
         super(SpiderTask, self).__init__(task_id, tags, units, retries, None, wait_time, on_finish)
         self.spider = spider
         self.__spider_args = spider_args
+        self.__job_settings = job_settings
 
     def get_spider_args(self):
-        return self.__spider_args
+        spider_args = self.__spider_args
+        if self.__job_settings is not None:
+            spider_args.update({"job_settings": self.__job_settings})
+        return spider_args
 
     def as_jobgraph_dict(self):
         jdict = super(SpiderTask, self).as_jobgraph_dict()
