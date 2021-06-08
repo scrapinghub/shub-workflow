@@ -12,12 +12,12 @@ from .utils import get_scheduled_jobs_specs
 logger = logging.getLogger(__name__)
 
 
-Resource = namedtuple('Resource', ['name'])
+Resource = namedtuple("Resource", ["name"])
 
 
 class BaseTask(abc.ABC):
     def __init__(self, task_id, tags=None, units=None, retries=1, project_id=None, wait_time=None, on_finish=None):
-        assert task_id != 'retry', "Reserved word 'retry' can't be used as task id"
+        assert task_id != "retry", "Reserved word 'retry' can't be used as task id"
         self.task_id = task_id
         self.tags = tags
         self.units = units
@@ -87,21 +87,21 @@ class BaseTask(abc.ABC):
 
     def as_jobgraph_dict(self):
         jdict = {
-            'tags': self.tags,
-            'units': self.units,
-            'on_finish': self.on_finish,
-            'wait_for': [t.task_id for t in self.get_wait_for()],
+            "tags": self.tags,
+            "units": self.units,
+            "on_finish": self.on_finish,
+            "wait_for": [t.task_id for t in self.get_wait_for()],
         }
         next_tasks = self.get_next_tasks()
         if next_tasks:
-            jdict['on_finish']['default'] = [t.task_id for t in next_tasks]
+            jdict["on_finish"]["default"] = [t.task_id for t in next_tasks]
         if self.retries > 0:
-            jdict['retries'] = self.retries
-            jdict['on_finish']['failed'] = ['retry']
+            jdict["retries"] = self.retries
+            jdict["on_finish"]["failed"] = ["retry"]
         if self.project_id:
-            jdict['project_id'] = self.project_id
+            jdict["project_id"] = self.project_id
         if self.wait_time:
-            jdict['wait_time'] = self.wait_time
+            jdict["wait_time"] = self.wait_time
 
         return jdict
 
@@ -121,9 +121,19 @@ class BaseTask(abc.ABC):
 
 
 class Task(BaseTask):
-    def __init__(self, task_id, command, init_args=None,
-                 retry_args=None, tags=None, units=None, retries=1,
-                 project_id=None, wait_time=None, on_finish=None):
+    def __init__(
+        self,
+        task_id,
+        command,
+        init_args=None,
+        retry_args=None,
+        tags=None,
+        units=None,
+        retries=1,
+        project_id=None,
+        wait_time=None,
+        on_finish=None,
+    ):
         """
         id - String. identifies the task.
         command - String. script name or jinja2 template string.
@@ -144,11 +154,9 @@ class Task(BaseTask):
 
     def as_jobgraph_dict(self):
         jdict = super(Task, self).as_jobgraph_dict()
-        jdict.update({
-            'command': self.get_commands(),
-            'init_args': self.init_args,
-            'retry_args': self.retry_args,
-        })
+        jdict.update(
+            {"command": self.get_commands(), "init_args": self.init_args, "retry_args": self.retry_args}
+        )
         return jdict
 
     def get_commands(self):
@@ -204,8 +212,19 @@ class SpiderTask(BaseTask):
     """
     A simple spider task.
     """
-    def __init__(self, task_id, spider, tags=None, units=None, retries=1, wait_time=None, on_finish=None,
-                 job_settings=None, **spider_args):
+
+    def __init__(
+        self,
+        task_id,
+        spider,
+        tags=None,
+        units=None,
+        retries=1,
+        wait_time=None,
+        on_finish=None,
+        job_settings=None,
+        **spider_args,
+    ):
         super(SpiderTask, self).__init__(task_id, tags, units, retries, None, wait_time, on_finish)
         self.spider = spider
         self.__spider_args = spider_args
@@ -219,10 +238,9 @@ class SpiderTask(BaseTask):
 
     def as_jobgraph_dict(self):
         jdict = super(SpiderTask, self).as_jobgraph_dict()
-        jdict.update({
-            'spider': self.spider,
-            'spider_args': self.get_spider_args(),
-        })
+        jdict.update(
+            {"spider": self.spider, "spider_args": self.get_spider_args()}
+        )
         return jdict
 
     def get_parallel_jobs(self):
@@ -235,8 +253,9 @@ class SpiderTask(BaseTask):
             logger.info('Will retry spider "%s"', jobname)
         else:
             logger.info('Will start spider "%s"', jobname)
-        jobid = manager.schedule_spider(self.spider, tags=self.tags, units=self.units, project_id=self.project_id,
-                                        **self.get_spider_args())
+        jobid = manager.schedule_spider(
+            self.spider, tags=self.tags, units=self.units, project_id=self.project_id, **self.get_spider_args()
+        )
         if jobid:
             logger.info('Scheduled spider "%s" (%s)', jobname, jobid)
             self.append_jobid(jobid)
