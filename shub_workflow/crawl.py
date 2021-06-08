@@ -25,6 +25,10 @@ class CrawlManager(WorkFlowManager):
         # running jobs represents the state of a crawl manager.
         self._running_job_keys = []
 
+    @property
+    def description(self):
+        return self.__doc__
+
     def add_argparser_options(self):
         super().add_argparser_options()
         self.argparser.add_argument("spider", help="Spider name")
