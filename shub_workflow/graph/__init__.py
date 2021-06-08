@@ -65,7 +65,7 @@ class GraphManager(WorkFlowManager):
         if not self.jobs_graph:
             self.argparser.error("Jobs graph configuration is empty.")
         if not self.args.starting_job:
-            self.argparser.error("You must provide --starting-job")
+            self.argparser.error("You must provide --starting-job.")
         self._fill_available_resources()
         ran_tasks = []
         self._setup_starting_jobs(ran_tasks)
@@ -196,6 +196,7 @@ class GraphManager(WorkFlowManager):
         )
         self.argparser.add_argument(
             "--starting-job",
+            "-s",
             action="append",
             default=[],
             help="Set starting jobs. Can be given multiple times.",
