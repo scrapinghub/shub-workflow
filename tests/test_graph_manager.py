@@ -187,14 +187,57 @@ class ManagerTest(BaseTestCase):
         self.assertFalse(manager.schedule_script.called)
 
     def test_invalid_job(self):
+        """
+        Test error when a bad job was provided on command line.
+        """
         with script_args(["--starting-job=jobA", "--starting-job=jobN"]):
             manager = TestManager()
         manager.schedule_script = Mock()
-        manager.schedule_script.side_effect = ["999/1/1", "999/1/2"]
         # Patch error method to avoid printing to console.
         with patch.object(manager.argparser, "error", side_effect=SystemExit(2)):
             with self.assertRaises(SystemExit):
                 manager._WorkFlowManager__on_start()
+
+    def test_set_job_on_instance(self):
+        """
+        Test a starting job can be set without need to pass on command line.
+        """
+        with script_args([]):
+            manager = TestManager()
+            manager.default_starting_jobs = ['jobA']
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ["999/1/1"]
+        manager._WorkFlowManager__on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_any_call(
+            ["commandA", "argA", "--optionA"],
+            tags=["tag1", "tag2"],
+            units=2,
+            project_id=None,
+        )
+
+    def test_set_job_on_instance_override(self):
+        """
+        Test a starting job can be set without need to pass on command line.
+        """
+        with script_args(['-s', 'jobB']):
+            manager = TestManager()
+            manager.default_starting_jobs = ['jobA']
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ["999/1/1"]
+        manager._WorkFlowManager__on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_any_call(
+            ["commandB", "argB", "--optionB"], tags=None, units=None, project_id=None
+        )
 
     def test_retry_job(self):
         """
