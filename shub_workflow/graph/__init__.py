@@ -25,6 +25,7 @@ _STARTING_JOB_RE = re.compile("--starting-job(?:=(.+))?")
 class GraphManager(WorkFlowManager):
 
     jobs_graph = {}
+    default_starting_jobs = None
 
     def __init__(self):
         self.__failed_outcomes = list(self.base_failed_outcomes)
@@ -64,16 +65,16 @@ class GraphManager(WorkFlowManager):
     def on_start(self):
         if not self.jobs_graph:
             self.argparser.error("Jobs graph configuration is empty.")
-        if not self.args.starting_job:
+        self.starting_jobs = self.args.starting_job or self.default_starting_jobs
+        if not self.starting_jobs:
             self.argparser.error("You must provide --starting-job.")
         self._fill_available_resources()
-        ran_tasks = []
-        self._setup_starting_jobs(ran_tasks)
+        self._setup_starting_jobs([])
         self.workflow_loop_enabled = True
         logger.info("Starting '%s' workflow", self.name)
 
     def _setup_starting_jobs(self, ran_tasks, candidates=None):
-        candidates = candidates or self.args.starting_job
+        candidates = candidates or self.starting_jobs
         for taskid in candidates:
             if taskid in ran_tasks:
                 logger.info(
