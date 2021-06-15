@@ -25,7 +25,6 @@ _STARTING_JOB_RE = re.compile("--starting-job(?:=(.+))?")
 class GraphManager(WorkFlowManager):
 
     jobs_graph = {}
-    default_starting_jobs = None
 
     def __init__(self):
         self.__failed_outcomes = list(self.base_failed_outcomes)
@@ -39,7 +38,10 @@ class GraphManager(WorkFlowManager):
         self.__tasks = {}
         super(GraphManager, self).__init__()
         self.__start_time = defaultdict(time)
+        self.__starting_jobs = self.args.starting_job
         for task in self.configure_workflow() or ():
+            if self.args.root_jobs:
+                self.__starting_jobs.append(task.task_id)
             self._add_task(task)
 
     @property
@@ -65,16 +67,16 @@ class GraphManager(WorkFlowManager):
     def on_start(self):
         if not self.jobs_graph:
             self.argparser.error("Jobs graph configuration is empty.")
-        self.starting_jobs = self.args.starting_job or self.default_starting_jobs
-        if not self.starting_jobs:
-            self.argparser.error("You must provide --starting-job.")
+        self.__starting_jobs = self.args.starting_job or self.__starting_jobs
+        if not self.__starting_jobs:
+            self.argparser.error("You must provide either --starting-job or --root-jobs.")
         self._fill_available_resources()
         self._setup_starting_jobs([])
         self.workflow_loop_enabled = True
         logger.info("Starting '%s' workflow", self.name)
 
     def _setup_starting_jobs(self, ran_tasks, candidates=None):
-        candidates = candidates or self.starting_jobs
+        candidates = candidates or self.__starting_jobs
         for taskid in candidates:
             if taskid in ran_tasks:
                 logger.info(
@@ -220,6 +222,8 @@ class GraphManager(WorkFlowManager):
             help="Skip given job. Can be given multiple times. Also next jobs for the skipped"
             "one will be skipped.",
         )
+        self.argparser.add_argument(
+            "--root-jobs", action="store_true", help="Set root jobs as starting jobs.")
 
     def parse_args(self):
         args = super(GraphManager, self).parse_args()
@@ -227,6 +231,8 @@ class GraphManager(WorkFlowManager):
 
         if not self.name:
             self.argparser.error("Manager name not set.")
+        if args.starting_job and args.root_jobs:
+            self.argparser.error("You can't provide both --starting-job and --root-jobs.")
         return args
 
     def workflow_loop(self):

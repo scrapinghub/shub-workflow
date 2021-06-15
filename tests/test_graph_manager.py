@@ -1,5 +1,6 @@
 import os
 import re
+from io import StringIO
 
 from unittest import TestCase
 from unittest.mock import patch, Mock, call
@@ -186,55 +187,55 @@ class ManagerTest(BaseTestCase):
         self.assertFalse(result)
         self.assertFalse(manager.schedule_script.called)
 
-    def test_invalid_job(self):
+    @patch('sys.stderr', new_callable=StringIO)
+    def test_invalid_job(self, mock_stderr):
         """
         Test error when a bad job was provided on command line.
         """
         with script_args(["--starting-job=jobA", "--starting-job=jobN"]):
             manager = TestManager()
-        manager.schedule_script = Mock()
-        # Patch error method to avoid printing to console.
-        with patch.object(manager.argparser, "error", side_effect=SystemExit(2)):
-            with self.assertRaises(SystemExit):
-                manager._WorkFlowManager__on_start()
+        with self.assertRaises(SystemExit):
+            manager._WorkFlowManager__on_start()
+        self.assertTrue("Invalid job: jobN. Available jobs: dict_keys(['jobA', 'jobC', 'jobD', 'jobB'])" in mock_stderr.getvalue())
 
-    def test_set_job_on_instance(self):
+    @patch('sys.stderr', new_callable=StringIO)
+    def test_no_starting_job(self, mock_stderr):
         """
-        Test a starting job can be set without need to pass on command line.
+        Test error when no starting job was provided.
         """
         with script_args([]):
             manager = TestManager()
-            manager.default_starting_jobs = ['jobA']
+        with self.assertRaises(SystemExit):
+            manager._WorkFlowManager__on_start()
+        self.assertTrue("You must provide either --starting-job or --root-jobs." in mock_stderr.getvalue())
+
+    @patch('sys.stderr', new_callable=StringIO)
+    def test_starting_job_and_root_jobs(self, mock_stderr):
+        """
+        Test error when no starting job was provided.
+        """
+        with script_args(["-s", "jobA", "--root-jobs"]):
+            with self.assertRaises(SystemExit):
+                manager = TestManager()
+        self.assertTrue("You can't provide both --starting-job and --root-jobs" in mock_stderr.getvalue())
+
+    def test_root_jobs(self):
+        with script_args(["--root-jobs"]):
+            manager = TestManager()
         manager.schedule_script = Mock()
-        manager.schedule_script.side_effect = ["999/1/1"]
+        manager.schedule_script.side_effect = ["999/1/1", "999/1/2"]
         manager._WorkFlowManager__on_start()
 
         # first loop
         result = manager.workflow_loop()
         self.assertTrue(result)
-        self.assertEqual(manager.schedule_script.call_count, 1)
+        self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_any_call(
             ["commandA", "argA", "--optionA"],
             tags=["tag1", "tag2"],
             units=2,
             project_id=None,
         )
-
-    def test_set_job_on_instance_override(self):
-        """
-        Test a starting job can be set without need to pass on command line.
-        """
-        with script_args(['-s', 'jobB']):
-            manager = TestManager()
-            manager.default_starting_jobs = ['jobA']
-        manager.schedule_script = Mock()
-        manager.schedule_script.side_effect = ["999/1/1"]
-        manager._WorkFlowManager__on_start()
-
-        # first loop
-        result = manager.workflow_loop()
-        self.assertTrue(result)
-        self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_any_call(
             ["commandB", "argB", "--optionB"], tags=None, units=None, project_id=None
         )
