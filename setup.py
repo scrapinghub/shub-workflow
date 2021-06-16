@@ -19,6 +19,7 @@ setup(
         'sqlitedict==1.6.0',
         's3fs==0.2.0',
         'boto3>=1.9.92',
+        'google-cloud-storage>=1.38.0',
     ),
     scripts = [],
     classifiers = [
