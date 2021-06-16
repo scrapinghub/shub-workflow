@@ -12,8 +12,8 @@ This script does the following:
 
 * searches for untagged finished jobs that corresponds to the given spiders and same flow id as inherited or passed
   to the delivery job.
-* gets all their items generated and uploads to customer s3 bucket in files of given max size (either in items or bytes)
-* tags processed jobs with 'delivered' tag, so they are not processed again
+* gets all their items generated and uploads to customer s3 bucket, gs buckets or local folder, in files of given max size (either in items or bytes)
+* tags processed jobs with 'delivered' tag, so they are not processed again (tag can be customized)
 
 Deliver class is meant to be subclasses for overriding default behaviors, either via overriding of configuration class
 attributes or instance methods.
@@ -21,16 +21,17 @@ attributes or instance methods.
 configuration class attributes
 ------------------------------
 
-DeliverScript.s3_bucket_name - Target s3 bucket (required)
+DeliverScript.output_prefix - Target output prefix. Supports s3://..., gs:// and local absolute or relative folders (required)
 DeliverScript.success_file - A boolean. Whether or not to generate a finall _SUCCESS file (optional, False by default)
 
 Following environment variables are also required:
 
-AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SH_APIKEY
+In case of using s3: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SH_APIKEY
+In case of using gs: GOOGLE_APPLICATION_CREDENTIALS (you can use helper method shub_workflow.deliver.gcstorage.set_credential_file_environ)
 
 The default file format are gzipped json list. The default file name format will be:
 
-s3://<bucket_name>/<spider name>/<formatted timestamp>/<file number>.jsonl.gz
+<output prefix>/<spider name>/<formatted timestamp>/<file number>.jsonl.gz
 
 The formatted timestamp corresponds to the time where the delivery script starts to run.
 
@@ -49,11 +50,11 @@ import logging
 import tempfile
 from tempfile import mktemp
 
-from s3fs import S3FileSystem
 from sqlitedict import SqliteDict
 
-from .script import BaseScript
+from shub_workflow.script import BaseScript
 
+from shub_workflow.deliver.futils import mv_file, touch
 
 _LOG = logging.getLogger(__name__)
 _LOG.setLevel(logging.INFO)
@@ -93,25 +94,13 @@ class SqliteDictDupesFilter(object):
                 pass
 
 
-def _upload_file_to_s3(bucketname, keyname, filename=None):
-    aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
-    aws_secret_access_key = os.environ['AWS_SECRET_ACCESS_KEY']
-    s3 = S3FileSystem(key=aws_access_key_id, secret=aws_secret_access_key)
-    with s3.open(f's3://{bucketname}/{keyname}', 'wb') as f:
-        if filename is None:
-            f.write(b'')
-        else:
-            with open(filename, 'rb') as r:
-                f.write(r.read())
-
-
 class OutputFile(object):
 
     max_filesize_items = 1000000
     max_filesize_bytes = 1000000000
 
-    def __init__(self, s3_bucket_name, keyprefix, testmode=False):
-        self.__s3_bucket_name = s3_bucket_name
+    def __init__(self, output_prefix, keyprefix, testmode=False):
+        self.__output_prefix = output_prefix
         self.__key_prefix = keyprefix
 
         self.__filename = mktemp()
@@ -170,23 +159,24 @@ class OutputFile(object):
 
     def _upload_file(self):
         keyname = self.gen_keyname()
+        destination = os.path.join(self.__output_prefix, keyname)
         if not self.__testmode:
-            _upload_file_to_s3(self.__s3_bucket_name, keyname, self.filename)
-        _LOG.info("Saved %d items in s3://%s/%s", self.__items_count, self.__s3_bucket_name, keyname)
+            mv_file(self.filename, destination)
+        _LOG.info(f"Saved {self.__items_count} items in {destination}")
 
 
 class OutputFileDict(object):
 
     outputfile_class = OutputFile
 
-    def __init__(self, s3_bucket_name, testmode=False):
-        self.__s3_bucket_name = s3_bucket_name
+    def __init__(self, output_prefix, testmode=False):
+        self.__output_prefix = output_prefix
         self.__testmode = testmode
         self.__outputfiles = {}
 
     def __getitem__(self, key):
         if key not in self.__outputfiles:
-            self.__outputfiles[key] = self.outputfile_class(s3_bucket_name=self.__s3_bucket_name, keyprefix=key,
+            self.__outputfiles[key] = self.outputfile_class(output_prefix=self.__output_prefix, keyprefix=key,
                                                             testmode=self.__testmode)
         return self.__outputfiles[key]
 
@@ -200,10 +190,11 @@ class OutputFileDict(object):
         return self.__outputfiles.pop(key)
 
 
-class S3DeliverScript(BaseScript):
+class DeliverScript(BaseScript):
 
+    default_delivered_tag = 'delivered'
     s3_success_file = False
-    s3_bucket_name = None
+    output_prefix = ''
 
     default_sh_chunk_size = 1_000
 
@@ -226,12 +217,13 @@ class S3DeliverScript(BaseScript):
         return self.__start_datetime
 
     def set_output_files(self):
-        return OutputFileDict(self.s3_bucket_name, self.args.test_mode)
+        return OutputFileDict(self.args.output_prefix, self.args.test_mode)
 
     def add_argparser_options(self):
         super().add_argparser_options()
 
         self.argparser.add_argument('scrapername', help='Indicate target scraper names', nargs='*')
+        self.argparser.add_argument('--output-prefix', help='Delivery prefix.', default=self.output_prefix)
         self.argparser.add_argument('--filter-dupes-by-field', default=[],
                                     help='Dedupe by any of the given item field. Can be given multiple times')
         self.argparser.add_argument('--one-file-per-job', action='store_true', help='Generate one file per job.')
@@ -242,6 +234,7 @@ class S3DeliverScript(BaseScript):
             'Chunk/page size for downloading items from Scrapy Cloud. For tweaking memory consumption and speed.'
             ' Note that the performance will depend on the sizes of individual items in the cloud.'
         ))
+        self.argparser.add_argument('--delivered-tag', help='Tag to apply to delivered jobs.', default=self.default_delivered_tag)
 
     def gen_keyprefix(self, scrapername, job, item):
         formatted_datetime = self.start_datetime.strftime('%Y-%m-%dT%H:%M:%S')
@@ -286,26 +279,26 @@ class S3DeliverScript(BaseScript):
             jobs_to_tag = self.process_spider_jobs(scrapername)
             all_jobs_to_tag.update(jobs_to_tag)
 
+            _LOG.info("Total Processed items for spider %s: %d", scrapername, self.itemcount)
             for ofile in self.output_files.values():
                 ofile.flush()
                 if self.s3_success_file:
                     success_files.add(ofile.success_file)
 
-            _LOG.info("Total Processed items for spider %s: %d", scrapername, self.itemcount)
-
         jcount = 0
         if self.args.test_mode:
             all_jobs_to_tag = set()
         for jkey in all_jobs_to_tag:
-            self.add_job_tags(jkey, tags=['delivered'])
+            self.add_job_tags(jkey, tags=[self.args.delivered_tag])
             jcount += 1
             if jcount % 100 == 0:
                 _LOG.info("Marked %d jobs as delivered", jcount)
 
         for success_file in success_files:
+            remote_success_file = os.path.join(self.args.output_prefix, success_file)
             if not self.args.test_mode:
-                _upload_file_to_s3(self.s3_bucket_name, success_file)
-            _LOG.info("Created s3://%s/%s", self.s3_bucket_name, success_file)
+                touch(remote_success_file)
+            _LOG.info(f"Created {remote_success_file}")
 
         self.close(success_files)
 
@@ -316,22 +309,33 @@ class S3DeliverScript(BaseScript):
         jobs_to_tag = []
         start = 0
         has_tag = [f"FLOW_ID={self.flow_id}"]
-        jobs_count = 0
 
         while True:
-            for spider_job in self.get_project().jobs.iter(spider=scrapername, state="finished", lacks_tag="delivered",
+            jobs_count = 0
+            for spider_job in self.get_project().jobs.iter(spider=scrapername, state="finished", lacks_tag=self.args.delivered_tag,
                                                            has_tag=has_tag, start=start):
                 jobs_count += 1
                 sj = self.get_project().jobs.get(spider_job['key'])
                 self._process_job_items(scrapername, sj)
                 jobs_to_tag.append(spider_job['key'])
-            if jobs_count == 0 or jobs_count % 1000 != 0:
+            if jobs_count == 0:
                 break
-            start += 1000
+            start += jobs_count
 
         return jobs_to_tag
 
 
+# for compatibility with older versions. New DeliverScript handles indistictly local files, s3 and gs.
+class S3DeliverScript(DeliverScript):
+
+    s3_bucket_name = None
+
+    def __init__(self):
+        self.output_prefix = self.s3_bucket_name
+        super().__init__()
+
+    
 if __name__ == '__main__':
-    deliver = S3DeliverScript()
+    logging.basicConfig(level=logging.INFO, format=("%(asctime)s [%(levelname)s] %(pathname)s:%(lineno)d %(message)s"))
+    deliver = DeliverScript()
     deliver.run()
