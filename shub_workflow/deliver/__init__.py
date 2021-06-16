@@ -102,6 +102,7 @@ class OutputFile(object):
 
     max_filesize_items = 1000000
     max_filesize_bytes = 1000000000
+    mv_file_kwargs = None
 
     def __init__(self, output_prefix, keyprefix, testmode=False):
         self.__output_prefix = output_prefix
@@ -169,7 +170,8 @@ class OutputFile(object):
         keyname = self.gen_keyname()
         destination = os.path.join(self.__output_prefix, keyname)
         if not self.__testmode:
-            mv_file(self.filename, destination)
+            kwargs = self.mv_file_kwargs or {}
+            mv_file(self.filename, destination, **kwargs)
         _LOG.info(f"Saved {self.__items_count} items in {destination}")
 
 
@@ -204,6 +206,7 @@ class DeliverScript(BaseScript):
     default_delivered_tag = "delivered"
     s3_success_file = False
     output_prefix = ""
+    outputfiledict_class = OutputFileDict
 
     default_sh_chunk_size = 1_000
 
@@ -226,7 +229,7 @@ class DeliverScript(BaseScript):
         return self.__start_datetime
 
     def set_output_files(self):
-        return OutputFileDict(self.args.output_prefix, self.args.test_mode)
+        return self.outputfiledict_class(self.args.output_prefix, self.args.test_mode)
 
     def add_argparser_options(self):
         super().add_argparser_options()
