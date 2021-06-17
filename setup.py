@@ -7,6 +7,7 @@ setup(
     version      = '1.7.4',
     description  = 'Workflow manager for scrapinghub ScrapyCloud tasks.',
     long_description = open('README.md').read(),
+    long_description_content_type = 'text/markdown',
     license      = 'BSD',
     url          = 'https://github.com/scrapinghub/shub-workflow',
     maintainer   ='Scrapinghub',
