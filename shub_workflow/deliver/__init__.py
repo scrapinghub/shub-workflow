@@ -103,6 +103,7 @@ class OutputFile(object):
     max_filesize_items = 1000000
     max_filesize_bytes = 1000000000
     mv_file_kwargs = None
+    gzipped_output = True
 
     def __init__(self, output_prefix, keyprefix, testmode=False):
         self.__output_prefix = output_prefix
@@ -136,11 +137,16 @@ class OutputFile(object):
         return self.__filecount
 
     def create_new_file(self):
-        return gzip.open(self.filename, "wb")
+        if self.gzipped_output:
+            return gzip.open(self.filename, "wb")
+        return open(self.filename, "w")
 
     def write(self, item):
         line = json.dumps(item) + "\n"
-        self.__file.write(line.encode("utf8"))
+        if self.gzipped_output:
+            self.__file.write(line.encode("utf8"))
+        else:
+            self.__file.write(line)
         self.__items_count += 1
         self.__size_bytes += sys.getsizeof(line)
         if (
