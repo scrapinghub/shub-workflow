@@ -18,6 +18,8 @@ class CrawlManager(WorkFlowManager):
     finished. Close reason of the manager will be inherited from spider one.
     """
 
+    spider = None
+
     def __init__(self):
         super().__init__()
         self._bad_outcomes = {}
@@ -31,16 +33,17 @@ class CrawlManager(WorkFlowManager):
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument("spider", help="Spider name")
-        self.argparser.add_argument(
-            "--spider-args", help="Spider arguments dict in json format", default="{}"
-        )
-        self.argparser.add_argument(
-            "--job-settings", help="Job settings dict in json format", default="{}"
-        )
-        self.argparser.add_argument(
-            "--units", help="Set number of ScrapyCloud units for each job", type=int
-        )
+        if self.spider is None:
+            self.argparser.add_argument("spider", help="Spider name")
+        self.argparser.add_argument("--spider-args", help="Spider arguments dict in json format", default="{}")
+        self.argparser.add_argument("--job-settings", help="Job settings dict in json format", default="{}")
+        self.argparser.add_argument("--units", help="Set number of ScrapyCloud units for each job", type=int)
+
+    def parse_args(self):
+        args = super().parse_args()
+        if self.spider is None:
+            self.spider = args.spider
+        return args
 
     def get_spider_args(self, override=None):
         spider_args = json.loads(self.args.spider_args)
@@ -58,11 +61,7 @@ class CrawlManager(WorkFlowManager):
         spider_args = self.get_spider_args(spider_args_override)
         job_settings = self.get_job_settings(job_settings_override)
         spider_args["job_settings"] = job_settings
-        self._running_job_keys.append(
-            super().schedule_spider(
-                self.args.spider, units=self.args.units, **spider_args
-            )
-        )
+        self._running_job_keys.append(super().schedule_spider(self.spider, units=self.args.units, **spider_args))
 
     def check_running_jobs(self):
         outcomes = {}
@@ -88,8 +87,8 @@ class CrawlManager(WorkFlowManager):
         return True
 
     def resume_workflow(self):
-        for job in self.get_owned_jobs(spider=self.args.spider, state=['running', 'pending']):
-            key = job['key']
+        for job in self.get_owned_jobs(spider=self.spider, state=["running", "pending"]):
+            key = job["key"]
             self._running_job_keys.append(key)
             _LOG.info(f"added running job {key}")
 
