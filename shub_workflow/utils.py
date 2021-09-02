@@ -1,4 +1,5 @@
 import logging
+import json
 import os
 
 from retrying import retry
@@ -23,25 +24,26 @@ def resolve_project_id(project_id=None):
         return project_id
 
     # read from environment
-    if os.environ.get('PROJECT_ID'):
-        return os.environ.get('PROJECT_ID')
+    if os.environ.get("PROJECT_ID"):
+        return os.environ.get("PROJECT_ID")
 
     # for ScrapyCloud jobs:
-    if os.environ.get('SHUB_JOBKEY'):
-        return os.environ['SHUB_JOBKEY'].split('/')[0]
+    if os.environ.get("SHUB_JOBKEY"):
+        return os.environ["SHUB_JOBKEY"].split("/")[0]
 
     # read from scrapinghub.yml
     try:
-        from shub.config import load_shub_config
+        from shub.config import load_shub_config  # pylint: disable=import-error
+
         cfg = load_shub_config()
-        project_id = cfg.get_project_id('default')
+        project_id = cfg.get_project_id("default")
         if project_id:
             return project_id
-    except Exception:
+    except ImportError:
         logger.warning("Install shub package if want to access scrapinghub.yml")
 
     if not project_id:
-        logger.warning('Project id not found. Use either PROJECT_ID env. variable or scrapinghub.yml default target.')
+        logger.warning("Project id not found. Use either PROJECT_ID env. variable or scrapinghub.yml default target.")
 
 
 MINS_IN_A_DAY = 24 * 60
@@ -58,13 +60,25 @@ def just_log_exception(exception):
     return True  # retries any other exception
 
 
-dash_retry_decorator = retry(retry_on_exception=just_log_exception, wait_fixed=ONE_MIN_IN_S*1000,
-                             stop_max_attempt_number=MINS_IN_A_DAY)
+dash_retry_decorator = retry(
+    retry_on_exception=just_log_exception, wait_fixed=ONE_MIN_IN_S * 1000, stop_max_attempt_number=MINS_IN_A_DAY
+)
 
 
 def kumo_settings():
-    if os.environ.get('SHUB_SETTINGS'):
-        from sh_scrapy.env import decode_uri
-        return decode_uri(os.environ.get('SHUB_SETTINGS')).get('project_settings', {})
-    logging.info("Couldn't find Dash project settings, probably not running in Dash")
-    return {}
+    settings = {}
+    shub_job_data = json.loads(os.environ.get("SHUB_SETTINGS", "{}"))
+    if shub_job_data:
+        settings.update(shub_job_data["project_settings"])
+        settings.update(shub_job_data["spider_settings"])
+    else:
+        logger.info("Couldn't find Dash project settings, probably not running in Dash")
+    return settings
+
+
+def get_project_settings():
+    from scrapy.utils.project import get_project_settings  # pylint: disable=import-error
+
+    settings = get_project_settings()
+    settings.setdict(kumo_settings(), priority="project")
+    return settings
