@@ -1,6 +1,7 @@
 import logging
 import json
 import os
+from typing import Optional
 
 from retrying import retry
 
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def resolve_project_id(project_id=None):
+def resolve_project_id(project_id=None) -> Optional[int]:
     """
     Gets project id from following sources in following order of precedence:
     - default parameter values
@@ -21,15 +22,15 @@ def resolve_project_id(project_id=None):
     either locally or from scrapinghub, correctly configured
     """
     if project_id:
-        return project_id
+        return int(project_id)
 
     # read from environment
     if os.environ.get("PROJECT_ID"):
-        return os.environ.get("PROJECT_ID")
+        return int(os.environ.get("PROJECT_ID"))
 
     # for ScrapyCloud jobs:
     if os.environ.get("SHUB_JOBKEY"):
-        return os.environ["SHUB_JOBKEY"].split("/")[0]
+        return int(os.environ["SHUB_JOBKEY"].split("/")[0])
 
     # read from scrapinghub.yml
     try:
@@ -38,7 +39,7 @@ def resolve_project_id(project_id=None):
         cfg = load_shub_config()
         project_id = cfg.get_project_id("default")
         if project_id:
-            return project_id
+            return int(project_id)
     except ImportError:
         logger.warning("Install shub package if want to access scrapinghub.yml")
 
