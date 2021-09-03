@@ -64,14 +64,14 @@ def s3_credentials(key, secret, include_region=False):
 
 def get_file(path, *args, aws_key=None, aws_secret=None, **kwargs):
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret))
-        fp = fs.open(s3_path(path), *args, **kwargs)
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
+        fp = fs.open(s3_path(path), *args)
         try:
             fp.name = path
         except Exception:
             pass
     else:
-        fp = open(path, *args, **kwargs)
+        fp = open(path, *args)
 
     return fp
 
@@ -104,9 +104,9 @@ def upload_file(path, dest, aws_key=None, aws_secret=None, **kwargs):
                 break
 
 
-def get_glob(path, aws_key=None, aws_secret=None):
+def get_glob(path, aws_key=None, aws_secret=None, **kwargs):
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret))
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
         fp = [_S3_ATTRIBUTE + p for p in fs.glob(s3_path(path))]
     else:
         fp = iglob(path)
@@ -114,9 +114,9 @@ def get_glob(path, aws_key=None, aws_secret=None):
     return fp
 
 
-def cp_file(src_path, dest_path, aws_key=None, aws_secret=None):
+def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, **kwargs):
     if src_path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret))
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
         fs.copy(s3_path(src_path), s3_path(dest_path))
     else:
         copyfile(src_path, dest_path)
@@ -142,17 +142,17 @@ def mv_file(src_path, dest_path, aws_key=None, aws_secret=None, **kwargs):
         rm_file(src_path)
 
 
-def rm_file(path, aws_key=None, aws_secret=None):
+def rm_file(path, aws_key=None, aws_secret=None, **kwargs):
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret))
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
         fs.rm(s3_path(path))
     else:
         remove(path)
 
 
-def list_folder(path, aws_key=None, aws_secret=None) -> List[str]:
+def list_folder(path, aws_key=None, aws_secret=None, **kwargs) -> List[str]:
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret))
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
 
         try:
             listing = [f"s3://{name}" for name in fs.ls(s3_path(path, is_folder=True))]
@@ -170,9 +170,9 @@ def list_folder(path, aws_key=None, aws_secret=None) -> List[str]:
     return listing
 
 
-def list_folder_in_ts_order(input_folder: str) -> Generator[str, None, None]:
+def list_folder_in_ts_order(input_folder: str, aws_key=None, aws_secret=None, **kwargs) -> Generator[str, None, None]:
     results = []
-    for input_file in list_folder(input_folder):
+    for input_file in list_folder(input_folder, aws_key=aws_key, aws_secret=aws_secret, **kwargs):
         if input_folder.startswith(_S3_ATTRIBUTE):
             with get_file(input_file, "rb") as f:
                 results.append((input_file, f.info()["LastModified"]))
@@ -182,31 +182,31 @@ def list_folder_in_ts_order(input_folder: str) -> Generator[str, None, None]:
         yield n
 
 
-def list_folder_files_recursive(folder: str) -> Generator[str, None, None]:
-    for f in list_folder(folder):
+def list_folder_files_recursive(folder: str, aws_key=None, aws_secret=None, **kwargs) -> Generator[str, None, None]:
+    for f in list_folder(folder, aws_key=aws_key, aws_secret=aws_secret, **kwargs):
         if f == folder:
             yield f
         else:
-            yield from list_folder_files_recursive(f)
+            yield from list_folder_files_recursive(f, aws_key=aws_key, aws_secret=aws_secret, **kwargs)
 
 
-def s3_folder_size(path, aws_key=None, aws_secret=None):
+def s3_folder_size(path, aws_key=None, aws_secret=None, **kwargs):
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret))
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
         return sum(fs.du(s3_path(path, is_folder=True), deep=True).values())
 
 
-def exists(path, aws_key=None, aws_secret=None):
+def exists(path, aws_key=None, aws_secret=None, **kwargs):
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret))
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
         return fs.exists(path)
     return os_exists(path)
 
 
-def empty_folder(path, aws_key=None, aws_secret=None) -> List[str]:
+def empty_folder(path, aws_key=None, aws_secret=None, **kwargs) -> List[str]:
     removed_files = []
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret))
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
         for s3file in list_folder(path, aws_key=aws_key, aws_secret=aws_secret):
             try:
                 fs.rm(s3file)
@@ -223,12 +223,12 @@ def empty_folder(path, aws_key=None, aws_secret=None) -> List[str]:
     return removed_files
 
 
-def touch(path, aws_key=None, aws_secret=None):
+def touch(path, aws_key=None, aws_secret=None, **kwargs):
     if not exists(path):
         if not path.startswith(_S3_ATTRIBUTE):
             dname = dirname(path)
             makedirs(dname, exist_ok=True)
-        with get_file(path, "w", aws_key=aws_key, aws_secret=aws_secret) as f:
+        with get_file(path, "w", aws_key=aws_key, aws_secret=aws_secret, **kwargs) as f:
             f.write("")
     else:
         raise ValueError(f"File {path} already exists")
