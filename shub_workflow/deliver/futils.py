@@ -243,28 +243,29 @@ class S3SessionFactory:
     Generate s3 temporal session credentials in cases where that is required
     """
 
-    def __init__(self, aws_access_key, aws_secret_key, aws_role, external_id):
+    def __init__(self, aws_key, aws_secret, aws_role, external_id, expiration_margin_minutes=10):
         self.aws_role = aws_role
-        self.aws_access_key = aws_access_key
-        self.aws_secret_key = aws_secret_key
+        self.aws_key = aws_key
+        self.aws_secret = aws_secret
         self.external_id = external_id
-        self.credentials_expiration = datetime.now(timezone.utc)
-        self.sts_client = boto3.client("sts", aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key,)
-        self.expired = True
+        self.expiration_margin_minutes = expiration_margin_minutes
+        self.credentials_expiration = None
+        self.sts_client = boto3.client("sts", aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
         self.full_credentials = {}
 
-    def refresh_credentials(self):
+    def get_credentials(self):
         """
         Get a new set of credentials if the existing ones are close to expire,
         update the S3 client.
         """
-        self.expired = datetime.now(timezone.utc) > self.credentials_expiration - timedelta(minutes=10)
-        if self.expired or not self._s3_client:
-            self.credentials_expiration = datetime.now(timezone.utc) + timedelta(hours=1)
+        if self.credentials_expiration is None or datetime.now(timezone.utc) > self.credentials_expiration - timedelta(
+            minutes=self.expiration_margin_minutes
+        ):
             session_name = str(uuid.uuid4())
             self.full_credentials = self.sts_client.assume_role(
                 RoleArn=self.aws_role, RoleSessionName=session_name, ExternalId=self.external_id,
             )["Credentials"]
+            self.credentials_expiration = self.full_credentials["Expiration"]
         return {
             "aws_key": self.full_credentials["AccessKeyId"],
             "aws_secret": self.full_credentials["SecretAccessKey"],
