@@ -177,7 +177,7 @@ def list_folder_in_ts_order(input_folder: str, aws_key=None, aws_secret=None, **
     results = []
     for input_file in list_folder(input_folder, aws_key=aws_key, aws_secret=aws_secret, **kwargs):
         if input_folder.startswith(_S3_ATTRIBUTE):
-            with get_file(input_file, "rb") as f:
+            with get_file(input_file, "rb", aws_key=aws_key, aws_secret=aws_secret, **kwargs) as f:
                 results.append((input_file, f.info()["LastModified"]))
         else:
             results.append((input_file, getctime(input_file)))
