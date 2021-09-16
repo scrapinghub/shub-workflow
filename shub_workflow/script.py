@@ -12,7 +12,7 @@ from typing import List
 
 from scrapinghub import ScrapinghubClient, DuplicateJobError
 
-from .utils import (
+from shub_workflow.utils import (
     resolve_project_id,
     dash_retry_decorator,
 )
@@ -26,6 +26,10 @@ logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s")
 class ArgumentParserScript(abc.ABC):
     def __init__(self):
         self.args = self.parse_args()
+
+    @property
+    def description(self):
+        return "You didn't set description for this script. Please set description property accordingly."
 
     @abc.abstractmethod
     def add_argparser_options(self):
@@ -41,9 +45,10 @@ class ArgumentParserScript(abc.ABC):
     def run(self):
         pass
 
+
 class BaseScript(ArgumentParserScript):
 
-    name = ''  # optional, may be needed for some applications
+    name = ""  # optional, may be needed for some applications
     flow_id_required = False  # if True, script can only run in the context of a flow_id
     children_tags = None
     default_project_id = None
@@ -59,10 +64,6 @@ class BaseScript(ArgumentParserScript):
             assert not self.flow_id_required or self.flow_id, "Could not detect flow_id. Please set with --flow-id."
         if self.flow_id:
             self.add_job_tags(tags=[f"FLOW_ID={self.flow_id}"])
-
-    @property
-    def description(self):
-        return "You didn't set description for this script. Please set description property accordingly."
 
     @property
     def flow_id(self):
@@ -100,11 +101,12 @@ class BaseScript(ArgumentParserScript):
         return self.client.get_project(project_id or self.project_id)
 
     @dash_retry_decorator
-    def get_job_metadata(self, jobid=None, project_id=None):
+    def get_job_metadata(self, jobid=None):
         """If jobid is None, get own metadata
         """
         jobid = jobid or os.getenv("SHUB_JOBKEY")
         if jobid:
+            project_id = jobid.split("/", 1)[0]
             project = self.get_project(project_id)
             job = project.jobs.get(jobid)
             return job.metadata
@@ -121,10 +123,10 @@ class BaseScript(ArgumentParserScript):
             return project.jobs.get(jobid)
         logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
-    def get_job_tags(self, jobid=None, project_id=None):
+    def get_job_tags(self, jobid=None):
         """If jobid is None, get own tags
         """
-        metadata = self.get_job_metadata(jobid, project_id)
+        metadata = self.get_job_metadata(jobid)
         if metadata:
             return dict(metadata.list()).get("tags", [])
         return []
@@ -134,12 +136,12 @@ class BaseScript(ArgumentParserScript):
     def update_metadata(metadata, data):
         metadata.update(data)
 
-    def add_job_tags(self, jobid=None, project_id=None, tags=None):
+    def add_job_tags(self, jobid=None, tags=None):
         """If jobid is None, add tags to own list of tags.
         """
         if tags:
             update = False
-            job_tags = self.get_job_tags(jobid, project_id)
+            job_tags = self.get_job_tags(jobid)
             for tag in tags:
                 if tag not in job_tags:
                     if tag.startswith("FLOW_ID="):
@@ -148,14 +150,14 @@ class BaseScript(ArgumentParserScript):
                         job_tags.append(tag)
                     update = True
             if update:
-                metadata = self.get_job_metadata(jobid, project_id)
+                metadata = self.get_job_metadata(jobid)
                 if metadata:
                     self.update_metadata(metadata, {"tags": job_tags})
 
-    def get_flowid_from_tags(self, jobid=None, project_id=None):
+    def get_flowid_from_tags(self, jobid=None):
         """If jobid is None, get flowid from own tags
         """
-        for tag in self.get_job_tags(jobid, project_id):
+        for tag in self.get_job_tags(jobid):
             if tag.startswith("FLOW_ID="):
                 return tag.replace("FLOW_ID=", "")
 
