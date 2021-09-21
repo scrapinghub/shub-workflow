@@ -66,15 +66,16 @@ def s3_credentials(key, secret, include_region=False):
 
 
 def get_file(path, *args, aws_key=None, aws_secret=None, **kwargs):
+    op_kwargs = kwargs.pop("op_kwargs", {})
     if path.startswith(_S3_ATTRIBUTE):
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
-        fp = fs.open(s3_path(path), *args)
+        fp = fs.open(s3_path(path), *args, **op_kwargs)
         try:
             fp.name = path
         except Exception:
             pass
     else:
-        fp = open(path, *args)
+        fp = open(path, *args, **op_kwargs)
 
     return fp
 
@@ -119,16 +120,18 @@ def get_glob(path, aws_key=None, aws_secret=None, **kwargs):
 
 def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, **kwargs):
     if src_path.startswith(_S3_ATTRIBUTE):
+        op_kwargs = kwargs.pop("op_kwargs", {})
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
-        fs.copy(s3_path(src_path), s3_path(dest_path))
+        fs.copy(s3_path(src_path), s3_path(dest_path), **op_kwargs)
     else:
         copyfile(src_path, dest_path)
 
 
 def mv_file(src_path, dest_path, aws_key=None, aws_secret=None, **kwargs):
     if src_path.startswith(_S3_ATTRIBUTE) and dest_path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret))
-        fs.mv(s3_path(src_path), s3_path(dest_path))
+        op_kwargs = kwargs.pop("op_kwargs", {})
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
+        fs.mv(s3_path(src_path), s3_path(dest_path), **op_kwargs)
     elif src_path.startswith(_S3_ATTRIBUTE):
         download_file(src_path, dest_path, aws_key, aws_secret, **kwargs)
         rm_file(src_path)
