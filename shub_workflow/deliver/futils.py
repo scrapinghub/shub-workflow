@@ -69,6 +69,8 @@ def get_file(path, *args, aws_key=None, aws_secret=None, **kwargs):
     op_kwargs = kwargs.pop("op_kwargs", {})
     if path.startswith(_S3_ATTRIBUTE):
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
+        if "ACL" in op_kwargs:
+            op_kwargs["acl"] = op_kwargs.pop("ACL")
         fp = fs.open(s3_path(path), *args, **op_kwargs)
         try:
             fp.name = path
