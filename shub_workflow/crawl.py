@@ -68,7 +68,7 @@ class CrawlManager(WorkFlowManager):
         for jobkey in list(self._running_job_keys):
             outcome = self.is_finished(jobkey)
             if outcome is None:
-                _LOG.debug(f"Job {jobkey} still running.")
+                _LOG.info(f"Job {jobkey} still running.")
                 continue
             _LOG.info(f"Job {jobkey} finished with outcome {outcome}.")
             self._running_job_keys.remove(jobkey)
