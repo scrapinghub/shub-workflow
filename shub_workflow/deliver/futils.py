@@ -7,6 +7,7 @@ from os import listdir, remove, environ, makedirs
 from os.path import exists as os_exists, dirname, getctime
 from shutil import copyfile
 from datetime import datetime, timedelta, timezone
+from functools import partial
 
 from retrying import retry
 from s3fs import S3FileSystem as OriginalS3FileSystem
@@ -46,7 +47,7 @@ def s3_path(path, is_folder=False):
     path = path.strip()
     if is_folder and not path.endswith("/"):
         path = path + "/"
-    return path[len(_S3_ATTRIBUTE):]
+    return path[len(_S3_ATTRIBUTE) :]
 
 
 def s3_credentials(key, secret, include_region=False):
@@ -248,11 +249,11 @@ class S3SessionFactory:
     Generate s3 temporal session credentials in cases where that is required
     """
 
-    def __init__(self, aws_key, aws_secret, aws_role, external_id, expiration_margin_minutes=10):
+    def __init__(self, aws_key, aws_secret, aws_role, aws_external_id, expiration_margin_minutes=10):
         self.aws_role = aws_role
         self.aws_key = aws_key
         self.aws_secret = aws_secret
-        self.external_id = external_id
+        self.aws_external_id = aws_external_id
         self.expiration_margin_minutes = expiration_margin_minutes
         self.credentials_expiration = None
         self.sts_client = boto3.client("sts", aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
@@ -268,7 +269,7 @@ class S3SessionFactory:
         ):
             session_name = str(uuid.uuid4())
             self.full_credentials = self.sts_client.assume_role(
-                RoleArn=self.aws_role, RoleSessionName=session_name, ExternalId=self.external_id,
+                RoleArn=self.aws_role, RoleSessionName=session_name, ExternalId=self.aws_external_id,
             )["Credentials"]
             self.credentials_expiration = self.full_credentials["Expiration"]
         return {
@@ -276,3 +277,40 @@ class S3SessionFactory:
             "aws_secret": self.full_credentials["SecretAccessKey"],
             "token": self.full_credentials["SessionToken"],
         }
+
+
+class S3Helper:
+    def __init__(self, aws_key, aws_secret, aws_role=None, aws_external_id=None, expiration_margin_minutes=10):
+        self.s3_session_factory = None
+        self.credentials = {"aws_key": aws_key, "aws_secret": aws_secret}
+        if aws_role is not None and aws_external_id is not None:
+            self.s3_session_factory = S3SessionFactory(
+                aws_key, aws_secret, aws_role, aws_external_id, expiration_margin_minutes
+            )
+
+        for method in (
+            get_file,
+            upload_file,
+            download_file,
+            list_folder,
+            mv_file,
+            rm_file,
+            get_glob,
+            empty_folder,
+            exists,
+            touch,
+            cp_file,
+            list_folder_in_ts_order,
+            list_folder_files_recursive,
+            s3_folder_size,
+        ):
+            self._wrap_method(method)
+
+    def _wrap_method(self, method):
+        def _method(*args, **kwargs):
+            if self.s3_session_factory is not None:
+                self.credentials = self.s3_session_factory.get_credentials()
+            kwargs.update(self.credentials)
+            return method(*args, **kwargs)
+
+        setattr(self, method.__name__, _method)
