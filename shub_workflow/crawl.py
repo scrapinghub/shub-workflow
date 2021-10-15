@@ -57,11 +57,12 @@ class CrawlManager(WorkFlowManager):
             job_settings.update(override)
         return job_settings
 
-    def schedule_spider(self, spider_args_override=None, job_settings_override=None):
+    def schedule_spider(self, spider=None, spider_args_override=None, job_settings_override=None):
+        spider = spider or self.spider
         spider_args = self.get_spider_args(spider_args_override)
         job_settings = self.get_job_settings(job_settings_override)
         spider_args["job_settings"] = job_settings
-        self._running_job_keys.append(super().schedule_spider(self.spider, units=self.args.units, **spider_args))
+        self._running_job_keys.append(super().schedule_spider(spider, units=self.args.units, **spider_args))
 
     def check_running_jobs(self):
         outcomes = {}
@@ -142,7 +143,8 @@ class GeneratorCrawlManager(PeriodicCrawlManager):
         if len(self._running_job_keys) < self.max_running_jobs:
             try:
                 next_params = next(self.parameters_gen)
-                self.schedule_spider(spider_args_override=next_params)
+                spider = next_params.pop("spider", None)
+                self.schedule_spider(spider=spider, spider_args_override=next_params)
             except StopIteration:
                 if not self._running_job_keys:
                     return False

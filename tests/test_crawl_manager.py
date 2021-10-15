@@ -32,6 +32,21 @@ class ListTestManager(GeneratorCrawlManager):
             yield args
 
 
+class ListTestManagerTwo(GeneratorCrawlManager):
+
+    name = "test"
+    default_max_jobs = 2
+    spider = "myspider"
+
+    def set_parameters_gen(self):
+        parameters_list = [
+            {"argA": "valA"},
+            {"argA": "valB", "spider": "myspidertwo"},
+        ]
+        for args in parameters_list:
+            yield args
+
+
 class TestManagerWithSpider(CrawlManager):
 
     name = "test"
@@ -224,3 +239,25 @@ class CrawlManagerTest(TestCase):
         result = manager.workflow_loop()
         self.assertFalse(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 3)
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_schedule_spider_list_two(self, mocked_super_schedule_spider):
+        with script_args([]):
+            manager = ListTestManagerTwo()
+
+        mocked_super_schedule_spider.side_effect = ["999/1/1", "999/1/2"]
+        manager._WorkFlowManager__on_start()
+
+        # first loop: schedule spider with first set of arguments
+        result = manager.workflow_loop()
+
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 1)
+        mocked_super_schedule_spider.assert_any_call("myspider", units=None, argA="valA", job_settings={})
+
+        # second loop: schedule spider again with second set of arguments
+        manager.is_finished = lambda x: None
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 2)
+        mocked_super_schedule_spider.assert_any_call("myspidertwo", units=None, argA="valB", job_settings={})
