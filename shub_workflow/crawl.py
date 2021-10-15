@@ -99,7 +99,7 @@ class CrawlManager(WorkFlowManager):
             for outcome in self._bad_outcomes.values():
                 close_reason = outcome
                 break
-            self.finish(job.key, close_reason=close_reason)
+            self.finish(close_reason=close_reason)
 
 
 class PeriodicCrawlManager(CrawlManager):

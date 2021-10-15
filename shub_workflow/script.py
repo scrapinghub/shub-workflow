@@ -56,6 +56,7 @@ class BaseScript(ArgumentParserScript):
     def __init__(self):
         self.project_id = None
         self.client = ScrapinghubClient()
+        self.close_reason = None
         super().__init__()
 
     def set_flow_id(self, args, default=None):
@@ -235,6 +236,10 @@ class BaseScript(ArgumentParserScript):
     @dash_retry_decorator
     def finish(self, jobid=None, close_reason=None):
         close_reason = close_reason or "finished"
+        if jobid is None:
+            self.close_reason = close_reason
+            if close_reason == "finished":
+                return
         jobid = jobid or os.getenv("SHUB_JOBKEY")
         if jobid:
             project_id = jobid.split("/", 1)[0]
