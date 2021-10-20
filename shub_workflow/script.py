@@ -213,10 +213,11 @@ class BaseScript(ArgumentParserScript):
         return self.get_jobs(project_id, **kwargs)
 
     @dash_retry_decorator
-    def is_running(self, jobkey, project_id=None):
+    def is_running(self, jobkey):
         """
         Checks whether a job is running (or pending)
         """
+        project_id = jobkey.split("/", 1)[0]
         project = self.get_project(project_id)
         job = project.jobs.get(jobkey)
         if job.metadata.get("state") in ("running", "pending"):
@@ -224,10 +225,11 @@ class BaseScript(ArgumentParserScript):
         return False
 
     @dash_retry_decorator
-    def is_finished(self, jobkey, project_id=None):
+    def is_finished(self, jobkey):
         """
         Checks whether a job is running. if so, return close_reason. Otherwise return None.
         """
+        project_id = jobkey.split("/", 1)[0]
         project = self.get_project(project_id)
         job = project.jobs.get(jobkey)
         if job.metadata.get("state") == "finished":
