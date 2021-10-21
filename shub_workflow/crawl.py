@@ -4,7 +4,7 @@ Base script class for spiders crawl managers.
 import abc
 import json
 import logging
-
+from random import shuffle
 
 from shub_workflow.base import WorkFlowManager
 
@@ -67,7 +67,9 @@ class CrawlManager(WorkFlowManager):
 
     def check_running_jobs(self):
         outcomes = {}
-        for jobkey in list(self._running_job_keys):
+        running_job_keys = list(self._running_job_keys)
+        shuffle(running_job_keys)
+        for jobkey in running_job_keys:
             outcome = self.is_finished(jobkey)
             if outcome is None:
                 _LOG.info(f"Job {jobkey} still running.")
