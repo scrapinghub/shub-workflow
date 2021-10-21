@@ -71,16 +71,17 @@ class CrawlManager(WorkFlowManager):
             outcome = self.is_finished(jobkey)
             if outcome is None:
                 _LOG.info(f"Job {jobkey} still running.")
-                continue
+                # if a job is still running, don't waste unneeded requests to get status of other jobs.
+                # this is particularly important on crawl managers that handle hundreds of jobs in parallel.
+                break
             _LOG.info(f"Job {jobkey} finished with outcome {outcome}.")
             self._running_job_keys.remove(jobkey)
             if outcome in self.base_failed_outcomes:
                 self._bad_outcomes[jobkey] = outcome
             outcomes[jobkey] = outcome
-            return outcomes
+        return outcomes
 
     def workflow_loop(self):
-        _LOG.info("Executing loop.")
         outcomes = self.check_running_jobs()
         if outcomes:
             return False
