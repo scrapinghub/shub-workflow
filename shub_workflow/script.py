@@ -20,7 +20,6 @@ from shub_workflow.utils import (
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s")
 
 
 class ArgumentParserScript(abc.ABC):

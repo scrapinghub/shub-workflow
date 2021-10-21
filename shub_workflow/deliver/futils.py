@@ -23,6 +23,7 @@ DEFAULT_REGION = "us-west-2"
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def just_log_exception(exception):

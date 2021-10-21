@@ -10,6 +10,7 @@ from .utils import get_scheduled_jobs_specs
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 Resource = namedtuple("Resource", ["name"])

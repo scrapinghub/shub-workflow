@@ -10,6 +10,7 @@ from shub_workflow.base import WorkFlowManager
 
 
 _LOG = logging.getLogger(__name__)
+_LOG.setLevel(logging.INFO)
 
 
 class CrawlManager(WorkFlowManager):

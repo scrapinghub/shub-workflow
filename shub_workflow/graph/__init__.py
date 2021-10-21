@@ -17,6 +17,7 @@ from shub_workflow.base import WorkFlowManager
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 _STARTING_JOB_RE = re.compile("--starting-job(?:=(.+))?")

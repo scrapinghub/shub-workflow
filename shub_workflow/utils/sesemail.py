@@ -10,6 +10,7 @@ from email.mime.image import MIMEImage
 from typing import List, Optional, Dict
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class SESHelper:
