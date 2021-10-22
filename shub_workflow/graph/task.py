@@ -27,11 +27,19 @@ class BaseTask(abc.ABC):
         self.wait_time = wait_time
         self.on_finish = on_finish or {}
 
+        self.__is_locked = False
         self.__next_tasks = []
         self.__wait_for = []
         self.__required_resources = []
 
         self.__job_ids = []
+
+    def set_is_locked(self):
+        self.__is_locked = True
+
+    @property
+    def is_locked(self):
+        return self.__is_locked
 
     def append_jobid(self, jobid):
         self.__job_ids.append(jobid)
@@ -43,12 +51,15 @@ class BaseTask(abc.ABC):
         return self.__job_ids
 
     def add_next_task(self, task):
+        assert not self.__is_locked, "You can't alter a locked job."
         self.__next_tasks.append(task)
 
     def add_wait_for(self, task):
+        assert not self.__is_locked, "You can't alter a locked job."
         self.__wait_for.append(task)
 
     def add_required_resources(self, resources_dict):
+        assert not self.__is_locked, "You can't alter a locked job."
         self.__required_resources.append(resources_dict)
 
     def get_next_tasks(self):
@@ -93,9 +104,7 @@ class BaseTask(abc.ABC):
             "on_finish": self.on_finish,
             "wait_for": [t.task_id for t in self.get_wait_for()],
         }
-        next_tasks = self.get_next_tasks()
-        if next_tasks:
-            jdict["on_finish"]["default"] = [t.task_id for t in next_tasks]
+        jdict["on_finish"]["default"] = []
         if self.retries > 0:
             jdict["retries"] = self.retries
             jdict["on_finish"]["failed"] = ["retry"]
@@ -155,9 +164,7 @@ class Task(BaseTask):
 
     def as_jobgraph_dict(self):
         jdict = super(Task, self).as_jobgraph_dict()
-        jdict.update(
-            {"command": self.get_commands(), "init_args": self.init_args, "retry_args": self.retry_args}
-        )
+        jdict.update({"command": self.get_commands(), "init_args": self.init_args, "retry_args": self.retry_args})
         return jdict
 
     def get_commands(self):
@@ -239,9 +246,7 @@ class SpiderTask(BaseTask):
 
     def as_jobgraph_dict(self):
         jdict = super(SpiderTask, self).as_jobgraph_dict()
-        jdict.update(
-            {"spider": self.spider, "spider_args": self.get_spider_args()}
-        )
+        jdict.update({"spider": self.spider, "spider_args": self.get_spider_args()})
         return jdict
 
     def get_parallel_jobs(self):

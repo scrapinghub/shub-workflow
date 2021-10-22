@@ -56,6 +56,9 @@ class GraphManager(WorkFlowManager):
         for ntask in task.get_next_tasks():
             self._add_task(ntask)
 
+    def get_task(self, task_id):
+        return self.__tasks.get(task_id)
+
     def configure_workflow(self):
         raise NotImplementedError("configure_workflow() method need to be implemented.")
 
@@ -121,6 +124,7 @@ class GraphManager(WorkFlowManager):
         self._add_pending_job(job, wait_for=tuple(wait_for))
 
     def _add_pending_job(self, job, wait_for=(), is_retry=False):
+        self._maybe_add_on_finish_default(job)
         if job in self.args.skip_job:
             return
         if job in self.__tasks:
@@ -373,16 +377,29 @@ class GraphManager(WorkFlowManager):
                     self._available_resources[res] += res_amount
                     self._acquired_resources[res].remove((rjob, res_amount))
 
+    def _maybe_add_on_finish_default(self, job):
+        on_finish = self.get_job(job)["on_finish"]
+        task = self.__tasks.get(job)
+        if task is not None and not task.is_locked:
+            task.set_is_locked()
+            for t in task.get_next_tasks():
+                on_finish["default"].append(t.task_id)
+                if t.task_id not in self.jobs_graph:
+                    self._add_task(t)
+
+        return on_finish
+
     def _get_next_jobs(self, job, outcome):
         if self.args.only_starting_jobs:
             return []
-        on_finish = self.get_job(job).get("on_finish", {})
+        on_finish = self.get_job(job)["on_finish"]
         if outcome in on_finish:
             nextjobs = on_finish[outcome]
         elif outcome in self.__failed_outcomes:
             nextjobs = on_finish.get("failed", [])
         else:
-            nextjobs = on_finish.get("default", [])
+            nextjobs = on_finish["default"]
+
         return nextjobs
 
     @property
