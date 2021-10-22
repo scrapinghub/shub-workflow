@@ -211,7 +211,7 @@ class ManagerTest(BaseTestCase):
         """
         with script_args(["-s", "jobA", "--root-jobs"]):
             with self.assertRaises(SystemExit):
-                manager = TestManager()
+                TestManager()
         self.assertTrue("You can't provide both --starting-job and --root-jobs" in mock_stderr.getvalue())
 
     def test_root_jobs(self):
@@ -1697,4 +1697,41 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_spider.call_count, 1)
         manager.schedule_spider.assert_any_call(
             "myspiderS", tags=["tag1"], units=1, project_id=None, argA="valA", argB="valB",
+        )
+
+    def test_add_task_on_start(self):
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = "test"
+
+            def configure_workflow(self):
+                jobA = Task(task_id="jobA", command="commandA --optionA=A")
+                return (jobA,)
+
+            def on_start(self):
+                jobB = Task(task_id="jobB", command="commandB --optionB=B")
+                self.get_task("jobA").add_next_task(jobB)
+                super().on_start()
+
+        with script_args(["--root-jobs"]):
+            manager = _TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ["999/1/1"]
+        manager._WorkFlowManager__on_start()
+
+        # first loop
+        self.assertTrue(manager.workflow_loop())
+        self.assertEqual(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_any_call(
+            ["commandA", "--optionA=A"], tags=None, units=None, project_id=None,
+        )
+
+        # second loop
+        manager.schedule_script.side_effect = ["999/2/1"]
+        manager.is_finished = lambda x: "finished"
+        self.assertTrue(manager.workflow_loop())
+        self.assertEqual(manager.schedule_script.call_count, 2)
+
+        manager.schedule_script.assert_any_call(
+            ["commandB", "--optionB=B"], tags=None, units=None, project_id=None
         )
