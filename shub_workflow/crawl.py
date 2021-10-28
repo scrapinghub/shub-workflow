@@ -20,6 +20,7 @@ class CrawlManager(WorkFlowManager):
     """
 
     spider = None
+    MIN_CHECK_JOBS = 20
 
     def __init__(self):
         super().__init__()
@@ -69,18 +70,23 @@ class CrawlManager(WorkFlowManager):
         outcomes = {}
         running_job_keys = list(self._running_job_keys)
         shuffle(running_job_keys)
-        for jobkey in running_job_keys:
-            outcome = self.is_finished(jobkey)
-            if outcome is None:
+        for count, jobkey in enumerate(running_job_keys, start=1):
+            if outcome := self.is_finished(jobkey) is not None:
+                _LOG.info(f"Job {jobkey} finished with outcome {outcome}.")
+                self._running_job_keys.remove(jobkey)
+                if outcome in self.base_failed_outcomes:
+                    self._bad_outcomes[jobkey] = outcome
+                outcomes[jobkey] = outcome
+            else:
                 _LOG.info(f"Job {jobkey} still running.")
-                # if a job is still running, don't waste unneeded requests to get status of other jobs.
+                # if some jobs are running don't waste unneeded requests to get status of other jobs.
                 # this is particularly important on crawl managers that handle hundreds of jobs in parallel.
-                break
-            _LOG.info(f"Job {jobkey} finished with outcome {outcome}.")
-            self._running_job_keys.remove(jobkey)
-            if outcome in self.base_failed_outcomes:
-                self._bad_outcomes[jobkey] = outcome
-            outcomes[jobkey] = outcome
+                # so here we limit number of checked jobs.
+                # However, we also need to ensure that a minimal number of jobs are checked for faster
+                # detection of free slots and scheduling of new jobs.
+                if count > self.MIN_CHECK_JOBS:
+                    break
+
         return outcomes
 
     def workflow_loop(self):

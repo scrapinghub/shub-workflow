@@ -59,7 +59,7 @@ class BaseScript(ArgumentParserScript):
         super().__init__()
 
     def set_flow_id(self, args, default=None):
-        self._flow_id = args.flow_id or self.get_flowid_from_tags() or default
+        self._flow_id = args.flow_id or self._get_flowid_from_tags() or default
         if self.flow_id_required:
             assert not self.flow_id_required or self.flow_id, "Could not detect flow_id. Please set with --flow-id."
         if self.flow_id:
@@ -133,7 +133,7 @@ class BaseScript(ArgumentParserScript):
 
     @staticmethod
     @dash_retry_decorator
-    def update_metadata(metadata, data):
+    def _update_metadata(metadata, data):
         metadata.update(data)
 
     def add_job_tags(self, jobid=None, tags=None):
@@ -152,9 +152,9 @@ class BaseScript(ArgumentParserScript):
             if update:
                 metadata = self.get_job_metadata(jobid)
                 if metadata:
-                    self.update_metadata(metadata, {"tags": job_tags})
+                    self._update_metadata(metadata, {"tags": job_tags})
 
-    def get_flowid_from_tags(self, jobid=None):
+    def _get_flowid_from_tags(self, jobid=None):
         """If jobid is None, get flowid from own tags
         """
         for tag in self.get_job_tags(jobid):

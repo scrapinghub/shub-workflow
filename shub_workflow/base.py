@@ -80,11 +80,6 @@ class WorkFlowManager(BaseScript, abc.ABC):
                 else:
                     still_running[key] = False
 
-    def collect_running_jobs(self):
-        """
-        Get all running jobs with same flow id
-        """
-
     def on_start(self):
         pass
 
