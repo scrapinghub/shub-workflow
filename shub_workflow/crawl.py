@@ -129,7 +129,7 @@ class PeriodicCrawlManager(CrawlManager):
         pass
 
 
-class GeneratorCrawlManager(PeriodicCrawlManager):
+class GeneratorCrawlManager(CrawlManager):
     """
     Schedule a spider periodically, each time with different parameters yielded by a generator, until stop.
     Number of simultaneos spider jobs will be limited by max running jobs (see WorkFlowManager).
@@ -159,3 +159,6 @@ class GeneratorCrawlManager(PeriodicCrawlManager):
                 if not self._running_job_keys:
                     return False
         return True
+
+    def on_close(self):
+        pass
