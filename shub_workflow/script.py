@@ -50,7 +50,7 @@ class BaseScript(ArgumentParserScript):
     name = ""  # optional, may be needed for some applications
     flow_id_required = False  # if True, script can only run in the context of a flow_id
     children_tags = None
-    default_project_id = None
+    default_project_id = None  # If None, autodetect (see shub_workflow.utils.resolve_project_id)
 
     def __init__(self):
         self.project_id = None
