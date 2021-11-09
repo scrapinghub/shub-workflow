@@ -38,8 +38,12 @@ class WorkFlowManager(BaseScript, abc.ABC):
         super().__init__()
 
     def set_flow_id(self, args, default=None):
-        default = default or str(uuid4())
+        default = default or self._generate_flow_id()
         super().set_flow_id(args, default)
+
+    @staticmethod
+    def _generate_flow_id():
+        return str(uuid4())
 
     @property
     def max_running_jobs(self):

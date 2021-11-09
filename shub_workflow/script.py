@@ -56,7 +56,11 @@ class BaseScript(ArgumentParserScript):
         self.project_id = None
         self.client = ScrapinghubClient()
         self.close_reason = None
+        self.__flow_tags = []
         super().__init__()
+
+    def append_flow_tag(self, tag):
+        self.__flow_tags.append(tag)
 
     def set_flow_id(self, args, default=None):
         self._flow_id = args.flow_id or self._get_flowid_from_tags() or default
@@ -166,7 +170,8 @@ class BaseScript(ArgumentParserScript):
         tags.extend(self.args.tag)
         if self.flow_id:
             tags.append(f"FLOW_ID={self.flow_id}")
-        return list(set(tags)) or None
+        tags.extend(self.__flow_tags)
+        return sorted(set(tags)) or None
 
     @dash_retry_decorator
     def _schedule_job(self, spider: str, tags=None, units=None, project_id=None, **kwargs):
