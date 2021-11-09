@@ -1,6 +1,7 @@
 import os
 import re
 from io import StringIO
+from collections import namedtuple
 
 from unittest import TestCase
 from unittest.mock import patch, Mock, call
@@ -9,6 +10,8 @@ from shub_workflow.graph import GraphManager
 from shub_workflow.graph.task import Task, SpiderTask, Resource
 
 from .utils.contexts import script_args
+
+Job = namedtuple("Job", "key")
 
 
 class TestManager(GraphManager):
@@ -102,10 +105,9 @@ class TestManager3(GraphManager):
         # return root jobs
         return (jobA,)
 
-    def get_job_tags(self, jobid=None):
-        if jobid is None:
-            return ["FLOW_ID=mytagsflowid"]
-        return super().get_job_tags(jobid)
+    @staticmethod
+    def _generate_flow_id():
+        return "mygeneratedflowid"
 
 
 class BaseTestCase(TestCase):
@@ -454,78 +456,120 @@ class ManagerTest(BaseTestCase):
     def test_tags(self):
         with script_args(["--starting-job=jobA", "--tag=tag3", "--tag=tag4"]):
             manager = TestManager3()
+        self.assertEqual(manager.flow_id, "mygeneratedflowid")
+        project = Mock()
+        manager.get_project = lambda _: project
         manager.is_finished = lambda x: None
-        manager.schedule_script = Mock()
-        manager.schedule_script.side_effect = [
-            "999/1/1",
-            "999/1/2",
-            "999/1/3",
-            "999/1/4",
+        project.jobs.run.side_effect = [
+            Job("999/1/1"),
+            Job("999/1/2"),
+            Job("999/1/3"),
+            Job("999/1/4"),
         ]
         manager._WorkFlowManager__on_start()
 
         # first loop
         result = manager.workflow_loop()
         self.assertTrue(result)
-        self.assertEqual(manager.schedule_script.call_count, 4)
+        self.assertEqual(project.jobs.run.call_count, 4)
         for i in range(4):
-            manager.schedule_script.assert_any_call(
-                ["commandA", f"--parg={i}", "argA", "--optionA"], tags=["tag1", "tag2"], units=None, project_id=None,
+            project.jobs.run.assert_any_call(
+                spider="py:commandA",
+                add_tag=["FLOW_ID=mygeneratedflowid", "tag1", "tag2", "tag3", "tag4"],
+                units=None,
+                cmd_args=f"--parg={i} argA --optionA",
+                meta=None,
             )
-        self.assertEqual(
-            set(manager._make_tags(["tag1", "tag2"])),
-            set(["tag1", "tag2", "tag3", "tag4", f"FLOW_ID={manager.flow_id}"]),
-        )
 
     def test_flow_id_from_command_line(self):
-        with script_args(["--starting-job=jobA", "--flow-id=myflowid"]):
+        with script_args(["--starting-job=jobA", "--flow-id=myclflowid"]):
             manager = TestManager3()
+        self.assertEqual(manager.flow_id, "myclflowid")
+        project = Mock()
+        manager.get_project = lambda _: project
         manager.is_finished = lambda x: None
-        manager.schedule_script = Mock()
-        manager.schedule_script.side_effect = [
-            "999/1/1",
-            "999/1/2",
-            "999/1/3",
-            "999/1/4",
+        project.jobs.run.side_effect = [
+            Job("999/1/1"),
+            Job("999/1/2"),
+            Job("999/1/3"),
+            Job("999/1/4"),
         ]
         manager._WorkFlowManager__on_start()
 
         # first loop
         result = manager.workflow_loop()
         self.assertTrue(result)
-        self.assertEqual(manager.schedule_script.call_count, 4)
+        self.assertEqual(project.jobs.run.call_count, 4)
         for i in range(4):
-            manager.schedule_script.assert_any_call(
-                ["commandA", f"--parg={i}", "argA", "--optionA"], tags=["tag1", "tag2"], units=None, project_id=None,
+            project.jobs.run.assert_any_call(
+                spider="py:commandA",
+                add_tag=["FLOW_ID=myclflowid", "tag1", "tag2"],
+                units=None,
+                cmd_args=f"--parg={i} argA --optionA",
+                meta=None,
             )
-        self.assertEqual(
-            set(manager._make_tags(["tag1", "tag2"])), set(["tag1", "tag2", "FLOW_ID=myflowid"]),
-        )
 
     def test_flow_id_from_job_tags(self):
+        class _TestManager(TestManager3):
+            def get_job_tags(self, jobid=None):
+                if jobid is None:
+                    return ["FLOW_ID=myflowidfromtag"]
+
         with script_args(["--starting-job=jobA"]):
-            manager = TestManager3()
+            manager = _TestManager()
+        self.assertEqual(manager.flow_id, "myflowidfromtag")
+        project = Mock()
+        manager.get_project = lambda _: project
         manager.is_finished = lambda x: None
-        manager.schedule_script = Mock()
-        manager.schedule_script.side_effect = [
-            "999/1/1",
-            "999/1/2",
-            "999/1/3",
-            "999/1/4",
+        project.jobs.run.side_effect = [
+            Job("999/1/1"),
+            Job("999/1/2"),
+            Job("999/1/3"),
+            Job("999/1/4"),
         ]
         manager._WorkFlowManager__on_start()
 
         # first loop
         result = manager.workflow_loop()
         self.assertTrue(result)
-        self.assertEqual(manager.schedule_script.call_count, 4)
+        self.assertEqual(project.jobs.run.call_count, 4)
         for i in range(4):
-            manager.schedule_script.assert_any_call(
-                ["commandA", f"--parg={i}", "argA", "--optionA"], tags=["tag1", "tag2"], units=None, project_id=None,
+            project.jobs.run.assert_any_call(
+                spider="py:commandA",
+                add_tag=["FLOW_ID=myflowidfromtag", "tag1", "tag2"],
+                units=None,
+                cmd_args=f"--parg={i} argA --optionA",
+                meta=None,
             )
-        self.assertEqual(
-            set(manager._make_tags(["tag1", "tag2"])), set(["tag1", "tag2", "FLOW_ID=mytagsflowid"]),
-        )
+
+    def test_additional_workflow_tags(self):
+        with script_args(["--starting-job=jobA"]):
+            manager = TestManager3()
+            manager.append_flow_tag("EXEC_ID=myexecid")
+        self.assertEqual(manager.flow_id, "mygeneratedflowid")
+        project = Mock()
+        manager.get_project = lambda _: project
+        manager.is_finished = lambda x: None
+        project.jobs.run.side_effect = [
+            Job("999/1/1"),
+            Job("999/1/2"),
+            Job("999/1/3"),
+            Job("999/1/4"),
+        ]
+        manager._WorkFlowManager__on_start()
+
+        # first loop
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(project.jobs.run.call_count, 4)
+        for i in range(4):
+            project.jobs.run.assert_any_call(
+                spider="py:commandA",
+                add_tag=["EXEC_ID=myexecid", "FLOW_ID=mygeneratedflowid", "tag1", "tag2"],
+                units=None,
+                cmd_args=f"--parg={i} argA --optionA",
+                meta=None,
+            )
 
     def test_skip_job(self):
         with script_args(["--starting-job=jobA", "--skip-job=jobC"]):
@@ -1732,6 +1776,4 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(manager.workflow_loop())
         self.assertEqual(manager.schedule_script.call_count, 2)
 
-        manager.schedule_script.assert_any_call(
-            ["commandB", "--optionB=B"], tags=None, units=None, project_id=None
-        )
+        manager.schedule_script.assert_any_call(["commandB", "--optionB=B"], tags=None, units=None, project_id=None)
