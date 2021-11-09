@@ -543,8 +543,11 @@ class ManagerTest(BaseTestCase):
             )
 
     def test_additional_workflow_tags(self):
+        class _TestManager(TestManager3):
+            add_job_tags = Mock()
+
         with script_args(["--starting-job=jobA"]):
-            manager = TestManager3()
+            manager = _TestManager()
             manager.append_flow_tag("EXEC_ID=myexecid")
         self.assertEqual(manager.flow_id, "mygeneratedflowid")
         project = Mock()
@@ -570,6 +573,7 @@ class ManagerTest(BaseTestCase):
                 cmd_args=f"--parg={i} argA --optionA",
                 meta=None,
             )
+        manager.add_job_tags.assert_any_call(tags=["EXEC_ID=myexecid"])
 
     def test_skip_job(self):
         with script_args(["--starting-job=jobA", "--skip-job=jobC"]):
@@ -1288,7 +1292,7 @@ class ManagerTest(BaseTestCase):
                 return jobA, jobB, jobC, jobD
 
         with script_args(
-            ["--starting-job=jobA", "--starting-job=jobB", "--starting-job=jobC", "--starting-job=jobD",]
+            ["--starting-job=jobA", "--starting-job=jobB", "--starting-job=jobC", "--starting-job=jobD"]
         ):
             manager = _TestManager()
 
@@ -1627,7 +1631,7 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandB", f'--config={{"topic": {i}, "file": "ds_dump_{i}"}}', "argB", "--optionB",],
+                ["commandB", f'--config={{"topic": {i}, "file": "ds_dump_{i}"}}', "argB", "--optionB"],
                 tags=None,
                 units=None,
                 project_id=None,
@@ -1662,7 +1666,7 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandB", f'--config={{"topic": {i}, "file": "ds_dump_{i}"}}', "argB", "--optionB",],
+                ["commandB", f'--config={{"topic": {i}, "file": "ds_dump_{i}"}}', "argB", "--optionB"],
                 tags=None,
                 units=None,
                 project_id=1999,
