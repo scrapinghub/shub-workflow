@@ -61,6 +61,7 @@ class BaseScript(ArgumentParserScript):
 
     def append_flow_tag(self, tag):
         self.__flow_tags.append(tag)
+        self.add_job_tags(tags=[tag])
 
     def set_flow_id(self, args, default=None):
         self._flow_id = args.flow_id or self._get_flowid_from_tags() or default
