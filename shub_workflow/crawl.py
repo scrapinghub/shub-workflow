@@ -70,10 +70,12 @@ class CrawlManager(WorkFlowManager):
         outcomes = {}
         running_job_keys = list(self._running_job_keys)
         shuffle(running_job_keys)
+        removed = 0
         for count, jobkey in enumerate(running_job_keys, start=1):
             if outcome := self.is_finished(jobkey) is not None:
                 _LOG.info(f"Job {jobkey} finished with outcome {outcome}.")
                 self._running_job_keys.remove(jobkey)
+                removed += 1
                 if outcome in self.base_failed_outcomes:
                     self._bad_outcomes[jobkey] = outcome
                 outcomes[jobkey] = outcome
@@ -84,7 +86,7 @@ class CrawlManager(WorkFlowManager):
                 # so here we limit number of checked jobs.
                 # However, we also need to ensure that a minimal number of jobs are checked for faster
                 # detection of free slots and scheduling of new jobs.
-                if count > self.MIN_CHECK_JOBS:
+                if count - removed > self.MIN_CHECK_JOBS:
                     break
 
         return outcomes
@@ -150,13 +152,15 @@ class GeneratorCrawlManager(CrawlManager):
 
     def workflow_loop(self):
         self.check_running_jobs()
-        if len(self._running_job_keys) < self.max_running_jobs:
+        while len(self._running_job_keys) < self.max_running_jobs:
             try:
                 next_params = next(self.parameters_gen)
                 spider = next_params.pop("spider", None)
                 self.schedule_spider(spider=spider, spider_args_override=next_params)
             except StopIteration:
-                if not self._running_job_keys:
+                if self._running_job_keys:
+                    break
+                else:
                     return False
         return True
 

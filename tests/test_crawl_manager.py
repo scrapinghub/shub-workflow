@@ -186,40 +186,35 @@ class CrawlManagerTest(TestCase):
         result = manager.workflow_loop()
 
         self.assertTrue(result)
-        self.assertEqual(mocked_super_schedule_spider.call_count, 1)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 2)
         mocked_super_schedule_spider.assert_any_call("myspider", units=None, argA="valA", job_settings={})
+        mocked_super_schedule_spider.assert_any_call("myspider", units=None, argA="valB", job_settings={})
 
-        # second loop: schedule spider again with second set of arguments
+        # second loop: still no job finished. Wait for a free slot
         manager.is_finished = lambda x: None
         result = manager.workflow_loop()
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 2)
-        mocked_super_schedule_spider.assert_any_call("myspider", units=None, argA="valB", job_settings={})
 
-        # third loop: still no job finished. Wait for a free slot
-        result = manager.workflow_loop()
-        self.assertTrue(result)
-        self.assertEqual(mocked_super_schedule_spider.call_count, 2)
-
-        # fourth loop: finish one job. We can schedule last one with third set of arguments
+        # third loop: finish one job. We can schedule last one with third set of arguments
         manager.is_finished = lambda x: "finished" if x == "999/1/1" else None
         result = manager.workflow_loop()
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 3)
         mocked_super_schedule_spider.assert_any_call("myspider", units=None, argB="valC", job_settings={})
 
-        # fifth loop: waiting jobs to finish
+        # fourth loop: waiting jobs to finish
         result = manager.workflow_loop()
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 3)
 
-        # fourth loop: second job finished
+        # fifth loop: second job finished
         manager.is_finished = lambda x: "cancelled" if x == "999/1/2" else None
         result = manager.workflow_loop()
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 3)
 
-        # fifth loop: last job finished. Exit
+        # sixth loop: last job finished. Exit
         manager.is_finished = lambda x: "finished" if x == "999/1/3" else None
         result = manager.workflow_loop()
         self.assertFalse(result)
@@ -251,12 +246,6 @@ class CrawlManagerTest(TestCase):
         result = manager.workflow_loop()
 
         self.assertTrue(result)
-        self.assertEqual(mocked_super_schedule_spider.call_count, 1)
-        mocked_super_schedule_spider.assert_any_call("myspider", units=None, argA="valA", job_settings={})
-
-        # second loop: schedule spider again with second set of arguments
-        manager.is_finished = lambda x: None
-        result = manager.workflow_loop()
-        self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 2)
+        mocked_super_schedule_spider.assert_any_call("myspider", units=None, argA="valA", job_settings={})
         mocked_super_schedule_spider.assert_any_call("myspidertwo", units=None, argA="valB", job_settings={})
