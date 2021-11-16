@@ -222,7 +222,7 @@ class CrawlManagerTest(TestCase):
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_schedule_spider_list_explicit_spider(self, mocked_super_schedule_spider):
-        class ListTestManagerTwo(GeneratorCrawlManager):
+        class _ListTestManager(GeneratorCrawlManager):
 
             name = "test"
             default_max_jobs = 2
@@ -237,7 +237,7 @@ class CrawlManagerTest(TestCase):
                     yield args
 
         with script_args([]):
-            manager = ListTestManagerTwo()
+            manager = _ListTestManager()
 
         mocked_super_schedule_spider.side_effect = ["999/1/1", "999/1/2"]
         manager._WorkFlowManager__on_start()
@@ -249,3 +249,39 @@ class CrawlManagerTest(TestCase):
         self.assertEqual(mocked_super_schedule_spider.call_count, 2)
         mocked_super_schedule_spider.assert_any_call("myspider", units=None, argA="valA", job_settings={})
         mocked_super_schedule_spider.assert_any_call("myspidertwo", units=None, argA="valB", job_settings={})
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_schedule_spider_list_scrapy_cloud_params(self, mocked_super_schedule_spider):
+        class _ListTestManager(GeneratorCrawlManager):
+
+            name = "test"
+            default_max_jobs = 2
+            spider = "myspider"
+
+            def set_parameters_gen(self):
+                parameters_list = [
+                    {
+                        "argA": "valA",
+                        "units": 2,
+                        "tags": ["CHECKED"],
+                        "project_id": 999,
+                        "job_settings": {"CONCURRENT_REQUESTS": 2},
+                    },
+                ]
+                for args in parameters_list:
+                    yield args
+
+        with script_args([]):
+            manager = _ListTestManager()
+
+        mocked_super_schedule_spider.side_effect = ["999/1/1", "999/1/2"]
+        manager._WorkFlowManager__on_start()
+
+        # first loop: schedule spider with first set of arguments
+        result = manager.workflow_loop()
+
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 1)
+        mocked_super_schedule_spider.assert_any_call(
+            "myspider", units=2, argA="valA", job_settings={"CONCURRENT_REQUESTS": 2}, project_id=999, tags=["CHECKED"]
+        )

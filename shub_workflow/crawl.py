@@ -39,7 +39,7 @@ class CrawlManager(WorkFlowManager):
             self.argparser.add_argument("spider", help="Spider name")
         self.argparser.add_argument("--spider-args", help="Spider arguments dict in json format", default="{}")
         self.argparser.add_argument("--job-settings", help="Job settings dict in json format", default="{}")
-        self.argparser.add_argument("--units", help="Set number of ScrapyCloud units for each job", type=int)
+        self.argparser.add_argument("--units", help="Set default number of ScrapyCloud units for each job", type=int)
 
     def parse_args(self):
         args = super().parse_args()
@@ -59,12 +59,14 @@ class CrawlManager(WorkFlowManager):
             job_settings.update(override)
         return job_settings
 
-    def schedule_spider(self, spider=None, spider_args_override=None, job_settings_override=None):
+    def schedule_spider(self, spider=None, spider_args_override=None):
         spider = spider or self.spider
         spider_args = self.get_spider_args(spider_args_override)
+        job_settings_override = spider_args.pop("job_settings", None)
         job_settings = self.get_job_settings(job_settings_override)
         spider_args["job_settings"] = job_settings
-        self._running_job_keys.append(super().schedule_spider(spider, units=self.args.units, **spider_args))
+        spider_args["units"] = spider_args.get("units", self.args.units)
+        self._running_job_keys.append(super().schedule_spider(spider, **spider_args))
 
     def check_running_jobs(self):
         outcomes = {}
