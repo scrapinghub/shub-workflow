@@ -4,10 +4,9 @@ from typing import List, Generator
 from operator import itemgetter
 from glob import iglob
 from os import listdir, remove, environ, makedirs
-from os.path import exists as os_exists, dirname, getctime
+from os.path import exists as os_exists, dirname, getctime, basename
 from shutil import copyfile
 from datetime import datetime, timedelta, timezone
-from functools import partial
 
 from retrying import retry
 from s3fs import S3FileSystem as OriginalS3FileSystem
@@ -48,7 +47,7 @@ def s3_path(path, is_folder=False):
     path = path.strip()
     if is_folder and not path.endswith("/"):
         path = path + "/"
-    return path[len(_S3_ATTRIBUTE) :]
+    return path[len(_S3_ATTRIBUTE):]
 
 
 def s3_credentials(key, secret, include_region=False):
@@ -88,8 +87,10 @@ DOWNLOAD_CHUNK_SIZE = 500 * 1024 * 1024
 UPLOAD_CHUNK_SIZE = 100 * 1024 * 1024
 
 
-def download_file(path, dest, aws_key=None, aws_secret=None, **kwargs):
+def download_file(path, dest=None, aws_key=None, aws_secret=None, **kwargs):
     assert path.startswith(_S3_ATTRIBUTE), f"Not a s3 source: {path}"
+    if dest is None:
+        dest = basename(path)
     with get_file(path, "rb", aws_key=aws_key, aws_secret=aws_secret, **kwargs) as r, open(dest, "wb") as w:
         total = 0
         while True:
@@ -102,6 +103,8 @@ def download_file(path, dest, aws_key=None, aws_secret=None, **kwargs):
 
 def upload_file(path, dest, aws_key=None, aws_secret=None, **kwargs):
     assert dest.startswith(_S3_ATTRIBUTE), f"Not a s3 source: {dest}"
+    if dest.endswith("/"):
+        dest = dest + basename(path)
     with open(path, "rb") as r, get_file(dest, "wb", aws_key=aws_key, aws_secret=aws_secret, **kwargs) as w:
         total = 0
         while True:
