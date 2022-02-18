@@ -16,7 +16,7 @@ logger.setLevel(logging.INFO)
 class WorkFlowManager(BaseScript, abc.ABC):
 
     # --max-running-job command line option overrides it
-    default_max_jobs = float('inf')
+    default_max_jobs = float("inf")
 
     # If 0, don't loop. If positive number, repeat loop every given number of seconds
     # --loop-mode command line option overrides it
@@ -51,16 +51,29 @@ class WorkFlowManager(BaseScript, abc.ABC):
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument('--loop-mode', help='If provided, manager will run in loop mode, with a cycle\
-                                    each given number of seconds. Default: %(default)s', type=int, metavar='SECONDS',
-                                    default=self.loop_mode)
-        self.argparser.add_argument('--max-running-jobs', type=int, default=self.default_max_jobs,
-                                    help='If given, don\'t allow more than the given jobs running at once.\
-                                    Default: %(default)s')
-        self.argparser.add_argument('--resume-workflow', help='Resume workflow. You must use it in combination with\
-                                    --flow-id in order to set the flow id of the worklow you want to resume.', action='store_true')
+        self.argparser.add_argument(
+            "--loop-mode",
+            help="If provided, manager will run in loop mode, with a cycle\
+                                    each given number of seconds. Default: %(default)s",
+            type=int,
+            metavar="SECONDS",
+            default=self.loop_mode,
+        )
+        self.argparser.add_argument(
+            "--max-running-jobs",
+            type=int,
+            default=self.default_max_jobs,
+            help="If given, don't allow more than the given jobs running at once.\
+                                    Default: %(default)s",
+        )
+        self.argparser.add_argument(
+            "--resume-workflow",
+            help="Resume workflow. You must use it in combination with\
+                                    --flow-id in order to set the flow id of the worklow you want to resume.",
+            action="store_true",
+        )
 
-    def wait_for(self, jobs_keys, interval=60, timeout=float('inf'), heartbeat=None):
+    def wait_for(self, jobs_keys, interval=60, timeout=float("inf"), heartbeat=None):
         """Waits until all given jobs are not running anymore or until the
         timeout is reached, if a heartbeat is given it'll log an entry every
         heartbeat seconds (considering the interval), otherwise it'll log an
@@ -79,7 +92,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
                 if self.is_running(key):
                     if time_waited >= next_heartbeat:
                         next_heartbeat += heartbeat
-                        logger.info('{} still running'.format(key))
+                        logger.info("{} still running".format(key))
                     break
                 else:
                     still_running[key] = False
