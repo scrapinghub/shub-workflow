@@ -272,7 +272,7 @@ class GraphManager(WorkFlowManager):
             if job_can_run:
                 try:
                     jobid = self.run_job(job, status["is_retry"])
-                except:
+                except Exception:
                     self._release_resources(job)
                     raise
                 self.__pending_jobs.pop(job)
@@ -302,7 +302,7 @@ class GraphManager(WorkFlowManager):
             if job_can_run:
                 try:
                     jobid = self.run_job(job, status["is_retry"])
-                except:
+                except Exception:
                     self._release_resources(job)
                     raise
                 self.__pending_jobs.pop(job)

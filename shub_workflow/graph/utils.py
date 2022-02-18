@@ -31,12 +31,12 @@ def get_scheduled_jobs_specs(manager, job_ids):
     """
     scheduled_jobs = []
     for jobid in job_ids:
-        project_id = jobid.split('/')[0]
+        project_id = jobid.split("/")[0]
         job = manager.get_project(project_id).jobs.get(jobid)
-        for l in job.logs.iter():
-            if 'message' not in l:
+        for logline in job.logs.iter():
+            if "message" not in logline:
                 continue
-            m = _search_scheduled_line(l['message'])
+            m = _search_scheduled_line(logline["message"])
             if m:
                 scheduled_jobs.append(m)
     return scheduled_jobs

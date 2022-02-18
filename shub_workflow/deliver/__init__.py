@@ -94,7 +94,7 @@ class SqliteDictDupesFilter(object):
             try:
                 self.__filter.close()
                 os.remove(self.dupes_db_file)
-            except:
+            except Exception:
                 pass
 
 

@@ -1291,9 +1291,7 @@ class ManagerTest(BaseTestCase):
 
                 return jobA, jobB, jobC, jobD
 
-        with script_args(
-            ["--starting-job=jobA", "--starting-job=jobB", "--starting-job=jobC", "--starting-job=jobD"]
-        ):
+        with script_args(["--starting-job=jobA", "--starting-job=jobB", "--starting-job=jobC", "--starting-job=jobD"]):
             manager = _TestManager()
 
         manager.schedule_script = Mock()
@@ -1612,7 +1610,10 @@ class ManagerTest(BaseTestCase):
             name = "test"
 
             def configure_workflow(self):
-                command = """{% for i in range(4) %}commandB --config='{"topic": {{ i }}, "file": "ds_dump_{{ i }}"}'\n{% endfor %}"""
+                command = (
+                    """{% for i in range(4) %}commandB --config='{"topic": {{ i }},"""
+                    """ "file": "ds_dump_{{ i }}"}'\n{% endfor %}"""
+                )
                 jobB = Task("jobB", command=command, init_args=["argB", "--optionB"])
                 return (jobB,)
 
@@ -1645,7 +1646,10 @@ class ManagerTest(BaseTestCase):
             def configure_workflow(self):
                 jobB = Task(
                     "jobB",
-                    command="""{% for i in range(4) %}commandB --config='{"topic": {{ i }}, "file": "ds_dump_{{ i }}"}'\n{% endfor %}""",
+                    command=(
+                        """{% for i in range(4) %}commandB --config='{"topic": {{ i }},"""
+                        """ "file": "ds_dump_{{ i }}"}'\n{% endfor %}"""
+                    ),
                     init_args=["argB", "--optionB"],
                     project_id=1999,
                 )

@@ -15,25 +15,26 @@ _LOG.setLevel(logging.INFO)
 
 def _transform_cmd(job_cmd):
     if isinstance(job_cmd, list):
-        return ' '.join(["'%s'" % cmd for cmd in job_cmd[1:]])
+        return " ".join(["'%s'" % cmd for cmd in job_cmd[1:]])
 
     return job_cmd
 
 
-_COPIED_FROM_META = {'job_cmd': ('cmd_args', _transform_cmd),
-                     'units': (None, None),
-                     'spider_args': ('job_args', None),
-                     'tags': ('add_tag', None),
-                     'job_settings': (None, None)}
+_COPIED_FROM_META = {
+    "job_cmd": ("cmd_args", _transform_cmd),
+    "units": (None, None),
+    "spider_args": ("job_args", None),
+    "tags": ("add_tag", None),
+    "job_settings": (None, None),
+}
 
 
 class BaseClonner(BaseScript):
-
     @staticmethod
     def is_cloned(job):
-        for tag in job.metadata.get('tags') or []:
-            if tag.startswith('ClonedTo='):
-                _LOG.warning(f'Job {job.key} already cloned. Skipped.')
+        for tag in job.metadata.get("tags") or []:
+            if tag.startswith("ClonedTo="):
+                _LOG.warning(f"Job {job.key} already cloned. Skipped.")
                 return True
         return False
 
@@ -49,7 +50,7 @@ class BaseClonner(BaseScript):
         extra_tags = extra_tags or []
         job = self.client.get_job(job_key)
 
-        spider = job.metadata.get('spider')
+        spider = job.metadata.get("spider")
 
         job_params = dict()
         for key, (target_key, _) in _COPIED_FROM_META.items():
@@ -58,13 +59,13 @@ class BaseClonner(BaseScript):
                 target_key = key
 
             job_params[target_key] = job.metadata.get(key)
-            add_tag = job_params.setdefault('add_tag', [])
-            add_tag = list(filter(lambda x: not x.startswith('ClonedFrom='), add_tag))
-            add_tag.append(f'ClonedFrom={job_key}')
+            add_tag = job_params.setdefault("add_tag", [])
+            add_tag = list(filter(lambda x: not x.startswith("ClonedFrom="), add_tag))
+            add_tag.append(f"ClonedFrom={job_key}")
             add_tag.extend(extra_tags)
-            job_params['add_tag'] = add_tag
+            job_params["add_tag"] = add_tag
             if units is not None:
-                job_params['units'] = units
+                job_params["units"] = units
 
         self.job_params_hook(job_params)
 
@@ -73,17 +74,19 @@ class BaseClonner(BaseScript):
             target_key = target_key or key
 
             if transform is None:
-                transform = lambda x: x
+
+                def transform(x):
+                    return x
 
             job_params[target_key] = transform(job_params[target_key])
 
-        project_id, _, _ = job_key.split('/')
+        project_id, _, _ = job_key.split("/")
         project = self.get_project(self.project_id or project_id)
         new_job = self.schedule_generic(project, spider, **job_params)
         _LOG.info("Cloned %s to %s", job_key, new_job.key)
-        jobtags = job.metadata.get('tags')
-        jobtags.append(f'ClonedTo={new_job.key}')
-        job.metadata.update({'tags': jobtags})
+        jobtags = job.metadata.get("tags")
+        jobtags.append(f"ClonedTo={new_job.key}")
+        job.metadata.update({"tags": jobtags})
 
         return job, new_job
 
@@ -105,27 +108,34 @@ class CloneJobScript(BaseClonner):
         if project_id:
             return project_id
         if args.key:
-            return args.key[0].split('/')[0]
+            return args.key[0].split("/")[0]
         if args.tag_spider:
-            return args.tag_spider.split('/')[0]
+            return args.tag_spider.split("/")[0]
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument('--key', type=str, action='append', default=[],
-                                    help='Target job key. Can be given multiple times. All must be in same project.')
-        self.argparser.add_argument('--tag-spider', help='In format <project_id>/<tag>/<spider name>,'
-                                    'clone given spider from given project id, by tag')
-        self.argparser.add_argument('--units', help='Set number of units. Default is the same as cloned job.', type=int)
+        self.argparser.add_argument(
+            "--key",
+            type=str,
+            action="append",
+            default=[],
+            help="Target job key. Can be given multiple times. All must be in same project.",
+        )
+        self.argparser.add_argument(
+            "--tag-spider",
+            help="In format <project_id>/<tag>/<spider name>," "clone given spider from given project id, by tag",
+        )
+        self.argparser.add_argument("--units", help="Set number of units. Default is the same as cloned job.", type=int)
 
     def run(self):
         if self.args.key:
             keys = filter(lambda x: not self.is_cloned_by_jobkey(x), self.args.key)
         elif self.args.tag_spider:
             keys = []
-            project_id, tag, spider = self.args.tag_spider.split('/')
-            for job in self.get_project(project_id).jobs.iter(spider=spider, state=['finished'], has_tag=tag):
-                if not self.is_cloned_by_jobkey(job['key']):
-                    keys.append(job['key'])
+            project_id, tag, spider = self.args.tag_spider.split("/")
+            for job in self.get_project(project_id).jobs.iter(spider=spider, state=["finished"], has_tag=tag):
+                if not self.is_cloned_by_jobkey(job["key"]):
+                    keys.append(job["key"])
         else:
             self.argparser.error("You must provide either --key or --tag-spider.")
 
@@ -133,7 +143,7 @@ class CloneJobScript(BaseClonner):
             try:
                 self.clone_job(job_key, self.args.units, self.args.tag)
             except Exception as e:
-                _LOG.error('Could not restart job %s: %s', job_key, e)
+                _LOG.error("Could not restart job %s: %s", job_key, e)
 
 
 if __name__ == "__main__":
