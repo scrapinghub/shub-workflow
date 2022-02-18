@@ -1,10 +1,5 @@
 #### joe made this: http://goel.io/joe
 
-#####=== Python ===#####
-
-Pipfile
-Pipfile.lock
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
