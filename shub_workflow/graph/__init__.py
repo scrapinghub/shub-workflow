@@ -322,6 +322,19 @@ class GraphManager(WorkFlowManager):
             )
         )
 
+    def handle_retry(self, job, outcome):
+        jobconf = self.get_job(job)
+        retries = jobconf.get("retries", 0)
+        if retries > 0:
+            self._add_pending_job(job, is_retry=True)
+            jobconf["retries"] -= 1
+            logger.warning(
+                "Will retry job %s (outcome: %s, number of retries left: %s)", job, outcome, jobconf["retries"],
+            )
+            return True
+        logger.warning("No more retries for failed job %s (outcome: %s)", job, outcome)
+        return False
+
     def check_running_jobs(self):
         for job, jobid in list(self.__running_jobs.items()):
             outcome = self.is_finished(jobid)
@@ -334,17 +347,7 @@ class GraphManager(WorkFlowManager):
                         conf["wait_for"].remove(job)
                 for nextjob in self._get_next_jobs(job, outcome):
                     if nextjob == "retry":
-                        jobconf = self.get_job(job)
-                        retries = jobconf.get("retries", 0)
-                        if retries > 0:
-                            self._add_pending_job(job, is_retry=True)
-                            jobconf["retries"] -= 1
-                            logger.warning(
-                                "Will retry job %s (outcome: %s, number of retries left: %s)",
-                                job,
-                                outcome,
-                                jobconf["retries"],
-                            )
+                        self.handle_retry(job, outcome)
                     elif nextjob in self.__pending_jobs:
                         logger.error("Job %s already pending", nextjob)
                     else:
