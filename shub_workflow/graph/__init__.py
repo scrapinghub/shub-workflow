@@ -322,6 +322,9 @@ class GraphManager(WorkFlowManager):
             )
         )
 
+    def get_running_jobid(self, job):
+        return self.__running_jobs.get(job)
+
     def handle_retry(self, job, outcome):
         jobconf = self.get_job(job)
         retries = jobconf.get("retries", 0)
