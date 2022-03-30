@@ -2,6 +2,7 @@ import logging
 import json
 import os
 from typing import Optional
+from traceback import format_tb
 
 from retrying import retry
 
@@ -52,6 +53,7 @@ ONE_MIN_IN_S = 60
 
 
 def just_log_exception(exception):
+    logger.error("".join(format_tb(exception.__traceback__)[1:]))
     logger.error(repr(exception))
     for etype in (KeyboardInterrupt, SystemExit, ImportError):
         if isinstance(exception, etype):
