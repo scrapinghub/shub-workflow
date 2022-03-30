@@ -74,7 +74,7 @@ class CrawlManager(WorkFlowManager):
         shuffle(running_job_keys)
         removed = 0
         for count, jobkey in enumerate(running_job_keys, start=1):
-            if outcome := self.is_finished(jobkey) is not None:
+            if (outcome := self.is_finished(jobkey)) is not None:
                 _LOG.info(f"Job {jobkey} finished with outcome {outcome}.")
                 self._running_job_keys.remove(jobkey)
                 removed += 1
