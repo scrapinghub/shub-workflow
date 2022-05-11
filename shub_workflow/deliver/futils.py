@@ -78,7 +78,7 @@ def get_file(path, *args, aws_key=None, aws_secret=None, **kwargs):
         except Exception:
             pass
     else:
-        fp = open(path, *args, **op_kwargs)
+        fp = open(path, *args, **kwargs)
 
     return fp
 
