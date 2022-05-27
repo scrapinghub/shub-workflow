@@ -141,9 +141,8 @@ def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, **kwargs):
 
 def mv_file(src_path, dest_path, aws_key=None, aws_secret=None, **kwargs):
     if src_path.startswith(_S3_ATTRIBUTE) and dest_path.startswith(_S3_ATTRIBUTE):
-        op_kwargs = kwargs.pop("op_kwargs", {})
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
-        fs.mv(s3_path(src_path), s3_path(dest_path), **op_kwargs)
+        cp_file(src_path, dest_path, aws_key, aws_secret, **kwargs)
+        rm_file(src_path, aws_key, aws_secret, **kwargs)
     elif src_path.startswith(_S3_ATTRIBUTE):
         download_file(src_path, dest_path, aws_key, aws_secret, **kwargs)
         rm_file(src_path)
@@ -162,8 +161,9 @@ def mv_file(src_path, dest_path, aws_key=None, aws_secret=None, **kwargs):
 
 def rm_file(path, aws_key=None, aws_secret=None, **kwargs):
     if path.startswith(_S3_ATTRIBUTE):
+        op_kwargs = kwargs.pop("op_kwargs", {})
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
-        fs.rm(s3_path(path))
+        fs.rm(s3_path(path), **op_kwargs)
     else:
         remove(path)
 
