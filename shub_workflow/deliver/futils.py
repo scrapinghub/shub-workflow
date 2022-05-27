@@ -101,18 +101,23 @@ def download_file(path, dest=None, aws_key=None, aws_secret=None, **kwargs):
                 break
 
 
-def upload_file(path, dest, aws_key=None, aws_secret=None, **kwargs):
+def upload_file_obj(robj, dest, aws_key=None, aws_secret=None, **kwargs):
     assert dest.startswith(_S3_ATTRIBUTE), f"Not a s3 source: {dest}"
-    if dest.endswith("/"):
-        dest = dest + basename(path)
-    with open(path, "rb") as r, get_file(dest, "wb", aws_key=aws_key, aws_secret=aws_secret, **kwargs) as w:
+    with get_file(dest, "wb", aws_key=aws_key, aws_secret=aws_secret, **kwargs) as w:
         total = 0
         while True:
-            size = w.write(r.read(UPLOAD_CHUNK_SIZE))
+            size = w.write(robj.read(UPLOAD_CHUNK_SIZE))
             total += size
             logger.info(f"Uploaded {total} bytes to {dest}")
             if size < UPLOAD_CHUNK_SIZE:
                 break
+
+
+def upload_file(path, dest, aws_key=None, aws_secret=None, **kwargs):
+    if dest.endswith("/"):
+        dest = dest + basename(path)
+    with open(path, "rb") as r:
+        upload_file_obj(r, dest, aws_key, aws_secret, **kwargs)
 
 
 def get_glob(path, aws_key=None, aws_secret=None, **kwargs):
@@ -294,6 +299,7 @@ class S3Helper:
 
         for method in (
             get_file,
+            upload_file_obj,
             upload_file,
             download_file,
             list_folder,
