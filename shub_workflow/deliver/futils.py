@@ -267,6 +267,7 @@ class S3SessionFactory:
         self.credentials_expiration = None
         self.sts_client = boto3.client("sts", aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
         self.full_credentials = {}
+        self.s3_client = None
 
     def get_credentials(self):
         """
@@ -281,6 +282,11 @@ class S3SessionFactory:
                 RoleArn=self.aws_role, RoleSessionName=session_name, ExternalId=self.aws_external_id,
             )["Credentials"]
             self.credentials_expiration = self.full_credentials["Expiration"]
+            self.s3_client = boto3.session.Session(
+                aws_access_key_id=self.full_credentials["AccessKeyId"],
+                aws_secret_access_key=self.full_credentials["SecretAccessKey"],
+                aws_session_token=self.full_credentials["SessionToken"],
+            ).client("s3")
         return {
             "aws_key": self.full_credentials["AccessKeyId"],
             "aws_secret": self.full_credentials["SecretAccessKey"],
