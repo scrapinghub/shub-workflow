@@ -173,7 +173,8 @@ def list_folder(path, aws_key=None, aws_secret=None, **kwargs) -> List[str]:
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret), **kwargs)
 
         try:
-            listing = [f"s3://{name}" for name in fs.ls(s3_path(path, is_folder=True))]
+            path = s3_path(path, is_folder=True)
+            listing = [f"s3://{name}" for name in fs.ls(path) if name != path]
         except FileNotFoundError:
             listing = []
 
