@@ -37,6 +37,12 @@ class WorkFlowManager(BaseScript, abc.ABC):
         self.workflow_loop_enabled = False
         super().__init__()
 
+    def parse_args(self):
+        args = super().parse_args()
+        if not self.name:
+            self.argparser.error("Manager name not set.")
+        return args
+
     def set_flow_id(self, args, default=None):
         default = default or self._generate_flow_id()
         super().set_flow_id(args, default)

@@ -211,8 +211,6 @@ class GraphManager(WorkFlowManager):
         args = super(GraphManager, self).parse_args()
         self.jobs_graph = yaml.load(args.jobs_graph) or deepcopy(self.jobs_graph)
 
-        if not self.name:
-            self.argparser.error("Manager name not set.")
         if args.starting_job and args.root_jobs:
             self.argparser.error("You can't provide both --starting-job and --root-jobs.")
         return args
