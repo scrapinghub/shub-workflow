@@ -68,7 +68,10 @@ class BaseScript(ArgumentParserScript):
         if self.flow_id_required:
             assert not self.flow_id_required or self.flow_id, "Could not detect flow_id. Please set with --flow-id."
         if self.flow_id:
-            self.add_job_tags(tags=[f"FLOW_ID={self.flow_id}"])
+            tags = [f"FLOW_ID={self.flow_id}"]
+            if self.name:
+                tags.append(f"NAME={self.name}")
+            self.add_job_tags(tags=tags)
 
     @property
     def flow_id(self):
