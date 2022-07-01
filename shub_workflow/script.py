@@ -174,6 +174,8 @@ class BaseScript(ArgumentParserScript):
         tags.extend(self.args.tag)
         if self.flow_id:
             tags.append(f"FLOW_ID={self.flow_id}")
+            if self.name:
+                tags.append(f"PARENT_NAME={self.name}")
         tags.extend(self.__flow_tags)
         return sorted(set(tags)) or None
 

@@ -475,7 +475,7 @@ class ManagerTest(BaseTestCase):
         for i in range(4):
             project.jobs.run.assert_any_call(
                 spider="py:commandA",
-                add_tag=["FLOW_ID=mygeneratedflowid", "tag1", "tag2", "tag3", "tag4"],
+                add_tag=["FLOW_ID=mygeneratedflowid", "PARENT_NAME=test", "tag1", "tag2", "tag3", "tag4"],
                 units=None,
                 cmd_args=f"--parg={i} argA --optionA",
                 meta=None,
@@ -503,7 +503,7 @@ class ManagerTest(BaseTestCase):
         for i in range(4):
             project.jobs.run.assert_any_call(
                 spider="py:commandA",
-                add_tag=["FLOW_ID=myclflowid", "tag1", "tag2"],
+                add_tag=["FLOW_ID=myclflowid", "PARENT_NAME=test", "tag1", "tag2"],
                 units=None,
                 cmd_args=f"--parg={i} argA --optionA",
                 meta=None,
@@ -536,7 +536,7 @@ class ManagerTest(BaseTestCase):
         for i in range(4):
             project.jobs.run.assert_any_call(
                 spider="py:commandA",
-                add_tag=["FLOW_ID=myflowidfromtag", "tag1", "tag2"],
+                add_tag=["FLOW_ID=myflowidfromtag", "PARENT_NAME=test", "tag1", "tag2"],
                 units=None,
                 cmd_args=f"--parg={i} argA --optionA",
                 meta=None,
@@ -568,7 +568,7 @@ class ManagerTest(BaseTestCase):
         for i in range(4):
             project.jobs.run.assert_any_call(
                 spider="py:commandA",
-                add_tag=["EXEC_ID=myexecid", "FLOW_ID=mygeneratedflowid", "tag1", "tag2"],
+                add_tag=["EXEC_ID=myexecid", "FLOW_ID=mygeneratedflowid", "PARENT_NAME=test", "tag1", "tag2"],
                 units=None,
                 cmd_args=f"--parg={i} argA --optionA",
                 meta=None,
