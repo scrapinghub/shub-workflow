@@ -27,7 +27,8 @@ class CrawlManager(WorkFlowManager):
         self._bad_outcomes = {}
 
         # running jobs represents the state of a crawl manager.
-        self._running_job_keys = []
+        # a dict job key : spider_args_override
+        self._running_job_keys = {}
 
     @property
     def description(self):
@@ -60,13 +61,16 @@ class CrawlManager(WorkFlowManager):
         return job_settings
 
     def schedule_spider(self, spider=None, spider_args_override=None):
+        if spider_args_override is not None:
+            spider_args_override.copy()
         spider = spider or self.spider
         spider_args = self.get_spider_args(spider_args_override)
         job_settings_override = spider_args.pop("job_settings", None)
         job_settings = self.get_job_settings(job_settings_override)
         spider_args["job_settings"] = job_settings
         spider_args["units"] = spider_args.get("units", self.args.units)
-        self._running_job_keys.append(super().schedule_spider(spider, **spider_args))
+        jobkey = super().schedule_spider(spider, **spider_args)
+        self._running_job_keys[jobkey] = spider_args_override
 
     def check_running_jobs(self):
         outcomes = {}
@@ -76,10 +80,10 @@ class CrawlManager(WorkFlowManager):
         for count, jobkey in enumerate(running_job_keys, start=1):
             if (outcome := self.is_finished(jobkey)) is not None:
                 _LOG.info(f"Job {jobkey} finished with outcome {outcome}.")
-                self._running_job_keys.remove(jobkey)
+                spider_args_override = self._running_job_keys.pop(jobkey)
                 removed += 1
                 if outcome in self.base_failed_outcomes:
-                    self._bad_outcomes[jobkey] = outcome
+                    self._bad_outcomes[jobkey] = outcome, spider_args_override
                 outcomes[jobkey] = outcome
             else:
                 _LOG.info(f"Job {jobkey} still running.")
@@ -104,14 +108,14 @@ class CrawlManager(WorkFlowManager):
     def resume_workflow(self):
         for job in self.get_owned_jobs(spider=self.spider, state=["running", "pending"]):
             key = job["key"]
-            self._running_job_keys.append(key)
+            self._running_job_keys[key] = None
             _LOG.info(f"added running job {key}")
 
     def on_close(self):
         job = self.get_job()
         if job:
             close_reason = None
-            for outcome in self._bad_outcomes.values():
+            for outcome, _ in self._bad_outcomes.values():
                 close_reason = outcome
                 break
             self.finish(close_reason=close_reason)
