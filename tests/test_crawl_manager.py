@@ -119,10 +119,10 @@ class CrawlManagerTest(TestCase):
         with script_args(["myspider", "--flow-id=3a20", "--resume-workflow"]):
             manager = TestManager()
 
-        manager.get_owned_jobs = Mock()
-        manager.get_owned_jobs.side_effect = [[{"key": "999/1/1"}]]
+        manager.get_jobs = Mock()
+        manager.get_jobs.side_effect = [[{"key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=test"]}]]
         manager._WorkFlowManager__on_start()
-        self.assertEqual(manager.get_owned_jobs.call_count, 1)
+        self.assertEqual(manager.get_jobs.call_count, 1)
 
         # first loop: spider still running in workflow. Continue.
         manager.is_finished = lambda x: None
@@ -135,6 +135,29 @@ class CrawlManagerTest(TestCase):
 
         self.assertFalse(result)
         self.assertFalse(mocked_super_schedule_spider.called)
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_schedule_spider_with_resume_no_owned(self, mocked_super_schedule_spider):
+        with script_args(["myspider", "--flow-id=3a20", "--resume-workflow"]):
+            manager = TestManager()
+
+        manager.get_jobs = Mock()
+        manager.get_jobs.side_effect = [[{"key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=testa"]}]]
+        manager._WorkFlowManager__on_start()
+        self.assertEqual(manager.get_jobs.call_count, 1)
+
+        # first loop: no spider, schedule one.
+        manager.is_finished = lambda x: None
+        mocked_super_schedule_spider.side_effect = ["999/1/2"]
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 1)
+
+        # second loop: spider is finished. Stop.
+        manager.is_finished = lambda x: "finished" if x == "999/1/2" else None
+        result = manager.workflow_loop()
+
+        self.assertFalse(result)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_schedule_spider_periodic(self, mocked_super_schedule_spider):
