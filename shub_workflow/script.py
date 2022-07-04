@@ -217,10 +217,14 @@ class BaseScript(ArgumentParserScript):
 
     def get_owned_jobs(self, project_id=None, **kwargs):
         assert self.flow_id, "This job doesn't have a flow id."
+        assert self.name, "This job doesn't have a name."
         assert "has_tag" not in kwargs, "Filtering by flow id requires no extra has_tag."
         assert "state" in kwargs, "'state' parameter must be provided."
         kwargs["has_tag"] = [f"FLOW_ID={self.flow_id}"]
-        return self.get_jobs(project_id, **kwargs)
+        parent_tag = f"PARENT_NAME={self.name}"
+        for job in self.get_jobs(project_id, **kwargs):
+            if parent_tag in job["tags"]:
+                yield job
 
     @dash_retry_decorator
     def is_running(self, jobkey):
