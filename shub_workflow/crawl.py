@@ -83,7 +83,7 @@ class CrawlManager(WorkFlowManager):
                 _LOG.info(f"Job {jobkey} finished with outcome {outcome}.")
                 spider, spider_args_override = self._running_job_keys.pop(jobkey)
                 removed += 1
-                if outcome in self.base_failed_outcomes:
+                if outcome in self.failed_outcomes:
                     if spider_args_override is not None:
                         spider_args_override = spider_args_override.copy()
                     self.bad_outcome_hook(spider, outcome, spider_args_override, jobkey)

@@ -28,7 +28,6 @@ class GraphManager(WorkFlowManager):
     jobs_graph = {}
 
     def __init__(self):
-        self.__failed_outcomes = list(self.base_failed_outcomes)
         # Ensure jobs are traversed in the same order as they went pending.
         self.__pending_jobs = odict()
         self.__running_jobs = odict()
@@ -399,7 +398,7 @@ class GraphManager(WorkFlowManager):
         on_finish = self.get_job(job)["on_finish"]
         if outcome in on_finish:
             nextjobs = on_finish[outcome]
-        elif outcome in self.__failed_outcomes:
+        elif outcome in self.failed_outcomes:
             nextjobs = on_finish.get("failed", [])
         else:
             nextjobs = on_finish["default"]

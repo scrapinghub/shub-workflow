@@ -35,6 +35,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
 
     def __init__(self):
         self.workflow_loop_enabled = False
+        self.failed_outcomes = list(self.base_failed_outcomes)
         super().__init__()
 
     def parse_args(self):
