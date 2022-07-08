@@ -158,6 +158,7 @@ class GeneratorCrawlManager(CrawlManager):
         super().__init__()
         self.__parameters_gen = self.set_parameters_gen()
         self.__additional_jobs = []
+        self.__next_job_seq = 1
 
     def bad_outcome_hook(self, spider, outcome, spider_args_override, jobkey):
         pass
@@ -172,6 +173,24 @@ class GeneratorCrawlManager(CrawlManager):
         for i in []:
             yield i
 
+    def __add_jobseq_tag(self, params):
+        tags = params.setdefault("tags", [])
+        jobseq_tag = None
+        for tag in tags:
+            if tag.startswith("JOBSEQ="):
+                jobseq_tag = tag
+                break
+        if jobseq_tag is None:
+            jobseq_tag = f"JOBSEQ={self.__next_job_seq:010d}"
+            self.__next_job_seq += 1
+        else:
+            tags.remove(jobseq_tag)
+            base_jobseq_tag, *rep = jobseq_tag.split(".r")
+            rep.append(0)
+            repn = int(rep[0]) + 1
+            jobseq_tag = f"{base_jobseq_tag}.r{repn}"
+        tags.append(jobseq_tag)
+
     def workflow_loop(self):
         self.check_running_jobs()
         while len(self._running_job_keys) < self.max_running_jobs:
@@ -181,6 +200,7 @@ class GeneratorCrawlManager(CrawlManager):
                 else:
                     next_params = next(self.__parameters_gen)
                 spider = next_params.pop("spider", None)
+                self.__add_jobseq_tag(next_params)
                 self.schedule_spider(spider=spider, spider_args_override=next_params)
             except StopIteration:
                 if self._running_job_keys:
