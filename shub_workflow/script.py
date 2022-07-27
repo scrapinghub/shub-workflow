@@ -213,7 +213,26 @@ class BaseScript(ArgumentParserScript):
 
     @dash_retry_decorator
     def get_jobs(self, project_id=None, **kwargs):
-        return self.get_project(project_id).jobs.iter(**kwargs)
+        kwargs = kwargs.copy()
+        kwargs["start"] = 0
+        max_count = kwargs.get("count") or float("inf")
+        kwargs["count"] = min(1000, max_count)
+        seen = set()
+        while True:
+            count = 0
+            for job in self.get_project(project_id).jobs.iter(**kwargs):
+                count += 1
+                if job["key"] not in seen:
+                    yield job
+                    seen.add(job["key"])
+                    if len(seen) == max_count:
+                        count = 0
+                        break
+            if count < kwargs["count"]:
+                break
+            else:
+                shift = len(seen)
+                kwargs["start"] += shift
 
     def get_owned_jobs(self, project_id=None, **kwargs):
         assert self.flow_id, "This job doesn't have a flow id."
