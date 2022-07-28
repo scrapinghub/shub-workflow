@@ -377,7 +377,7 @@ class CrawlManagerTest(TestCase):
                 {
                     "spider": "myspider",
                     "key": "999/1/1",
-                    "tags": ["FLOW_ID=3a20", "PARENT_NAME=test"],
+                    "tags": ["FLOW_ID=3a20", "PARENT_NAME=test", "JOBSEQ=0000000001"],
                     "spider_args": {"argA": "valA"},
                 }
             ],
@@ -391,7 +391,7 @@ class CrawlManagerTest(TestCase):
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 1)
         mocked_super_schedule_spider.assert_any_call(
-            "myspidertwo", argA="valB", tags=["JOBSEQ=0000000001"], job_settings={}, units=None
+            "myspidertwo", argA="valB", tags=["JOBSEQ=0000000002"], job_settings={}, units=None
         )
 
         # second loop: finished second spider. Finish execution

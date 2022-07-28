@@ -23,6 +23,18 @@ def get_spider_args_from_params(params):
     return spider_args
 
 
+def get_jobseq(tags):
+    jobseq, repetition = 0, 0
+    for tag in tags:
+        if tag.startswith("JOBSEQ="):
+            tag = tag.replace("JOBSEQ=", "")
+            jobseq, *rep = tag.split(".r")
+            rep.append(0)
+            repetition = int(rep[0])
+            jobseq = int(jobseq)
+    return jobseq, repetition
+
+
 class CrawlManager(WorkFlowManager):
     """
     Schedules a single spider job. If loop mode is enabled, it will shutdown only after the scheduled spider
@@ -201,10 +213,8 @@ class GeneratorCrawlManager(CrawlManager):
             self.__next_job_seq += 1
         else:
             tags.remove(jobseq_tag)
-            base_jobseq_tag, *rep = jobseq_tag.split(".r")
-            rep.append(0)
-            repn = int(rep[0]) + 1
-            jobseq_tag = f"{base_jobseq_tag}.r{repn}"
+            jobseq, repn = get_jobseq([jobseq_tag])
+            jobseq_tag = f"JOBSEQ={jobseq:010d}.r{repn + 1}"
         tags.append(jobseq_tag)
 
     def workflow_loop(self):
@@ -241,9 +251,11 @@ class GeneratorCrawlManager(CrawlManager):
         for job in super().resume_workflow():
             jobid = self.get_job_id(job)
             self.__jobids.add(jobid)
+            self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job)[0] + 1)
         for job in self.get_owned_jobs(spider=self.spider, state=["finished"]):
             jobid = self.get_job_id(job)
             self.__jobids.add(jobid)
+            self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
 
     def on_close(self):
         pass
