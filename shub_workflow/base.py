@@ -75,8 +75,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
         )
         self.argparser.add_argument(
             "--resume-workflow",
-            help="Resume workflow. You must use it in combination with\
-                                    --flow-id in order to set the flow id of the worklow you want to resume.",
+            help="Resume workflow.",
             action="store_true",
         )
 

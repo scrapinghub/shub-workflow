@@ -6,11 +6,21 @@ import json
 import logging
 from random import shuffle
 
+from bloom_filter import BloomFilter
+
 from shub_workflow.base import WorkFlowManager
+from shub_workflow.utils import hashstr
 
 
 _LOG = logging.getLogger(__name__)
 _LOG.setLevel(logging.INFO)
+
+
+def get_spider_args_from_params(params):
+    spider_args = params.copy()
+    for key in "spider", "units", "project_id", "tags":
+        spider_args.pop(key, None)
+    return spider_args
 
 
 class CrawlManager(WorkFlowManager):
@@ -113,10 +123,13 @@ class CrawlManager(WorkFlowManager):
         return True
 
     def resume_workflow(self):
+        running_jobs = []
         for job in self.get_owned_jobs(spider=self.spider, state=["running", "pending"]):
             key = job["key"]
             self._running_job_keys[key] = None, None
             _LOG.info(f"added running job {key}")
+            running_jobs.append(job)
+        return running_jobs
 
     def on_close(self):
         job = self.get_job()
@@ -154,11 +167,14 @@ class GeneratorCrawlManager(CrawlManager):
     - Don't forget to set loop mode and max jobs (which defaults to infinite).
     """
 
+    MAX_TOTAL_JOBS = 1000000
+
     def __init__(self):
         super().__init__()
         self.__parameters_gen = self.set_parameters_gen()
         self.__additional_jobs = []
         self.__next_job_seq = 1
+        self.__jobids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
 
     def bad_outcome_hook(self, spider, outcome, spider_args_override, jobkey):
         pass
@@ -199,15 +215,35 @@ class GeneratorCrawlManager(CrawlManager):
                     next_params = self.__additional_jobs.pop(0)
                 else:
                     next_params = next(self.__parameters_gen)
-                spider = next_params.pop("spider", None)
-                self.__add_jobseq_tag(next_params)
-                self.schedule_spider(spider=spider, spider_args_override=next_params)
+                spider = next_params.pop("spider", self.spider)
+                assert spider is not None, "No spider set."
+                spider_args = get_spider_args_from_params(next_params)
+                jobid = self.get_job_id({"spider": spider, "spider_args": spider_args})
+                if jobid not in self.__jobids:
+                    self.__add_jobseq_tag(next_params)
+                    self.schedule_spider(spider=spider, spider_args_override=next_params)
+                    self.__jobids.add(jobid)
             except StopIteration:
                 if self._running_job_keys:
                     break
                 else:
                     return False
         return True
+
+    @staticmethod
+    def get_job_id(job):
+        jdict = job.get("spider_args", {}).copy()
+        jdict["spider"] = job["spider"]
+        jid = json.dumps(jdict, sort_keys=True)
+        return hashstr(jid)
+
+    def resume_workflow(self):
+        for job in super().resume_workflow():
+            jobid = self.get_job_id(job)
+            self.__jobids.add(jobid)
+        for job in self.get_owned_jobs(spider=self.spider, state=["finished"]):
+            jobid = self.get_job_id(job)
+            self.__jobids.add(jobid)
 
     def on_close(self):
         pass

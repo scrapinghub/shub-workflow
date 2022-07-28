@@ -21,6 +21,7 @@ setup(
         "s3fs==0.4.0",
         "boto3>=1.9.92",
         "google-cloud-storage>=1.38.0",
+        "bloom-filter==1.3.3",
     ),
     scripts=[],
     classifiers=[
