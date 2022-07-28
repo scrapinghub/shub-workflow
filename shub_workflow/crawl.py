@@ -260,6 +260,5 @@ class GeneratorCrawlManager(CrawlManager):
             count += 1
         _LOG.info(f"Added a total of {count} completed jobs")
 
-
     def on_close(self):
         pass
