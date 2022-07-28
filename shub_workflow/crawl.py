@@ -252,10 +252,14 @@ class GeneratorCrawlManager(CrawlManager):
             jobid = self.get_job_id(job)
             self.__jobids.add(jobid)
             self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job)[0] + 1)
+        count = 0
         for job in self.get_owned_jobs(spider=self.spider, state=["finished"]):
             jobid = self.get_job_id(job)
             self.__jobids.add(jobid)
             self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
+            count += 1
+        _LOG.info(f"Added a total of {count} completed jobs")
+
 
     def on_close(self):
         pass
