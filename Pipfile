@@ -11,6 +11,7 @@ jinja2 = ">=2.7.3"
 sqlitedict = "==1.6.0"
 s3fs = "==0.2.0"
 google-cloud-storage = "==1.38.0"
+bloom-filter = "*"
 
 [dev-packages]
 flake8 = "*"

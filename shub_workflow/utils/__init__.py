@@ -1,6 +1,7 @@
 import logging
 import json
 import os
+import hashlib
 from typing import Optional
 from traceback import format_tb
 
@@ -9,6 +10,12 @@ from retrying import retry
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def hashstr(text):
+    u = hashlib.sha1()
+    u.update(text.encode("utf8"))
+    return u.hexdigest()
 
 
 def resolve_project_id(project_id=None) -> Optional[int]:
