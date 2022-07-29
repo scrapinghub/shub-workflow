@@ -92,7 +92,8 @@ class CrawlManager(WorkFlowManager):
         spider_args["job_settings"] = job_settings
         spider_args["units"] = spider_args.get("units", self.args.units)
         jobkey = super().schedule_spider(spider, **spider_args)
-        self._running_job_keys[jobkey] = spider, spider_args_override
+        if jobkey is not None:
+            self._running_job_keys[jobkey] = spider, spider_args_override
         return jobkey
 
     def check_running_jobs(self):
