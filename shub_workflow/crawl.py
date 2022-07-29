@@ -254,7 +254,7 @@ class GeneratorCrawlManager(CrawlManager):
             self.__jobids.add(jobid)
             self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job)[0] + 1)
         count = 0
-        for job in self.get_owned_jobs(spider=self.spider, state=["finished"]):
+        for job in self.get_owned_jobs(spider=self.spider, state=["finished"], meta=["spider_args"]):
             jobid = self.get_job_id(job)
             self.__jobids.add(jobid)
             self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
