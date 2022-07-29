@@ -109,32 +109,32 @@ class BaseScript(ArgumentParserScript):
         return self.client.get_project(project_id or self.project_id)
 
     @dash_retry_decorator
-    def get_job_metadata(self, jobid=None):
-        """If jobid is None, get own metadata
+    def get_job_metadata(self, jobkey=None):
+        """If jobkey is None, get own metadata
         """
-        jobid = jobid or os.getenv("SHUB_JOBKEY")
-        if jobid:
-            project_id = jobid.split("/", 1)[0]
+        jobkey = jobkey or os.getenv("SHUB_JOBKEY")
+        if jobkey:
+            project_id = jobkey.split("/", 1)[0]
             project = self.get_project(project_id)
-            job = project.jobs.get(jobid)
+            job = project.jobs.get(jobkey)
             return job.metadata
         logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
     @dash_retry_decorator
-    def get_job(self, jobid=None):
-        """If jobid is None, get own metadata
+    def get_job(self, jobkey=None):
+        """If jobkey is None, get own metadata
         """
-        jobid = jobid or os.getenv("SHUB_JOBKEY")
-        if jobid:
-            project_id = jobid.split("/", 1)[0]
+        jobkey = jobkey or os.getenv("SHUB_JOBKEY")
+        if jobkey:
+            project_id = jobkey.split("/", 1)[0]
             project = self.get_project(project_id)
-            return project.jobs.get(jobid)
+            return project.jobs.get(jobkey)
         logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
-    def get_job_tags(self, jobid=None):
-        """If jobid is None, get own tags
+    def get_job_tags(self, jobkey=None):
+        """If jobkey is None, get own tags
         """
-        metadata = self.get_job_metadata(jobid)
+        metadata = self.get_job_metadata(jobkey)
         if metadata:
             return dict(metadata.list()).get("tags", [])
         return []
@@ -144,12 +144,12 @@ class BaseScript(ArgumentParserScript):
     def _update_metadata(metadata, data):
         metadata.update(data)
 
-    def add_job_tags(self, jobid=None, tags=None):
-        """If jobid is None, add tags to own list of tags.
+    def add_job_tags(self, jobkey=None, tags=None):
+        """If jobkey is None, add tags to own list of tags.
         """
         if tags:
             update = False
-            job_tags = self.get_job_tags(jobid)
+            job_tags = self.get_job_tags(jobkey)
             for tag in tags:
                 if tag not in job_tags:
                     if tag.startswith("FLOW_ID="):
@@ -158,14 +158,14 @@ class BaseScript(ArgumentParserScript):
                         job_tags.append(tag)
                     update = True
             if update:
-                metadata = self.get_job_metadata(jobid)
+                metadata = self.get_job_metadata(jobkey)
                 if metadata:
                     self._update_metadata(metadata, {"tags": job_tags})
 
-    def _get_flowid_from_tags(self, jobid=None):
-        """If jobid is None, get flowid from own tags
+    def _get_flowid_from_tags(self, jobkey=None):
+        """If jobkey is None, get flowid from own tags
         """
-        for tag in self.get_job_tags(jobid):
+        for tag in self.get_job_tags(jobkey):
             if tag.startswith("FLOW_ID="):
                 return tag.replace("FLOW_ID=", "")
 
@@ -257,29 +257,26 @@ class BaseScript(ArgumentParserScript):
             return True
         return False
 
-    @dash_retry_decorator
     def is_finished(self, jobkey):
         """
         Checks whether a job is running. if so, return close_reason. Otherwise return None.
         """
-        project_id = jobkey.split("/", 1)[0]
-        project = self.get_project(project_id)
-        job = project.jobs.get(jobkey)
-        if job.metadata.get("state") == "finished":
-            return job.metadata.get("close_reason")
+        metadata = self.get_job_metadata(jobkey)
+        if metadata.get("state") == "finished":
+            return metadata.get("close_reason")
 
     @dash_retry_decorator
-    def finish(self, jobid=None, close_reason=None):
+    def finish(self, jobkey=None, close_reason=None):
         close_reason = close_reason or "finished"
-        if jobid is None:
+        if jobkey is None:
             self.close_reason = close_reason
             if close_reason == "finished":
                 return
-        jobid = jobid or os.getenv("SHUB_JOBKEY")
-        if jobid:
-            project_id = jobid.split("/", 1)[0]
+        jobkey = jobkey or os.getenv("SHUB_JOBKEY")
+        if jobkey:
+            project_id = jobkey.split("/", 1)[0]
             hsp = self.client._hsclient.get_project(project_id)
-            hsj = hsp.get_job(jobid)
+            hsj = hsp.get_job(jobkey)
             hsp.jobq.finish(hsj, close_reason=close_reason)
         else:
             logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
