@@ -245,6 +245,8 @@ class GeneratorCrawlManager(CrawlManager):
     def get_job_id(job):
         jdict = job.get("spider_args", {}).copy()
         jdict["spider"] = job["spider"]
+        for k, v in jdict.items():
+            jdict[k] = str(v)
         jid = json.dumps(jdict, sort_keys=True)
         return hashstr(jid)
 
