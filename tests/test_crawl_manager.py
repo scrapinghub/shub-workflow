@@ -128,7 +128,9 @@ class CrawlManagerTest(TestCase):
             manager = TestManager()
 
         manager.get_jobs = Mock()
-        manager.get_jobs.side_effect = [[{"key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=test"]}]]
+        manager.get_jobs.side_effect = [
+            [{"spider": "myspider", "key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=test"]}]
+        ]
         manager._WorkFlowManager__on_start()
         self.assertEqual(manager.get_jobs.call_count, 1)
 
@@ -206,7 +208,7 @@ class CrawlManagerTest(TestCase):
         mocked_super_schedule_spider.assert_any_call("myspider", units=None, job_settings={})
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_list_bb(self, mocked_super_schedule_spider):
+    def test_schedule_spider_list_bad_outcome_hook(self, mocked_super_schedule_spider):
         with script_args(["myspider"]):
             manager = ListTestManager()
 
@@ -372,7 +374,9 @@ class CrawlManagerTest(TestCase):
 
         manager.get_jobs = Mock()
         manager.get_jobs.side_effect = [
+            # running spiders
             [],
+            # finished spiders
             [
                 {
                     "spider": "myspider",
@@ -399,3 +403,60 @@ class CrawlManagerTest(TestCase):
         result = manager.workflow_loop()
         self.assertEqual(mocked_super_schedule_spider.call_count, 1)
         self.assertFalse(result)
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_schedule_spider_list_resumed_running_job_with_bad_outcome(self, mocked_super_schedule_spider):
+        class _ListTestManager(ListTestManager):
+
+            name = "test"
+            default_max_jobs = 2
+            spider = "myspider"
+
+            def set_parameters_gen(self):
+                parameters_list = [
+                    {"argA": "valA"},
+                ]
+                for args in parameters_list:
+                    yield args
+
+        with script_args(["--flow-id=3a20", "--resume-workflow"]):
+            manager = _ListTestManager()
+
+        manager.get_jobs = Mock()
+        manager.get_jobs.side_effect = [
+            # running spiders
+            [
+                {
+                    "spider": "myspider",
+                    "key": "999/1/1",
+                    "tags": ["FLOW_ID=3a20", "PARENT_NAME=test", "JOBSEQ=0000000001"],
+                    "spider_args": {"argA": "valA"},
+                }
+            ],
+            # finished spiders
+            [],
+        ]
+        mocked_super_schedule_spider.side_effect = ["999/2/1"]
+        manager._WorkFlowManager__on_start()
+
+        # first loop: acquire running job.
+        manager.is_finished = lambda x: None
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 0)
+
+        # second loop: second job finished with failed outcome. Retry according
+        # to bad outcome hook
+        manager.is_finished = lambda x: "cancelled (stalled)"
+        mocked_super_schedule_spider.side_effect = ["999/2/2"]
+        result = manager.workflow_loop()
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 1)
+        mocked_super_schedule_spider.assert_any_call(
+            "myspider",
+            units=None,
+            argA="valA",
+            tags=["FLOW_ID=3a20", "PARENT_NAME=test", "JOBSEQ=0000000001.r1"],
+            argR="valR",
+            job_settings={},
+        )

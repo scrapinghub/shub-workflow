@@ -137,11 +137,16 @@ class CrawlManager(WorkFlowManager):
 
     def resume_workflow(self, meta=None):
         running_jobs = []
-        for job in self.get_owned_jobs(spider=self.spider, state=["running", "pending"], meta=meta):
+        count = 0
+        for job in self.get_owned_jobs(state=["running", "pending"], meta=["spider_args", "tags", "spider"]):
             key = job["key"]
-            self._running_job_keys[key] = None, None
+            spider_args_override = job.get("spider_args", {}).copy()
+            spider_args_override["tags"] = job["tags"]
+            self._running_job_keys[key] = job["spider"], spider_args_override
             _LOG.info(f"added running job {key}")
             running_jobs.append(job)
+            count += 1
+        _LOG.info(f"Added a total of {count} running jobs.")
         return running_jobs
 
     def on_close(self):
@@ -251,7 +256,7 @@ class GeneratorCrawlManager(CrawlManager):
         return hashstr(jid)
 
     def resume_workflow(self):
-        for job in super().resume_workflow(meta=["spider_args", "tags", "spider"]):
+        for job in super().resume_workflow():
             jobid = self.get_job_id(job)
             self.__jobids.add(jobid)
             self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
