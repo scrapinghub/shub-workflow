@@ -75,7 +75,9 @@ class WorkFlowManager(BaseScript, abc.ABC):
         )
         self.argparser.add_argument(
             "--resume-workflow",
-            help="Resume workflow.",
+            help="Resume workflow. A flag option. It must be used in combination with \
+                               the `FLOW_ID` tag or, in case this flag is not present, \
+                               with the `--flow-id` option.",
             action="store_true",
         )
 

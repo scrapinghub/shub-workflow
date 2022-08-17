@@ -60,6 +60,9 @@ class BaseScript(ArgumentParserScript):
         super().__init__()
 
     def append_flow_tag(self, tag):
+        """
+        A flow tag is a tag that is transmited to children.
+        """
         self.__flow_tags.append(tag)
         self.add_job_tags(tags=[tag])
 
@@ -169,7 +172,7 @@ class BaseScript(ArgumentParserScript):
             if tag.startswith("FLOW_ID="):
                 return tag.replace("FLOW_ID=", "")
 
-    def _make_tags(self, tags):
+    def _make_children_tags(self, tags):
         tags = tags or []
         tags.extend(self.args.tag)
         if self.flow_id:
@@ -182,7 +185,7 @@ class BaseScript(ArgumentParserScript):
     @dash_retry_decorator
     def _schedule_job(self, spider: str, tags=None, units=None, project_id=None, **kwargs):
         project = self.get_project(project_id)
-        schedule_kwargs = dict(spider=spider, add_tag=self._make_tags(tags), units=units, **kwargs,)
+        schedule_kwargs = dict(spider=spider, add_tag=self._make_children_tags(tags), units=units, **kwargs,)
         logger.info("Scheduling a job:\n%s", schedule_kwargs)
         try:
             job = project.jobs.run(**schedule_kwargs)
