@@ -142,6 +142,11 @@ class BaseScript(ArgumentParserScript):
             return dict(metadata.list()).get("tags", [])
         return []
 
+    def get_keyvalue_job_tag(self, key, jobkey=None):
+        for tag in self.get_job_tags(jobkey):
+            if tag.startswith(f"{key}="):
+                return tag.replace(f"{key}=", "")
+
     @staticmethod
     @dash_retry_decorator
     def _update_metadata(metadata, data):
@@ -168,9 +173,7 @@ class BaseScript(ArgumentParserScript):
     def _get_flowid_from_tags(self, jobkey=None):
         """If jobkey is None, get flowid from own tags
         """
-        for tag in self.get_job_tags(jobkey):
-            if tag.startswith("FLOW_ID="):
-                return tag.replace("FLOW_ID=", "")
+        return self.get_keyvalue_job_tag("FLOW_ID", jobkey)
 
     def _make_children_tags(self, tags):
         tags = tags or []
