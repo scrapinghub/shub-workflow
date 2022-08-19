@@ -61,10 +61,6 @@ class GraphManager(WorkFlowManager):
     def configure_workflow(self):
         raise NotImplementedError("configure_workflow() method need to be implemented.")
 
-    def resume_workflow(self):
-        # TODO: implement
-        raise NotImplementedError()
-
     def on_start(self):
         if not self.jobs_graph:
             self.argparser.error("Jobs graph configuration is empty.")

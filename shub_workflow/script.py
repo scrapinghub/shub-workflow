@@ -103,9 +103,8 @@ class BaseScript(ArgumentParserScript):
         if not self.project_id:
             self.argparser.error("Project id not provided.")
 
-        self.set_flow_id(args)
-
         self.name = args.name or self.name
+        self.set_flow_id(args)
         return args
 
     def get_project(self, project_id=None):
@@ -142,8 +141,8 @@ class BaseScript(ArgumentParserScript):
             return dict(metadata.list()).get("tags", [])
         return []
 
-    def get_keyvalue_job_tag(self, key, jobkey=None):
-        for tag in self.get_job_tags(jobkey):
+    def get_keyvalue_job_tag(self, key, tags):
+        for tag in tags:
             if tag.startswith(f"{key}="):
                 return tag.replace(f"{key}=", "")
 
@@ -173,7 +172,8 @@ class BaseScript(ArgumentParserScript):
     def _get_flowid_from_tags(self, jobkey=None):
         """If jobkey is None, get flowid from own tags
         """
-        return self.get_keyvalue_job_tag("FLOW_ID", jobkey)
+        tags = self.get_job_tags(jobkey)
+        return self.get_keyvalue_job_tag("FLOW_ID", tags)
 
     def _make_children_tags(self, tags):
         tags = tags or []
@@ -239,17 +239,6 @@ class BaseScript(ArgumentParserScript):
             else:
                 shift = len(seen)
                 kwargs["start"] += shift
-
-    def get_owned_jobs(self, project_id=None, **kwargs):
-        assert self.flow_id, "This job doesn't have a flow id."
-        assert self.name, "This job doesn't have a name."
-        assert "has_tag" not in kwargs, "Filtering by flow id requires no extra has_tag."
-        assert "state" in kwargs, "'state' parameter must be provided."
-        kwargs["has_tag"] = [f"FLOW_ID={self.flow_id}"]
-        parent_tag = f"PARENT_NAME={self.name}"
-        for job in self.get_jobs(project_id, **kwargs):
-            if parent_tag in job["tags"]:
-                yield job
 
     @dash_retry_decorator
     def is_running(self, jobkey):

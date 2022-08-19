@@ -36,6 +36,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
     def __init__(self):
         self.workflow_loop_enabled = False
         self.failed_outcomes = list(self.base_failed_outcomes)
+        self.is_resumed = False
         super().__init__()
 
     def parse_args(self):
@@ -47,6 +48,17 @@ class WorkFlowManager(BaseScript, abc.ABC):
     def set_flow_id(self, args, default=None):
         default = default or self._generate_flow_id()
         super().set_flow_id(args, default)
+
+    def get_owned_jobs(self, project_id=None, **kwargs):
+        assert self.flow_id, "This job doesn't have a flow id."
+        assert self.name, "This job doesn't have a name."
+        assert "has_tag" not in kwargs, "Filtering by flow id requires no extra has_tag."
+        assert "state" in kwargs, "'state' parameter must be provided."
+        kwargs["has_tag"] = [f"FLOW_ID={self.flow_id}"]
+        parent_tag = f"PARENT_NAME={self.name}"
+        for job in self.get_jobs(project_id, **kwargs):
+            if parent_tag in job["tags"]:
+                yield job
 
     @staticmethod
     def _generate_flow_id():
@@ -72,13 +84,6 @@ class WorkFlowManager(BaseScript, abc.ABC):
             default=self.default_max_jobs,
             help="If given, don't allow more than the given jobs running at once.\
                                     Default: %(default)s",
-        )
-        self.argparser.add_argument(
-            "--resume-workflow",
-            help="Resume workflow. A flag option. It must be used in combination with \
-                               the `FLOW_ID` tag or, in case this flag is not present, \
-                               with the `--flow-id` option.",
-            action="store_true",
         )
 
     def wait_for(self, jobs_keys, interval=60, timeout=float("inf"), heartbeat=None):
@@ -108,7 +113,20 @@ class WorkFlowManager(BaseScript, abc.ABC):
     def on_start(self):
         pass
 
-    @abc.abstractmethod
+    def __check_resume_workflow(self):
+        resumed_job = None
+        for job in self.get_jobs(status=["finished"], meta=["tags"], has_tag=[f"NAME={self.name}"]):
+            if self.get_keyvalue_job_tag("FLOW_ID", job["tags"]) == self.flow_id:
+                resumed_job = job
+                break
+        if resumed_job is not None:
+            inherited_tags = []
+            for tag in resumed_job["tags"]:
+                if tag.split("=") == 2:
+                    inherited_tags.append(tag)
+            self.add_job_tags(tags=inherited_tags)
+            self.is_resumed = True
+
     def resume_workflow(self):
         """
         Implement resume logic
@@ -116,7 +134,8 @@ class WorkFlowManager(BaseScript, abc.ABC):
         pass
 
     def __on_start(self):
-        if self.args.resume_workflow:
+        self.__check_resume_workflow()
+        if self.is_resumed:
             self.resume_workflow()
         self.on_start()
         self.workflow_loop_enabled = True

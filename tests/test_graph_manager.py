@@ -116,8 +116,12 @@ class BaseTestCase(TestCase):
         os.environ["PROJECT_ID"] = "999"
 
 
+@patch("shub_workflow.script.BaseScript.get_jobs")
 class ManagerTest(BaseTestCase):
-    def test_full_specs(self):
+    def test_full_specs(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobA", "--starting-job=jobB"]):
             manager = TestManager()
         manager.schedule_script = Mock()
@@ -183,10 +187,13 @@ class ManagerTest(BaseTestCase):
         self.assertFalse(manager.schedule_script.called)
 
     @patch("sys.stderr", new_callable=StringIO)
-    def test_invalid_job(self, mock_stderr):
+    def test_invalid_job(self, mock_stderr, mocked_get_jobs):
         """
         Test error when a bad job was provided on command line.
         """
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobA", "--starting-job=jobN"]):
             manager = TestManager()
         with self.assertRaises(SystemExit):
@@ -196,10 +203,13 @@ class ManagerTest(BaseTestCase):
         )
 
     @patch("sys.stderr", new_callable=StringIO)
-    def test_no_starting_job(self, mock_stderr):
+    def test_no_starting_job(self, mock_stderr, mocked_get_jobs):
         """
         Test error when no starting job was provided.
         """
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args([]):
             manager = TestManager()
         with self.assertRaises(SystemExit):
@@ -207,16 +217,22 @@ class ManagerTest(BaseTestCase):
         self.assertTrue("You must provide either --starting-job or --root-jobs." in mock_stderr.getvalue())
 
     @patch("sys.stderr", new_callable=StringIO)
-    def test_starting_job_and_root_jobs(self, mock_stderr):
+    def test_starting_job_and_root_jobs(self, mock_stderr, mocked_get_jobs):
         """
         Test error when no starting job was provided.
         """
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["-s", "jobA", "--root-jobs"]):
             with self.assertRaises(SystemExit):
                 TestManager()
         self.assertTrue("You can't provide both --starting-job and --root-jobs" in mock_stderr.getvalue())
 
-    def test_root_jobs(self):
+    def test_root_jobs(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--root-jobs"]):
             manager = TestManager()
         manager.schedule_script = Mock()
@@ -234,10 +250,13 @@ class ManagerTest(BaseTestCase):
             ["commandB", "argB", "--optionB"], tags=None, units=None, project_id=None
         )
 
-    def test_retry_job(self):
+    def test_retry_job(self, mocked_get_jobs):
         """
         Test that failed job is retried only the specified number of times
         """
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobA"]):
             manager = TestManager2()
         manager.is_finished = lambda x: None
@@ -318,10 +337,13 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
-    def test_retry_job_without_retry_args(self):
+    def test_retry_job_without_retry_args(self, mocked_get_jobs):
         """
         Test that failed job without retry args is retried with init args
         """
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobC"]):
             manager = TestManager2()
 
@@ -344,10 +366,13 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
 
-    def test_max_retries(self):
+    def test_max_retries(self, mocked_get_jobs):
         """
         Test max retries
         """
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobC"]):
             manager = TestManager2()
 
@@ -383,10 +408,13 @@ class ManagerTest(BaseTestCase):
         self.assertFalse(result)
         self.assertEqual(manager.schedule_script.call_count, 3)
 
-    def test_parallel_job(self):
+    def test_parallel_job(self, mocked_get_jobs):
         """
         Test correct scheduling of a job with parallelization
         """
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobA"]):
             manager = TestManager2()
         manager.is_finished = lambda x: None
@@ -453,7 +481,10 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.assert_any_call(["commandC", "argC"], tags=None, units=None, project_id=None)
         manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
 
-    def test_tags(self):
+    def test_tags(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobA", "--tag=tag3", "--tag=tag4"]):
             manager = TestManager3()
         self.assertEqual(manager.flow_id, "mygeneratedflowid")
@@ -481,7 +512,10 @@ class ManagerTest(BaseTestCase):
                 meta=None,
             )
 
-    def test_flow_id_from_command_line(self):
+    def test_flow_id_from_command_line(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobA", "--flow-id=myclflowid"]):
             manager = TestManager3()
         self.assertEqual(manager.flow_id, "myclflowid")
@@ -509,7 +543,10 @@ class ManagerTest(BaseTestCase):
                 meta=None,
             )
 
-    def test_flow_id_from_job_tags(self):
+    def test_flow_id_from_job_tags(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         class _TestManager(TestManager3):
             def get_job_tags(self, jobid=None):
                 if jobid is None:
@@ -542,7 +579,10 @@ class ManagerTest(BaseTestCase):
                 meta=None,
             )
 
-    def test_additional_workflow_tags(self):
+    def test_additional_workflow_tags(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         class _TestManager(TestManager3):
             add_job_tags = Mock()
 
@@ -575,7 +615,10 @@ class ManagerTest(BaseTestCase):
             )
         manager.add_job_tags.assert_any_call(tags=["EXEC_ID=myexecid"])
 
-    def test_skip_job(self):
+    def test_skip_job(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobA", "--skip-job=jobC"]):
             manager = TestManager3()
         manager.is_finished = lambda x: None
@@ -619,7 +662,10 @@ class ManagerTest(BaseTestCase):
         self.assertFalse(result)
         self.assertFalse(manager.schedule_script.called)
 
-    def test_wait_for_already_finished_job(self):
+    def test_wait_for_already_finished_job(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobA"]):
             manager = TestManager3()
         manager.is_finished = lambda x: None
@@ -679,7 +725,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
-    def test_no_wait_for_a_job_that_will_not_be_run(self):
+    def test_no_wait_for_a_job_that_will_not_be_run(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobD"]):
             manager = TestManager3()
         manager.schedule_script = Mock()
@@ -700,7 +749,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
-    def test_skip_job_no_wait_for_skipped(self):
+    def test_skip_job_no_wait_for_skipped(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobA", "--skip-job=jobB"]):
             manager = TestManager3()
         manager.is_finished = lambda x: None
@@ -743,7 +795,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
-    def test_start_job_wait_for_another_in_start_jobs(self):
+    def test_start_job_wait_for_another_in_start_jobs(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobB", "--starting-job=jobE"]):
             manager = TestManager3()
         manager.schedule_script = Mock()
@@ -770,7 +825,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
-    def test_wait_for_a_starting_parallel_job(self):
+    def test_wait_for_a_starting_parallel_job(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobB"]):
             manager = TestManager2()
         manager.schedule_script = Mock()
@@ -797,12 +855,14 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
-    def test_start_job_wait_for_a_job_after_another_start_job(self):
+    def test_start_job_wait_for_a_job_after_another_start_job(self, mocked_get_jobs):
         """
         One of the starting jobs must wait for a job triggered on the other start job finish:
         jobC -> jobD
         jobE must wait for jobD
         """
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -859,12 +919,14 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
-    def test_start_job_wait_for_another_that_must_wait_another(self):
+    def test_start_job_wait_for_another_that_must_wait_another(self, mocked_get_jobs):
         """
         One of the starting jobs must wait for a job triggered on the other start job finish:
         jobC -> jobD
         jobE must wait for jobD
         """
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -937,10 +999,12 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
-    def test_job_wait_for_another_that_must_wait_another_that_will_not_run(self):
+    def test_job_wait_for_another_that_must_wait_another_that_will_not_run(self, mocked_get_jobs):
         """
         One of the jobs must wait for a job that waits for another that will never run
         """
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -1015,10 +1079,12 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
-    def test_job_wait_for_another_that_must_wait_another_that_will_not_run_ii(self):
+    def test_job_wait_for_another_that_must_wait_another_that_will_not_run_ii(self, mocked_get_jobs):
         """
         One of the jobs must wait for a job that waits for another that will never run. Second variant.
         """
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -1093,12 +1159,14 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
 
-    def test_many_jobs_waiting_for_not_running_job(self):
+    def test_many_jobs_waiting_for_not_running_job(self, mocked_get_jobs):
         """
         When many jobs waits for the same that will not run, ensure that only one job at a time
         is choosen for run, except when we run a job with parallelization (in this case, all
         parallel jobs must run)
         """
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -1164,8 +1232,10 @@ class ManagerTest(BaseTestCase):
             ["commandC", "argC", "--optionC"], tags=None, units=None, project_id=None
         )
 
-    def test_job_cyclic_dependency(self):
+    def test_job_cyclic_dependency(self, mocked_get_jobs):
         """If at some point all pending jobs depend on each other, raise an error."""
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -1217,8 +1287,10 @@ class ManagerTest(BaseTestCase):
         ):
             manager.workflow_loop()
 
-    def test_job_required_resource(self):
+    def test_job_required_resource(self, mocked_get_jobs):
         """If a jobs depends on an unavailable resource, it should not run."""
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -1265,8 +1337,10 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_called_with(["commandB"], tags=None, units=None, project_id=None)
 
-    def test_job_required_alternative_resources(self):
+    def test_job_required_alternative_resources(self, mocked_get_jobs):
         """Test alternative resources."""
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -1335,8 +1409,10 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_called_with(["commandB"], tags=None, units=None, project_id=None)
 
-    def test_parallel_job_required_resource(self):
+    def test_parallel_job_required_resource(self, mocked_get_jobs):
         """If a job with required resource is parallel, divide the resource among all parallel subjobs"""
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -1388,8 +1464,10 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_called_with(["commandB"], tags=None, units=None, project_id=None)
 
-    def test_parallel_job_required_double_resource(self):
+    def test_parallel_job_required_double_resource(self, mocked_get_jobs):
         """Double resources with parallel jobs"""
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -1446,8 +1524,10 @@ class ManagerTest(BaseTestCase):
         calls = [call(["commandC", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)]
         manager.schedule_script.assert_has_calls(calls)
 
-    def test_parallel_job_alternative_required_resource(self):
+    def test_parallel_job_alternative_required_resource(self, mocked_get_jobs):
         """Alternative resources with parallel jobs"""
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -1499,9 +1579,11 @@ class ManagerTest(BaseTestCase):
         calls = [call(["commandC", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)]
         manager.schedule_script.assert_has_calls(calls)
 
-    def test_parallel_job_partial_resource(self):
+    def test_parallel_job_partial_resource(self, mocked_get_jobs):
         """When two parallel jobs share same resource, if one partially finishes,
            the other can partially acquire the resource."""
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -1553,10 +1635,12 @@ class ManagerTest(BaseTestCase):
         calls = [call(["commandC", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(2, 4)]
         manager.schedule_script.assert_has_calls(calls)
 
-    def test_max_running_jobs(self):
+    def test_max_running_jobs(self, mocked_get_jobs):
         """
         Test max running jobs
         """
+
+        mocked_get_jobs.side_effect = [[]]
 
         class _TestManager(GraphManager):
             project_id = 999
@@ -1587,7 +1671,10 @@ class ManagerTest(BaseTestCase):
         result = manager.workflow_loop()
         self.assertFalse(result)
 
-    def test_only_starting_jobs(self):
+    def test_only_starting_jobs(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         with script_args(["--starting-job=jobA", "--starting-job=jobB", "--only-starting-jobs"]):
             manager = TestManager()
         manager.is_finished = lambda x: None
@@ -1604,7 +1691,10 @@ class ManagerTest(BaseTestCase):
         result = manager.workflow_loop()
         self.assertFalse(result)
 
-    def test_multiple_parallel_arg_substitution(self):
+    def test_multiple_parallel_arg_substitution(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         class _TestManager(GraphManager):
             project_id = 999
             name = "test"
@@ -1638,7 +1728,10 @@ class ManagerTest(BaseTestCase):
                 project_id=None,
             )
 
-    def test_custom_target_project_id(self):
+    def test_custom_target_project_id(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         class _TestManager(GraphManager):
             project_id = 999
             name = "test"
@@ -1677,7 +1770,10 @@ class ManagerTest(BaseTestCase):
             )
 
     @patch("shub_workflow.graph.time")
-    def test_wait_time(self, mocked_time):
+    def test_wait_time(self, mocked_time, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         class _TestManager(GraphManager):
             project_id = 999
             name = "test"
@@ -1719,7 +1815,10 @@ class ManagerTest(BaseTestCase):
         # fourth loop: joB finishes, all finishes
         self.assertFalse(manager.workflow_loop())
 
-    def test_spider_task(self):
+    def test_spider_task(self, mocked_get_jobs):
+
+        mocked_get_jobs.side_effect = [[]]
+
         class _TestManager(GraphManager):
             project_id = 999
             name = "test"
@@ -1751,7 +1850,7 @@ class ManagerTest(BaseTestCase):
             "myspiderS", tags=["tag1"], units=1, project_id=None, argA="valA", argB="valB",
         )
 
-    def test_add_task_on_start(self):
+    def test_add_task_on_start(self, mocked_get_jobs):
         class _TestManager(GraphManager):
             project_id = 999
             name = "test"
@@ -1764,6 +1863,8 @@ class ManagerTest(BaseTestCase):
                 jobB = Task(task_id="jobB", command="commandB --optionB=B")
                 self.get_task("jobA").add_next_task(jobB)
                 super().on_start()
+
+        mocked_get_jobs.side_effect = [[]]
 
         with script_args(["--root-jobs"]):
             manager = _TestManager()

@@ -135,7 +135,7 @@ class CrawlManager(WorkFlowManager):
             self.schedule_spider()
         return True
 
-    def resume_workflow(self, meta=None):
+    def resume_workflow(self):
         running_jobs = []
         count = 0
         for job in self.get_owned_jobs(state=["running", "pending"], meta=["spider_args", "tags", "spider"]):

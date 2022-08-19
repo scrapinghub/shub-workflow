@@ -46,13 +46,18 @@ class TestManagerWithSpider(CrawlManager):
     spider = "myimplicitspider"
 
 
+@patch("shub_workflow.script.BaseScript.get_jobs")
+@patch("shub_workflow.script.BaseScript.add_job_tags")
 class CrawlManagerTest(TestCase):
     def setUp(self):
         os.environ["SH_APIKEY"] = "ffff"
         os.environ["PROJECT_ID"] = "999"
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider(self, mocked_super_schedule_spider):
+    def test_schedule_spider_dd(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
+
+        mocked_add_job_tags.side_effect = [[]]
+
         with script_args(["myspider"]):
             manager = TestManager()
 
@@ -80,7 +85,10 @@ class CrawlManagerTest(TestCase):
         self.assertFalse(mocked_super_schedule_spider.called)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_implicit_spider(self, mocked_super_schedule_spider):
+    def test_schedule_implicit_spider(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
+
+        mocked_add_job_tags.side_effect = [[]]
+
         with script_args([]):
             manager = TestManagerWithSpider()
 
@@ -95,7 +103,10 @@ class CrawlManagerTest(TestCase):
         mocked_super_schedule_spider.assert_any_call("myimplicitspider", units=None, job_settings={})
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_bad_outcome(self, mocked_super_schedule_spider):
+    def test_schedule_spider_bad_outcome(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
+
+        mocked_add_job_tags.side_effect = [[]]
+
         with script_args(["myspider"]):
             manager = TestManager()
 
@@ -123,16 +134,21 @@ class CrawlManagerTest(TestCase):
         self.assertFalse(mocked_super_schedule_spider.called)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_with_resume(self, mocked_super_schedule_spider):
-        with script_args(["myspider", "--flow-id=3a20", "--resume-workflow"]):
+    def test_schedule_spider_with_resume_dd(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
+        with script_args(["myspider", "--flow-id=3a20"]):
             manager = TestManager()
 
-        manager.get_jobs = Mock()
-        manager.get_jobs.side_effect = [
-            [{"spider": "myspider", "key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=test"]}]
+        mocked_get_jobs_side_effect = [
+            # the resumed job
+            [{"tags": ["FLOW_ID=3a20"], "key": "999/10/1"}],
+            # the owned job
+            [{"spider": "myspider", "key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=test"]}],
         ]
+        mocked_get_jobs.side_effect = mocked_get_jobs_side_effect
         manager._WorkFlowManager__on_start()
-        self.assertEqual(manager.get_jobs.call_count, 1)
+        self.assertTrue(manager.is_resumed)
+        self.assertEqual(len(manager._running_job_keys), 1)
+        self.assertEqual(manager.get_jobs.call_count, len(mocked_get_jobs_side_effect))
 
         # first loop: spider still running in workflow. Continue.
         manager.is_finished = lambda x: None
@@ -147,14 +163,40 @@ class CrawlManagerTest(TestCase):
         self.assertFalse(mocked_super_schedule_spider.called)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_with_resume_no_owned(self, mocked_super_schedule_spider):
-        with script_args(["myspider", "--flow-id=3a20", "--resume-workflow"]):
+    def test_schedule_spider_with_resume_not_found(
+        self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs
+    ):
+        with script_args(["myspider", "--flow-id=3a20"]):
             manager = TestManager()
 
-        manager.get_jobs = Mock()
-        manager.get_jobs.side_effect = [[{"key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=testa"]}]]
+        mocked_get_jobs_side_effect = [
+            # the not resumed job (different flow id)
+            [{"tags": ["FLOW_ID=3344"], "key": "999/10/1"}],
+        ]
+        mocked_get_jobs.side_effect = mocked_get_jobs_side_effect
         manager._WorkFlowManager__on_start()
-        self.assertEqual(manager.get_jobs.call_count, 1)
+        self.assertFalse(manager.is_resumed)
+        self.assertEqual(len(manager._running_job_keys), 0)
+        self.assertEqual(manager.get_jobs.call_count, len(mocked_get_jobs_side_effect))
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_schedule_spider_with_resume_not_owned(
+        self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs
+    ):
+        with script_args(["myspider", "--flow-id=3a20"]):
+            manager = TestManager()
+
+        mocked_get_jobs.side_effect = [
+            # the resumed job
+            [{"tags": ["FLOW_ID=3a20"], "key": "999/10/1"}],
+            # the not owned job
+            [{"key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=testa"]}],
+        ]
+        manager._WorkFlowManager__on_start()
+        self.assertTrue(manager.is_resumed)
+        self.assertEqual(len(manager._running_job_keys), 0)
+
+        self.assertEqual(manager.get_jobs.call_count, 2)
 
         # first loop: no spider, schedule one.
         manager.is_finished = lambda x: None
@@ -170,7 +212,7 @@ class CrawlManagerTest(TestCase):
         self.assertFalse(result)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_periodic(self, mocked_super_schedule_spider):
+    def test_schedule_spider_periodic(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
         with script_args(["myspider"]):
             manager = PeriodicTestManager()
 
@@ -208,7 +250,9 @@ class CrawlManagerTest(TestCase):
         mocked_super_schedule_spider.assert_any_call("myspider", units=None, job_settings={})
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_list_bad_outcome_hook(self, mocked_super_schedule_spider):
+    def test_schedule_spider_list_bad_outcome_hook(
+        self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs
+    ):
         with script_args(["myspider"]):
             manager = ListTestManager()
 
@@ -279,7 +323,9 @@ class CrawlManagerTest(TestCase):
         self.assertEqual(mocked_super_schedule_spider.call_count, 5)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_list_explicit_spider(self, mocked_super_schedule_spider):
+    def test_schedule_spider_list_explicit_spider(
+        self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs
+    ):
         class _ListTestManager(GeneratorCrawlManager):
 
             name = "test"
@@ -313,7 +359,9 @@ class CrawlManagerTest(TestCase):
         )
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_list_scrapy_cloud_params(self, mocked_super_schedule_spider):
+    def test_schedule_spider_list_scrapy_cloud_params(
+        self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs
+    ):
         class _ListTestManager(GeneratorCrawlManager):
 
             name = "test"
@@ -354,7 +402,7 @@ class CrawlManagerTest(TestCase):
         )
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_list_with_resume(self, mocked_super_schedule_spider):
+    def test_schedule_spider_list_with_resume(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
         class _ListTestManager(GeneratorCrawlManager):
 
             name = "test"
@@ -369,11 +417,12 @@ class CrawlManagerTest(TestCase):
                 for args in parameters_list:
                     yield args
 
-        with script_args(["--flow-id=3a20", "--resume-workflow"]):
+        with script_args(["--flow-id=3a20"]):
             manager = _ListTestManager()
 
-        manager.get_jobs = Mock()
-        manager.get_jobs.side_effect = [
+        mocked_get_jobs.side_effect = [
+            # the resumed job
+            [{"tags": ["FLOW_ID=3a20"], "key": "999/10/1"}],
             # running spiders
             [],
             # finished spiders
@@ -388,6 +437,8 @@ class CrawlManagerTest(TestCase):
         ]
         mocked_super_schedule_spider.side_effect = ["999/2/1"]
         manager._WorkFlowManager__on_start()
+        self.assertTrue(manager.is_resumed)
+        self.assertEqual(len(manager._running_job_keys), 0)
 
         # first loop: only second task was scheduled. First one already completed before resuming.
         manager.is_finished = lambda x: None
@@ -405,7 +456,9 @@ class CrawlManagerTest(TestCase):
         self.assertFalse(result)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_list_resumed_running_job_with_bad_outcome(self, mocked_super_schedule_spider):
+    def test_schedule_spider_list_resumed_running_job_with_bad_outcome(
+        self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs
+    ):
         class _ListTestManager(ListTestManager):
 
             name = "test"
@@ -419,11 +472,13 @@ class CrawlManagerTest(TestCase):
                 for args in parameters_list:
                     yield args
 
-        with script_args(["--flow-id=3a20", "--resume-workflow"]):
+        with script_args(["--flow-id=3a20"]):
             manager = _ListTestManager()
 
         manager.get_jobs = Mock()
         manager.get_jobs.side_effect = [
+            # the resumed job
+            [{"tags": ["FLOW_ID=3a20"], "key": "999/10/1"}],
             # running spiders
             [
                 {
@@ -438,6 +493,8 @@ class CrawlManagerTest(TestCase):
         ]
         mocked_super_schedule_spider.side_effect = ["999/2/1"]
         manager._WorkFlowManager__on_start()
+        self.assertTrue(manager.is_resumed)
+        self.assertEqual(len(manager._running_job_keys), 1)
 
         # first loop: acquire running job.
         manager.is_finished = lambda x: None
