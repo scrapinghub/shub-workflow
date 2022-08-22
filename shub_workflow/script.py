@@ -49,7 +49,7 @@ class BaseScript(ArgumentParserScript):
 
     name = ""  # optional, may be needed for some applications
     flow_id_required = False  # if True, script can only run in the context of a flow_id
-    children_tags = None
+    children_tags = None  # extra tags added to children
     default_project_id = None  # If None, autodetect (see shub_workflow.utils.resolve_project_id)
 
     def __init__(self):
@@ -87,7 +87,7 @@ class BaseScript(ArgumentParserScript):
         self.argparser.add_argument("--name", help="Script name.")
         self.argparser.add_argument("--flow-id", help="If given, use the given flow id.")
         self.argparser.add_argument(
-            "--tag",
+            "--children-tag",
             help="Additional tag added to the scheduled jobs. Can be given multiple times.",
             action="append",
             default=self.children_tags or [],
@@ -138,7 +138,7 @@ class BaseScript(ArgumentParserScript):
         """
         metadata = self.get_job_metadata(jobkey)
         if metadata:
-            return dict(metadata.list()).get("tags", [])
+            return dict(self._list_metadata(metadata)).get("tags", [])
         return []
 
     def get_keyvalue_job_tag(self, key, tags):
@@ -150,6 +150,16 @@ class BaseScript(ArgumentParserScript):
     @dash_retry_decorator
     def _update_metadata(metadata, data):
         metadata.update(data)
+
+    @staticmethod
+    @dash_retry_decorator
+    def _list_metadata(metadata):
+        return metadata.list()
+
+    @staticmethod
+    @dash_retry_decorator
+    def _get_metadata_key(metadata, key):
+        return metadata.get(key)
 
     def add_job_tags(self, jobkey=None, tags=None):
         """If jobkey is None, add tags to own list of tags.
@@ -177,7 +187,7 @@ class BaseScript(ArgumentParserScript):
 
     def _make_children_tags(self, tags):
         tags = tags or []
-        tags.extend(self.args.tag)
+        tags.extend(self.args.children_tag)
         if self.flow_id:
             tags.append(f"FLOW_ID={self.flow_id}")
             if self.name:
@@ -248,7 +258,7 @@ class BaseScript(ArgumentParserScript):
         project_id = jobkey.split("/", 1)[0]
         project = self.get_project(project_id)
         job = project.jobs.get(jobkey)
-        if job.metadata.get("state") in ("running", "pending"):
+        if self._get_metadata_key(job.metadata, "state") in ("running", "pending"):
             return True
         return False
 
@@ -257,8 +267,8 @@ class BaseScript(ArgumentParserScript):
         Checks whether a job is running. if so, return close_reason. Otherwise return None.
         """
         metadata = self.get_job_metadata(jobkey)
-        if metadata.get("state") == "finished":
-            return metadata.get("close_reason")
+        if self._get_metadata_key(metadata, "state") == "finished":
+            return self._get_metadata_key(metadata, "close_reason")
 
     @dash_retry_decorator
     def finish(self, jobkey=None, close_reason=None):

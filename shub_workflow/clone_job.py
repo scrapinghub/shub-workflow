@@ -32,7 +32,7 @@ _COPIED_FROM_META = {
 class BaseClonner(BaseScript):
     @staticmethod
     def is_cloned(job):
-        for tag in job.metadata.get("tags") or []:
+        for tag in BaseScript._get_metadata_key(job.metadata, "tags") or []:
             if tag.startswith("ClonedTo="):
                 _LOG.warning(f"Job {job.key} already cloned. Skipped.")
                 return True
@@ -50,7 +50,7 @@ class BaseClonner(BaseScript):
         extra_tags = extra_tags or []
         job = self.client.get_job(job_key)
 
-        spider = job.metadata.get("spider")
+        spider = self._get_metadata_key(job.metadata, "spider")
 
         job_params = dict()
         for key, (target_key, _) in _COPIED_FROM_META.items():
@@ -58,7 +58,7 @@ class BaseClonner(BaseScript):
             if target_key is None:
                 target_key = key
 
-            job_params[target_key] = job.metadata.get(key)
+            job_params[target_key] = self._get_metadata_key(job.metadata, key)
             add_tag = job_params.setdefault("add_tag", [])
             add_tag = list(filter(lambda x: not x.startswith("ClonedFrom="), add_tag))
             add_tag.append(f"ClonedFrom={job_key}")
@@ -84,9 +84,9 @@ class BaseClonner(BaseScript):
         project = self.get_project(self.project_id or project_id)
         new_job = self.schedule_generic(project, spider, **job_params)
         _LOG.info("Cloned %s to %s", job_key, new_job.key)
-        jobtags = job.metadata.get("tags")
+        jobtags = self._get_metadata_key(job.metadata, "tags")
         jobtags.append(f"ClonedTo={new_job.key}")
-        job.metadata.update({"tags": jobtags})
+        self._update_metadata(job.metadata, {"tags": jobtags})
 
         return job, new_job
 
