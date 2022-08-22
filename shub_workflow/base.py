@@ -30,6 +30,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
         "cancelled",
         "cancel_timeout",
         "memusage_exceeded",
+        "diskusage_exceeded",
         "cancelled (stalled)",
     )
 
