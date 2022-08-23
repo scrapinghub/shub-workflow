@@ -66,19 +66,20 @@ class BaseScript(ArgumentParserScript):
         self.__flow_tags.append(tag)
         self.add_job_tags(tags=[tag])
 
-    def set_flow_id(self, args, default=None):
-        self._flow_id = args.flow_id or self._get_flowid_from_tags() or default
-        if self.flow_id_required:
-            assert not self.flow_id_required or self.flow_id, "Could not detect flow_id. Please set with --flow-id."
-        if self.flow_id:
-            tags = [f"FLOW_ID={self.flow_id}"]
-            if self.name:
-                tags.append(f"NAME={self.name}")
-            self.add_job_tags(tags=tags)
+    @staticmethod
+    def generate_flow_id():
+        raise NotImplementedError("generate_flow_id() must be implemented if flow_id_required is True.")
 
-    @property
-    def flow_id(self):
-        return self._flow_id
+    def set_flow_id_name(self, args):
+        flowid_from_tag, name_from_tag = self._get_flowid_name_from_tags()
+        self.flow_id = flowid_from_tag or args.flow_id
+        if not self.flow_id and self.flow_id_required:
+            self.flow_id = self.generate_flow_id()
+        tags = [f"FLOW_ID={self.flow_id}"]
+        self.name = name_from_tag or args.name or self.name
+        if self.name:
+            tags.append(f"NAME={self.name}")
+        self.add_job_tags(tags=tags)
 
     def add_argparser_options(self):
         self.argparser.add_argument(
@@ -103,8 +104,7 @@ class BaseScript(ArgumentParserScript):
         if not self.project_id:
             self.argparser.error("Project id not provided.")
 
-        self.name = args.name or self.name
-        self.set_flow_id(args)
+        self.set_flow_id_name(args)
         return args
 
     def get_project(self, project_id=None):
@@ -179,11 +179,13 @@ class BaseScript(ArgumentParserScript):
                 if metadata:
                     self._update_metadata(metadata, {"tags": job_tags})
 
-    def _get_flowid_from_tags(self, jobkey=None):
+    def _get_flowid_name_from_tags(self, jobkey=None):
         """If jobkey is None, get flowid from own tags
         """
         tags = self.get_job_tags(jobkey)
-        return self.get_keyvalue_job_tag("FLOW_ID", tags)
+        flow_id = self.get_keyvalue_job_tag("FLOW_ID", tags)
+        name = self.get_keyvalue_job_tag("NAME", tags)
+        return flow_id, name
 
     def _make_children_tags(self, tags):
         tags = tags or []

@@ -106,7 +106,7 @@ class TestManager3(GraphManager):
         return (jobA,)
 
     @staticmethod
-    def _generate_flow_id():
+    def generate_flow_id():
         return "mygeneratedflowid"
 
 

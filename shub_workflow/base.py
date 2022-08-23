@@ -40,15 +40,10 @@ class WorkFlowManager(BaseScript, abc.ABC):
         self.is_resumed = False
         super().__init__()
 
-    def parse_args(self):
-        args = super().parse_args()
+    def set_flow_id_name(self, args):
+        super().set_flow_id_name(args)
         if not self.name:
             self.argparser.error("Manager name not set.")
-        return args
-
-    def set_flow_id(self, args, default=None):
-        default = default or self._generate_flow_id()
-        super().set_flow_id(args, default)
 
     def get_owned_jobs(self, project_id=None, **kwargs):
         assert self.flow_id, "This job doesn't have a flow id."
@@ -62,7 +57,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
                 yield job
 
     @staticmethod
-    def _generate_flow_id():
+    def generate_flow_id():
         return str(uuid4())
 
     @property
