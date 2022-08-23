@@ -485,7 +485,7 @@ class ManagerTest(BaseTestCase):
 
         mocked_get_jobs.side_effect = [[]]
 
-        with script_args(["--starting-job=jobA", "--tag=tag3", "--tag=tag4"]):
+        with script_args(["--starting-job=jobA", "--children-tag=tag3", "--children-tag=tag4"]):
             manager = TestManager3()
         self.assertEqual(manager.flow_id, "mygeneratedflowid")
         project = Mock()
