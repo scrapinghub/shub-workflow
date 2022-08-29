@@ -75,7 +75,8 @@ class BaseScript(ArgumentParserScript):
         self.flow_id = flowid_from_tag or args.flow_id
         if not self.flow_id and self.flow_id_required:
             self.flow_id = self.generate_flow_id()
-        tags = [f"FLOW_ID={self.flow_id}"]
+        if self.flow_id:
+            tags = [f"FLOW_ID={self.flow_id}"]
         self.name = name_from_tag or args.name or self.name
         if self.name:
             tags.append(f"NAME={self.name}")
