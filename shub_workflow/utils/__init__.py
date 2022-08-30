@@ -6,6 +6,7 @@ from typing import Optional
 from traceback import format_tb
 
 from retrying import retry
+from scrapinghub.client.exceptions import ServerError
 
 
 logger = logging.getLogger(__name__)
@@ -62,12 +63,10 @@ ONE_MIN_IN_S = 60
 def just_log_exception(exception):
     logger.error("".join(format_tb(exception.__traceback__)[1:]))
     logger.error(repr(exception))
-    for etype in (KeyboardInterrupt, SystemExit, ImportError):
-        if isinstance(exception, etype):
-            return False
-
-    logger.info("Waiting %d seconds", ONE_MIN_IN_S)
-    return True  # retries any other exception
+    if isinstance(exception, ServerError):
+        logger.info("Waiting %d seconds", ONE_MIN_IN_S)
+        return True
+    return False
 
 
 dash_retry_decorator = retry(
