@@ -73,6 +73,7 @@ class BaseScript(ArgumentParserScript):
     def set_flow_id_name(self, args):
         flowid_from_tag, name_from_tag = self._get_flowid_name_from_tags()
         self.flow_id = flowid_from_tag or args.flow_id
+        tags = []
         if not self.flow_id and self.flow_id_required:
             self.flow_id = self.generate_flow_id()
         if self.flow_id:
