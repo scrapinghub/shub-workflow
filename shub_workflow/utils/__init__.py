@@ -7,6 +7,7 @@ from traceback import format_tb
 
 from retrying import retry
 from scrapinghub.client.exceptions import ServerError
+from requests.exceptions import ReadTimeout
 
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ def resolve_project_id(project_id=None) -> Optional[int]:
     if not project_id:
         logger.warning("Project id not found. Use either PROJECT_ID env. variable or scrapinghub.yml default target.")
 
+    return None
 
 MINS_IN_A_DAY = 24 * 60
 ONE_MIN_IN_S = 60
@@ -63,7 +65,7 @@ ONE_MIN_IN_S = 60
 def just_log_exception(exception):
     logger.error("".join(format_tb(exception.__traceback__)[1:]))
     logger.error(repr(exception))
-    if isinstance(exception, ServerError):
+    if isinstance(exception, (ServerError, ReadTimeout)):
         logger.info("Waiting %d seconds", ONE_MIN_IN_S)
         return True
     return False
@@ -86,8 +88,8 @@ def kumo_settings():
 
 
 def get_project_settings():
-    from scrapy.utils.project import get_project_settings  # pylint: disable=import-error
+    from scrapy.utils.project import get_project_settings as scrapy_get_project_settings # pylint: disable=import-error
 
-    settings = get_project_settings()
+    settings = scrapy_get_project_settings()
     settings.setdict(kumo_settings(), priority="project")
     return settings
