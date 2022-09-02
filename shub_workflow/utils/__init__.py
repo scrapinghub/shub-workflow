@@ -58,6 +58,7 @@ def resolve_project_id(project_id=None) -> Optional[int]:
 
     return None
 
+
 MINS_IN_A_DAY = 24 * 60
 ONE_MIN_IN_S = 60
 
@@ -88,7 +89,7 @@ def kumo_settings():
 
 
 def get_project_settings():
-    from scrapy.utils.project import get_project_settings as scrapy_get_project_settings # pylint: disable=import-error
+    from scrapy.utils.project import get_project_settings as scrapy_get_project_settings  # pylint: disable=import-error
 
     settings = scrapy_get_project_settings()
     settings.setdict(kumo_settings(), priority="project")
