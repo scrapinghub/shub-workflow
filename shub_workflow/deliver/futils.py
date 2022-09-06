@@ -344,4 +344,6 @@ class S3Helper:
 
 
 class FSHelper(S3Helper):
-    pass
+
+    def __init__(self, aws_key=None, aws_secret=None, **kwargs):
+        super().__init__(aws_key, aws_secret, **kwargs)
