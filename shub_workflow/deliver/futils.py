@@ -341,3 +341,7 @@ class S3Helper:
             return method(*args, **kwargs)
 
         setattr(self, method.__name__, _method)
+
+
+class FSHelper(S3Helper):
+    pass
