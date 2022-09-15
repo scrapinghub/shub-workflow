@@ -13,6 +13,12 @@ from copy import copy, deepcopy
 
 import yaml
 
+try:
+    from yaml import CLoader as Loader
+except ImportError:
+    from yaml import Loader
+
+
 from shub_workflow.base import WorkFlowManager
 
 
@@ -204,7 +210,7 @@ class GraphManager(WorkFlowManager):
 
     def parse_args(self):
         args = super(GraphManager, self).parse_args()
-        self.jobs_graph = yaml.load(args.jobs_graph) or deepcopy(self.jobs_graph)
+        self.jobs_graph = yaml.load(args.jobs_graph, Loader=Loader) or deepcopy(self.jobs_graph)
 
         if args.starting_job and args.root_jobs:
             self.argparser.error("You can't provide both --starting-job and --root-jobs.")

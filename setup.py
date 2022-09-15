@@ -13,7 +13,7 @@ setup(
     maintainer="Scrapinghub",
     packages=find_packages(),
     install_requires=(
-        "pyyaml>=3.12,<6",
+        "pyyaml>=3.12",
         "retrying>=1.3.3",
         "scrapinghub[msgpack]>=2.3.1",
         "jinja2>=2.7.3",
