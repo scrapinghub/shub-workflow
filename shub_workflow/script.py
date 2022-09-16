@@ -58,6 +58,7 @@ class BaseScript(ArgumentParserScript):
         self.close_reason = None
         self.__flow_tags = []
         super().__init__()
+        self.set_flow_id_name(self.args)
 
     def append_flow_tag(self, tag):
         """
@@ -108,7 +109,6 @@ class BaseScript(ArgumentParserScript):
         if not self.project_id:
             self.argparser.error("Project id not provided.")
 
-        self.set_flow_id_name(args)
         return args
 
     def get_project(self, project_id=None):

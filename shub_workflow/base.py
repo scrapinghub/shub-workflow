@@ -103,7 +103,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
 
     def parse_args(self):
         args = super().parse_args()
-        if self.name is None:
+        if not self.name:
             self.name = args.name
         return args
 
