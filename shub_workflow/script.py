@@ -85,7 +85,10 @@ class BaseScript(ArgumentParserScript):
 
     def add_argparser_options(self):
         self.argparser.add_argument(
-            "--project-id", help="Overrides target project id.", type=int, default=self.default_project_id,
+            "--project-id",
+            help="Overrides target project id.",
+            type=int,
+            default=self.default_project_id,
         )
         self.argparser.add_argument("--name", help="Script name.")
         self.argparser.add_argument("--flow-id", help="If given, use the given flow id.")
@@ -114,8 +117,7 @@ class BaseScript(ArgumentParserScript):
 
     @dash_retry_decorator
     def get_job_metadata(self, jobkey=None):
-        """If jobkey is None, get own metadata
-        """
+        """If jobkey is None, get own metadata"""
         jobkey = jobkey or os.getenv("SHUB_JOBKEY")
         if jobkey:
             project_id = jobkey.split("/", 1)[0]
@@ -126,8 +128,7 @@ class BaseScript(ArgumentParserScript):
 
     @dash_retry_decorator
     def get_job(self, jobkey=None):
-        """If jobkey is None, get own metadata
-        """
+        """If jobkey is None, get own metadata"""
         jobkey = jobkey or os.getenv("SHUB_JOBKEY")
         if jobkey:
             project_id = jobkey.split("/", 1)[0]
@@ -136,8 +137,7 @@ class BaseScript(ArgumentParserScript):
         logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
     def get_job_tags(self, jobkey=None):
-        """If jobkey is None, get own tags
-        """
+        """If jobkey is None, get own tags"""
         metadata = self.get_job_metadata(jobkey)
         if metadata:
             return dict(self._list_metadata(metadata)).get("tags", [])
@@ -164,8 +164,7 @@ class BaseScript(ArgumentParserScript):
         return metadata.get(key)
 
     def add_job_tags(self, jobkey=None, tags=None):
-        """If jobkey is None, add tags to own list of tags.
-        """
+        """If jobkey is None, add tags to own list of tags."""
         if tags:
             update = False
             job_tags = self.get_job_tags(jobkey)
@@ -182,8 +181,7 @@ class BaseScript(ArgumentParserScript):
                     self._update_metadata(metadata, {"tags": job_tags})
 
     def _get_flowid_name_from_tags(self, jobkey=None):
-        """If jobkey is None, get flowid from own tags
-        """
+        """If jobkey is None, get flowid from own tags"""
         tags = self.get_job_tags(jobkey)
         flow_id = self.get_keyvalue_job_tag("FLOW_ID", tags)
         name = self.get_keyvalue_job_tag("NAME", tags)
@@ -202,7 +200,12 @@ class BaseScript(ArgumentParserScript):
     @dash_retry_decorator
     def _schedule_job(self, spider: str, tags=None, units=None, project_id=None, **kwargs):
         project = self.get_project(project_id)
-        schedule_kwargs = dict(spider=spider, add_tag=self._make_children_tags(tags), units=units, **kwargs,)
+        schedule_kwargs = dict(
+            spider=spider,
+            add_tag=self._make_children_tags(tags),
+            units=units,
+            **kwargs,
+        )
         logger.info("Scheduling a job:\n%s", schedule_kwargs)
         try:
             job = project.jobs.run(**schedule_kwargs)

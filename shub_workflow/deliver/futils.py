@@ -290,7 +290,9 @@ class S3SessionFactory:
         ):
             session_name = str(uuid.uuid4())
             self.full_credentials = self.sts_client.assume_role(
-                RoleArn=self.aws_role, RoleSessionName=session_name, ExternalId=self.aws_external_id,
+                RoleArn=self.aws_role,
+                RoleSessionName=session_name,
+                ExternalId=self.aws_external_id,
             )["Credentials"]
             self.credentials_expiration = self.full_credentials["Expiration"]
             self.s3_client = boto3.session.Session(
@@ -344,6 +346,5 @@ class S3Helper:
 
 
 class FSHelper(S3Helper):
-
     def __init__(self, aws_key=None, aws_secret=None, **kwargs):
         super().__init__(aws_key, aws_secret, **kwargs)

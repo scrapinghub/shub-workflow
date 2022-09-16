@@ -83,7 +83,9 @@ class GraphManager(WorkFlowManager):
         for taskid in candidates:
             if taskid in ran_tasks:
                 logger.info(
-                    "Task %s already done %s.", taskid, tuple(self.__tasks[taskid].get_scheduled_jobs()),
+                    "Task %s already done %s.",
+                    taskid,
+                    tuple(self.__tasks[taskid].get_scheduled_jobs()),
                 )
                 next_tasks = [t.task_id for t in self.__tasks[taskid].get_next_tasks()]
                 if next_tasks:
@@ -187,7 +189,11 @@ class GraphManager(WorkFlowManager):
         super(GraphManager, self).add_argparser_options()
         self.argparser.add_argument("--jobs-graph", help="Define jobs graph_dict on command line", default="{}")
         self.argparser.add_argument(
-            "--starting-job", "-s", action="append", default=[], help="Set starting jobs. Can be given multiple times.",
+            "--starting-job",
+            "-s",
+            action="append",
+            default=[],
+            help="Set starting jobs. Can be given multiple times.",
         )
         self.argparser.add_argument(
             "--only-starting-jobs",
@@ -331,7 +337,10 @@ class GraphManager(WorkFlowManager):
             self._add_pending_job(job, is_retry=True)
             jobconf["retries"] -= 1
             logger.warning(
-                "Will retry job %s (outcome: %s, number of retries left: %s)", job, outcome, jobconf["retries"],
+                "Will retry job %s (outcome: %s, number of retries left: %s)",
+                job,
+                outcome,
+                jobconf["retries"],
             )
             return True
         logger.warning("No more retries for failed job %s (outcome: %s)", job, outcome)
