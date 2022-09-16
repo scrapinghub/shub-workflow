@@ -268,7 +268,7 @@ class BaseScript(ArgumentParserScript):
 
     def is_finished(self, jobkey):
         """
-        Checks whether a job is running. if so, return close_reason. Otherwise return None.
+        Checks whether a job is finished. if so, return close_reason. Otherwise return None.
         """
         metadata = self.get_job_metadata(jobkey)
         if self._get_metadata_key(metadata, "state") == "finished":
