@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="shub-workflow",
-    version="1.9.2.9",
+    version="1.9.3",
     description="Workflow manager for scrapinghub ScrapyCloud tasks.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
