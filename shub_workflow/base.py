@@ -83,6 +83,8 @@ class WorkFlowManager(BaseScript, abc.ABC):
 
     def add_argparser_options(self):
         super().add_argparser_options()
+        if self.name is None:
+            self.argparser.add_argument("name", help="Script name.")
         self.argparser.add_argument(
             "--loop-mode",
             help="If provided, manager will run in loop mode, with a cycle\
@@ -98,6 +100,12 @@ class WorkFlowManager(BaseScript, abc.ABC):
             help="If given, don't allow more than the given jobs running at once.\
                                     Default: %(default)s",
         )
+
+    def parse_args(self):
+        args = super().parse_args()
+        if self.name is None:
+            self.name = args.name
+        return args
 
     def wait_for(self, jobs_keys, interval=60, timeout=float("inf"), heartbeat=None):
         """Waits until all given jobs are not running anymore or until the

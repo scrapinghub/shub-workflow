@@ -78,7 +78,7 @@ class BaseScript(ArgumentParserScript):
             self.flow_id = self.generate_flow_id()
         if self.flow_id:
             tags = [f"FLOW_ID={self.flow_id}"]
-        self.name = name_from_tag or args.name or self.name
+        self.name = name_from_tag or self.name
         if self.name:
             tags.append(f"NAME={self.name}")
         self.add_job_tags(tags=tags)
@@ -90,7 +90,6 @@ class BaseScript(ArgumentParserScript):
             type=int,
             default=self.default_project_id,
         )
-        self.argparser.add_argument("--name", help="Script name.")
         self.argparser.add_argument("--flow-id", help="If given, use the given flow id.")
         self.argparser.add_argument(
             "--children-tag",
