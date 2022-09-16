@@ -21,20 +21,19 @@ class WorkFlowManagerTest(TestCase):
             def workflow_loop(self):
                 return True
 
-        mocked_get_job_tags.side_effect = [[]]
+        mocked_get_job_tags.side_effect = [[], []]
 
         with script_args([]):
             with self.assertRaises(SystemExit):
-                manager = TestManager()
+                TestManager()
         self.assertTrue("the following arguments are required: name" in mocked_stderr.getvalue())
-        self.assertEqual(manager.name, None)
 
     def test_name_required_set(self, mocked_update_metadata, mocked_get_job_tags):
         class TestManager(WorkFlowManager):
             def workflow_loop(self):
                 return True
 
-        mocked_get_job_tags.side_effect = [[]]
+        mocked_get_job_tags.side_effect = [[], []]
 
         with script_args(["my_fantasy_name"]):
             manager = TestManager()
