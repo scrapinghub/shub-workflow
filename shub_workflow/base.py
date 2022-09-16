@@ -83,7 +83,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        if self.name is None:
+        if not self.name:
             self.argparser.add_argument("name", help="Script name.")
         self.argparser.add_argument(
             "--loop-mode",
