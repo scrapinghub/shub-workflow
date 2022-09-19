@@ -98,7 +98,7 @@ class SqliteDictDupesFilter(object):
                 pass
 
 
-class OutputFile(object):
+class OutputFile:
 
     max_filesize_items = 1000000
     max_filesize_bytes = 1000000000
@@ -181,7 +181,7 @@ class OutputFile(object):
         _LOG.info(f"Saved {self.__items_count} items in {destination}")
 
 
-class OutputFileDict(object):
+class OutputFileDict:
 
     outputfile_class = OutputFile
 
@@ -207,10 +207,36 @@ class OutputFileDict(object):
         return self.__outputfiles.pop(key)
 
 
-class DeliverScript(BaseScript):
+class BaseDeliverScript(BaseScript):
 
     default_delivered_tag = "delivered"
-    s3_success_file = False
+
+    def add_argparser_options(self):
+        super().add_argparser_options()
+        self.argparser.add_argument(
+            "--delivered-tag", help="Tag to apply to delivered jobs.", default=self.default_delivered_tag
+        )
+
+    def process_spider_jobs(self, scrapername):
+        jobs_to_tag = []
+        has_tag = [f"FLOW_ID={self.flow_id}"]
+
+        for spider_job in self.get_jobs(
+            spider=scrapername, state="finished", lacks_tag=self.args.delivered_tag, has_tag=has_tag
+        ):
+            sj = self.get_project().jobs.get(spider_job["key"])
+            self.process_job_items(scrapername, sj)
+            jobs_to_tag.append(spider_job["key"])
+
+        return jobs_to_tag
+
+    def process_job_items(self, scrapername, spider_job):
+        pass
+
+
+class DeliverScript(BaseDeliverScript):
+
+    write_success_file = False
     output_prefix = ""
     outputfiledict_class = OutputFileDict
 
@@ -263,15 +289,12 @@ class DeliverScript(BaseScript):
                 " Note that the performance will depend on the sizes of individual items in the cloud."
             ),
         )
-        self.argparser.add_argument(
-            "--delivered-tag", help="Tag to apply to delivered jobs.", default=self.default_delivered_tag
-        )
 
     def gen_keyprefix(self, scrapername, job, item):
         formatted_datetime = self.start_datetime.strftime("%Y-%m-%dT%H:%M:%S")
         return os.path.join(scrapername, formatted_datetime)
 
-    def _process_job_items(self, scrapername, spider_job):
+    def process_job_items(self, scrapername, spider_job):
         first_keyprefix = None
         job_item_count = 0
         chunks = spider_job.items.list_iter(chunksize=self.args.sh_chunk_size)
@@ -308,17 +331,16 @@ class DeliverScript(BaseScript):
         for scrapername in self.args.scrapername:
             _LOG.info(f"Processing spider {scrapername}")
             jobs_to_tag = self.process_spider_jobs(scrapername)
-            all_jobs_to_tag.update(jobs_to_tag)
+            if not self.args.test_mode:
+                all_jobs_to_tag.update(jobs_to_tag)
 
             _LOG.info("Total Processed items for spider %s: %d", scrapername, self.itemcount)
             for ofile in self.output_files.values():
                 ofile.flush()
-                if self.s3_success_file:
+                if self.write_success_file:
                     success_files.add(ofile.success_file)
 
         jcount = 0
-        if self.args.test_mode:
-            all_jobs_to_tag = set()
         for jkey in all_jobs_to_tag:
             self.add_job_tags(jkey, tags=[self.args.delivered_tag])
             jcount += 1
@@ -335,26 +357,6 @@ class DeliverScript(BaseScript):
 
     def close(self, success_files):
         pass
-
-    def process_spider_jobs(self, scrapername):
-        jobs_to_tag = []
-        start = 0
-        has_tag = [f"FLOW_ID={self.flow_id}"]
-
-        while True:
-            jobs_count = 0
-            for spider_job in self.get_project().jobs.iter(
-                spider=scrapername, state="finished", lacks_tag=self.args.delivered_tag, has_tag=has_tag, start=start
-            ):
-                jobs_count += 1
-                sj = self.get_project().jobs.get(spider_job["key"])
-                self._process_job_items(scrapername, sj)
-                jobs_to_tag.append(spider_job["key"])
-            if jobs_count == 0:
-                break
-            start += jobs_count
-
-        return jobs_to_tag
 
 
 # for compatibility with older versions. New DeliverScript handles indistictly local files, s3 and gs.
