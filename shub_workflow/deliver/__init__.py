@@ -211,27 +211,51 @@ class BaseDeliverScript(BaseScript):
 
     default_delivered_tag = "delivered"
 
+    def __init__(self):
+        super().__init__()
+        self._all_jobs_to_tag = set()
+
     def add_argparser_options(self):
         super().add_argparser_options()
+        self.argparser.add_argument("scrapername", help="Indicate target scraper names", nargs="+")
         self.argparser.add_argument(
             "--delivered-tag", help="Tag to apply to delivered jobs.", default=self.default_delivered_tag
         )
+        self.argparser.add_argument(
+            "--test-mode",
+            action="store_true",
+            help="Run in test mode (performs all processes, but doesn't\
+                                          upload files nor tag jobs)",
+        )
+
+    def get_target_tags(self):
+        return [f"FLOW_ID={self.flow_id}"]
 
     def process_spider_jobs(self, scrapername):
-        jobs_to_tag = []
-        has_tag = [f"FLOW_ID={self.flow_id}"]
+        has_tag = self.get_target_tags()
 
         for spider_job in self.get_jobs(
             spider=scrapername, state="finished", lacks_tag=self.args.delivered_tag, has_tag=has_tag
         ):
             sj = self.get_project().jobs.get(spider_job["key"])
             self.process_job_items(scrapername, sj)
-            jobs_to_tag.append(spider_job["key"])
-
-        return jobs_to_tag
+            if not self.args.test_mode:
+                self._all_jobs_to_tag.append(spider_job["key"])
 
     def process_job_items(self, scrapername, spider_job):
-        pass
+        for item in spider_job.items.iter():
+            self.on_item(item, scrapername)
+
+    def on_item(item, scrapername):
+        print(json.dumps(item))
+
+    def on_close(self):
+        jcount = 0
+        for jkey in self._all_jobs_to_tag:
+            self.add_job_tags(jkey, tags=[self.args.delivered_tag])
+            jcount += 1
+            if jcount % 100 == 0:
+                _LOG.info("Marked %d jobs as delivered", jcount)
 
 
 class DeliverScript(BaseDeliverScript):
@@ -265,8 +289,6 @@ class DeliverScript(BaseDeliverScript):
 
     def add_argparser_options(self):
         super().add_argparser_options()
-
-        self.argparser.add_argument("scrapername", help="Indicate target scraper names", nargs="*")
         self.argparser.add_argument("--output-prefix", help="Delivery prefix.", default=self.output_prefix)
         self.argparser.add_argument(
             "--filter-dupes-by-field",
@@ -274,12 +296,6 @@ class DeliverScript(BaseDeliverScript):
             help="Dedupe by any of the given item field. Can be given multiple times",
         )
         self.argparser.add_argument("--one-file-per-job", action="store_true", help="Generate one file per job.")
-        self.argparser.add_argument(
-            "--test-mode",
-            action="store_true",
-            help="Run in test mode (performs all processes, but doesn't\
-                                          upload files nor tag jobs)",
-        )
         self.argparser.add_argument(
             "--sh-chunk-size",
             type=int,
@@ -327,25 +343,15 @@ class DeliverScript(BaseDeliverScript):
 
     def run(self):
         success_files = set()
-        all_jobs_to_tag = set()
         for scrapername in self.args.scrapername:
             _LOG.info(f"Processing spider {scrapername}")
-            jobs_to_tag = self.process_spider_jobs(scrapername)
-            if not self.args.test_mode:
-                all_jobs_to_tag.update(jobs_to_tag)
+            self.process_spider_jobs(scrapername)
 
             _LOG.info("Total Processed items for spider %s: %d", scrapername, self.itemcount)
             for ofile in self.output_files.values():
                 ofile.flush()
                 if self.write_success_file:
                     success_files.add(ofile.success_file)
-
-        jcount = 0
-        for jkey in all_jobs_to_tag:
-            self.add_job_tags(jkey, tags=[self.args.delivered_tag])
-            jcount += 1
-            if jcount % 100 == 0:
-                _LOG.info("Marked %d jobs as delivered", jcount)
 
         for success_file in success_files:
             remote_success_file = os.path.join(self.args.output_prefix, success_file)
