@@ -71,6 +71,7 @@ _ARGUMENT_RE = re.compile(r"\{argument:(.+?)\}")
 class BaseDeliverScript(BaseScript):
 
     default_delivered_tag = "delivered"
+    scrapername_nargs = "+"
 
     def __init__(self):
         super().__init__()
@@ -78,7 +79,7 @@ class BaseDeliverScript(BaseScript):
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument("scrapername", help="Indicate target scraper names", nargs="+")
+        self.argparser.add_argument("scrapername", help="Indicate target scraper names", nargs=self.scrapername_nargs)
         self.argparser.add_argument(
             "--delivered-tag", help="Tag to apply to delivered jobs.", default=self.default_delivered_tag
         )
