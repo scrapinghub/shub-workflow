@@ -90,9 +90,8 @@ class BaseDeliverScript(BaseScript):
     def get_target_tags(self):
         return []
 
-    def get_delivery_spider_jobs(self, scrapername):
+    def get_delivery_spider_jobs(self, scrapername, target_tags):
 
-        target_tags = self.get_target_tags()
         flow_id_tag = [f"FLOW_ID={self.flow_id}"]
 
         for spider_job in self.get_jobs(
@@ -102,7 +101,8 @@ class BaseDeliverScript(BaseScript):
                 yield self.get_project().jobs.get(spider_job["key"])
 
     def process_spider_jobs(self, scrapername):
-        for sj in self.get_delivery_spider_jobs(scrapername):
+        target_tags = self.get_target_tags()
+        for sj in self.get_delivery_spider_jobs(scrapername, target_tags):
             self.process_job_items(scrapername, sj)
             if not self.args.test_mode:
                 self._all_jobs_to_tag.append(sj.key)
