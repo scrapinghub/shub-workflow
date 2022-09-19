@@ -70,39 +70,42 @@ _ARGUMENT_RE = re.compile(r"\{argument:(.+?)\}")
 
 class BaseDeliverScript(BaseScript):
 
-    default_delivered_tag = "delivered"
+    delivered_tag = "delivered"
     scrapername_nargs = "+"
+    flow_id_required = True
 
     def __init__(self):
         super().__init__()
-        self._all_jobs_to_tag = set()
+        self._all_jobs_to_tag = []
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument("scrapername", help="Indicate target scraper names", nargs=self.scrapername_nargs)
-        self.argparser.add_argument(
-            "--delivered-tag", help="Tag to apply to delivered jobs.", default=self.default_delivered_tag
-        )
+        self.argparser.add_argument("scrapername", help="Target scraper names", nargs=self.scrapername_nargs)
         self.argparser.add_argument(
             "--test-mode",
             action="store_true",
-            help="Run in test mode (performs all processes, but doesn't\
-                                          upload files nor tag jobs)",
+            help="Run in test mode (performs all processes, but doesn't upload files nor consumes jobs)",
         )
 
     def get_target_tags(self):
-        return [f"FLOW_ID={self.flow_id}"]
+        return []
 
-    def process_spider_jobs(self, scrapername):
-        has_tag = self.get_target_tags()
+    def get_delivery_spider_jobs(self, scrapername):
+
+        target_tags = self.get_target_tags()
+        flow_id_tag = [f"FLOW_ID={self.flow_id}"]
 
         for spider_job in self.get_jobs(
-            spider=scrapername, state="finished", lacks_tag=self.args.delivered_tag, has_tag=has_tag
+            spider=scrapername, state="finished", lacks_tag=self.delivered_tag, has_tag=flow_id_tag, meta=["tags"]
         ):
-            sj = self.get_project().jobs.get(spider_job["key"])
+            if not set(target_tags).difference(spider_job["tags"]):
+                yield self.get_project().jobs.get(spider_job["key"])
+
+    def process_spider_jobs(self, scrapername):
+        for sj in self.get_delivery_spider_jobs(scrapername):
             self.process_job_items(scrapername, sj)
             if not self.args.test_mode:
-                self._all_jobs_to_tag.append(spider_job["key"])
+                self._all_jobs_to_tag.append(sj.key)
 
     def process_job_items(self, scrapername, spider_job):
         for item in spider_job.items.iter():
@@ -119,13 +122,13 @@ class BaseDeliverScript(BaseScript):
     def on_close(self):
         jcount = 0
         for jkey in self._all_jobs_to_tag:
-            self.add_job_tags(jkey, tags=[self.args.delivered_tag])
+            self.add_job_tags(jkey, tags=[self.delivered_tag])
             jcount += 1
             if jcount % 100 == 0:
                 _LOG.info("Marked %d jobs as delivered", jcount)
 
 
-class SqliteDictDupesFilter(object):
+class SqliteDictDupesFilter:
     def __init__(self):
         """
         SqlteDict based dupes filter
