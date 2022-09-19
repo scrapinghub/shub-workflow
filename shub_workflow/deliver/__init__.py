@@ -68,6 +68,62 @@ _FIELD_RE = re.compile(r"\{field:(.+?)\}")
 _ARGUMENT_RE = re.compile(r"\{argument:(.+?)\}")
 
 
+class BaseDeliverScript(BaseScript):
+
+    default_delivered_tag = "delivered"
+
+    def __init__(self):
+        super().__init__()
+        self._all_jobs_to_tag = set()
+
+    def add_argparser_options(self):
+        super().add_argparser_options()
+        self.argparser.add_argument("scrapername", help="Indicate target scraper names", nargs="+")
+        self.argparser.add_argument(
+            "--delivered-tag", help="Tag to apply to delivered jobs.", default=self.default_delivered_tag
+        )
+        self.argparser.add_argument(
+            "--test-mode",
+            action="store_true",
+            help="Run in test mode (performs all processes, but doesn't\
+                                          upload files nor tag jobs)",
+        )
+
+    def get_target_tags(self):
+        return [f"FLOW_ID={self.flow_id}"]
+
+    def process_spider_jobs(self, scrapername):
+        has_tag = self.get_target_tags()
+
+        for spider_job in self.get_jobs(
+            spider=scrapername, state="finished", lacks_tag=self.args.delivered_tag, has_tag=has_tag
+        ):
+            sj = self.get_project().jobs.get(spider_job["key"])
+            self.process_job_items(scrapername, sj)
+            if not self.args.test_mode:
+                self._all_jobs_to_tag.append(spider_job["key"])
+
+    def process_job_items(self, scrapername, spider_job):
+        for item in spider_job.items.iter():
+            self.on_item(item, scrapername)
+
+    def on_item(self, item, scrapername):
+        print(json.dumps(item))
+
+    def run(self):
+        for scrapername in self.args.scrapername:
+            _LOG.info(f"Processing spider {scrapername}")
+            self.process_spider_jobs(scrapername)
+
+    def on_close(self):
+        jcount = 0
+        for jkey in self._all_jobs_to_tag:
+            self.add_job_tags(jkey, tags=[self.args.delivered_tag])
+            jcount += 1
+            if jcount % 100 == 0:
+                _LOG.info("Marked %d jobs as delivered", jcount)
+
+
 class SqliteDictDupesFilter(object):
     def __init__(self):
         """
@@ -207,57 +263,6 @@ class OutputFileDict:
         return self.__outputfiles.pop(key)
 
 
-class BaseDeliverScript(BaseScript):
-
-    default_delivered_tag = "delivered"
-
-    def __init__(self):
-        super().__init__()
-        self._all_jobs_to_tag = set()
-
-    def add_argparser_options(self):
-        super().add_argparser_options()
-        self.argparser.add_argument("scrapername", help="Indicate target scraper names", nargs="+")
-        self.argparser.add_argument(
-            "--delivered-tag", help="Tag to apply to delivered jobs.", default=self.default_delivered_tag
-        )
-        self.argparser.add_argument(
-            "--test-mode",
-            action="store_true",
-            help="Run in test mode (performs all processes, but doesn't\
-                                          upload files nor tag jobs)",
-        )
-
-    def get_target_tags(self):
-        return [f"FLOW_ID={self.flow_id}"]
-
-    def process_spider_jobs(self, scrapername):
-        has_tag = self.get_target_tags()
-
-        for spider_job in self.get_jobs(
-            spider=scrapername, state="finished", lacks_tag=self.args.delivered_tag, has_tag=has_tag
-        ):
-            sj = self.get_project().jobs.get(spider_job["key"])
-            self.process_job_items(scrapername, sj)
-            if not self.args.test_mode:
-                self._all_jobs_to_tag.append(spider_job["key"])
-
-    def process_job_items(self, scrapername, spider_job):
-        for item in spider_job.items.iter():
-            self.on_item(item, scrapername)
-
-    def on_item(item, scrapername):
-        print(json.dumps(item))
-
-    def on_close(self):
-        jcount = 0
-        for jkey in self._all_jobs_to_tag:
-            self.add_job_tags(jkey, tags=[self.args.delivered_tag])
-            jcount += 1
-            if jcount % 100 == 0:
-                _LOG.info("Marked %d jobs as delivered", jcount)
-
-
 class DeliverScript(BaseDeliverScript):
 
     write_success_file = False
@@ -275,6 +280,7 @@ class DeliverScript(BaseDeliverScript):
         self.itemcount = 0
         self.filecount = 0
         self.dupes_filter = {i: SqliteDictDupesFilter() for i in self.args.filter_dupes_by_field}
+        self.success_files = []
 
     @property
     def description(self):
@@ -341,28 +347,21 @@ class DeliverScript(BaseDeliverScript):
                 _LOG.info("Processed %d items.", self.itemcount)
         _LOG.info("Processed all %d items of spider job %s", job_item_count, spider_job.key)
 
-    def run(self):
-        success_files = set()
-        for scrapername in self.args.scrapername:
-            _LOG.info(f"Processing spider {scrapername}")
-            self.process_spider_jobs(scrapername)
+    def process_spider_jobs(self, scrapername):
+        super().process_spider_jobs(scrapername)
+        _LOG.info("Total Processed items for spider %s: %d", scrapername, self.itemcount)
+        for ofile in self.output_files.values():
+            ofile.flush()
+            if self.write_success_file:
+                self.success_files.add(ofile.success_file)
 
-            _LOG.info("Total Processed items for spider %s: %d", scrapername, self.itemcount)
-            for ofile in self.output_files.values():
-                ofile.flush()
-                if self.write_success_file:
-                    success_files.add(ofile.success_file)
-
-        for success_file in success_files:
+    def on_close(self):
+        for success_file in self.success_files:
             remote_success_file = os.path.join(self.args.output_prefix, success_file)
             if not self.args.test_mode:
                 touch(remote_success_file)
             _LOG.info(f"Created {remote_success_file}")
-
-        self.close(success_files)
-
-    def close(self, success_files):
-        pass
+        super().on_close()
 
 
 # for compatibility with older versions. New DeliverScript handles indistictly local files, s3 and gs.
