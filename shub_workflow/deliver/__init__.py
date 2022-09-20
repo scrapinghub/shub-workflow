@@ -144,6 +144,7 @@ class BaseDeliverScript(BaseScript):
         for scrapername in self.args.scrapername:
             _LOG.info(f"Processing spider {scrapername}")
             self.process_spider_jobs(scrapername)
+        self.on_close()
 
     def on_close(self):
         _LOG.info(f"Processed a total of {self.total_items_count} items.")
