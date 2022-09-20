@@ -256,6 +256,15 @@ class BaseScript(ArgumentParserScript):
                 shift = len(seen)
                 kwargs["start"] += shift
 
+    def get_jobs_with_tags(self, spider, tags, project_id=None, **kwargs):
+        """
+        Get jobs with target tags
+        """
+        has_tag, tags = tags[:1], tags[1:]
+        for spider_job in self.get_jobs(project_id, spider=spider, has_tag=has_tag, **kwargs):
+            if not set(tags).difference(spider_job["tags"]):
+                yield self.get_project().jobs.get(spider_job["key"])
+
     @dash_retry_decorator
     def is_running(self, jobkey):
         """

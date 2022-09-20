@@ -72,7 +72,6 @@ class BaseDeliverScript(BaseScript):
 
     delivered_tag = "delivered"
     scrapername_nargs = "+"
-    flow_id_required = True
 
     def __init__(self):
         super().__init__()
@@ -91,14 +90,10 @@ class BaseDeliverScript(BaseScript):
         return []
 
     def get_delivery_spider_jobs(self, scrapername, target_tags):
-
-        flow_id_tag = [f"FLOW_ID={self.flow_id}"]
-
-        for spider_job in self.get_jobs(
-            spider=scrapername, state="finished", lacks_tag=self.delivered_tag, has_tag=flow_id_tag, meta=["tags"]
-        ):
-            if not set(target_tags).difference(spider_job["tags"]):
-                yield self.get_project().jobs.get(spider_job["key"])
+        if self.flow_id:
+            flow_id_tag = [f"FLOW_ID={self.flow_id}"]
+            target_tags = flow_id_tag + target_tags
+        yield from self.get_jobs_with_tags(scrapername, target_tags, state=["finished"], lacks_tag=[self.delivered_tag])
 
     def process_spider_jobs(self, scrapername):
         target_tags = self.get_target_tags()
