@@ -81,6 +81,8 @@ class BaseDeliverScript(BaseScript):
     # for changing behavior, override is_seen_item()
     DEDUPE_KEY_BY_FIELDS = ()
 
+    MAX_PROCESSED_ITEMS = float("inf")
+
     def __init__(self):
         super().__init__()
         self._all_jobs_to_tag = []
@@ -112,6 +114,8 @@ class BaseDeliverScript(BaseScript):
             self.process_job_items(scrapername, sj)
             if not self.args.test_mode:
                 self._all_jobs_to_tag.append(sj.key)
+            if self.total_items_count >= self.MAX_PROCESSED_ITEMS:
+                break
 
     def get_item_unique_key(self, item):
         key = tuple(item[f] for f in self.DEDUPE_KEY_BY_FIELDS)
