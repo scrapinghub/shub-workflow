@@ -158,7 +158,8 @@ def mv_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, 
         rm_file(src_path)
     else:
         dname = dirname(dest_path)
-        makedirs(dname, exist_ok=True)
+        if dname:
+            makedirs(dname, exist_ok=True)
         cp_file(src_path, dest_path)
         rm_file(src_path)
 
