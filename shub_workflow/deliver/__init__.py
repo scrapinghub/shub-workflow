@@ -70,16 +70,20 @@ _ARGUMENT_RE = re.compile(r"\{argument:(.+?)\}")
 
 class BaseDeliverScript(BaseScript):
 
-    delivered_tag = "delivered"
-    scrapername_nargs = "+"
+    DELIVERED_TAG = "delivered"
+    SCRAPERNAME_NARGS = "+"
+
+    # print log every given items processed
+    LOG_EVERY = 1000
 
     def __init__(self):
         super().__init__()
         self._all_jobs_to_tag = []
+        self.total_items_count = 0
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument("scrapername", help="Target scraper names", nargs=self.scrapername_nargs)
+        self.argparser.add_argument("scrapername", help="Target scraper names", nargs=self.SCRAPERNAME_NARGS)
         self.argparser.add_argument(
             "--test-mode",
             action="store_true",
@@ -93,7 +97,7 @@ class BaseDeliverScript(BaseScript):
         if self.flow_id:
             flow_id_tag = [f"FLOW_ID={self.flow_id}"]
             target_tags = flow_id_tag + target_tags
-        yield from self.get_jobs_with_tags(scrapername, target_tags, state=["finished"], lacks_tag=[self.delivered_tag])
+        yield from self.get_jobs_with_tags(scrapername, target_tags, state=["finished"], lacks_tag=[self.DELIVERED_TAG])
 
     def process_spider_jobs(self, scrapername):
         target_tags = self.get_target_tags()
@@ -105,6 +109,9 @@ class BaseDeliverScript(BaseScript):
     def process_job_items(self, scrapername, spider_job):
         for item in spider_job.items.iter():
             self.on_item(item, scrapername)
+            self.total_items_count += 1
+            if self.total_items_count % self.LOG_EVERY == 0:
+                _LOG.info(f"Processed {self.total_items_count} items.")
 
     def on_item(self, item, scrapername):
         print(json.dumps(item))
@@ -115,9 +122,10 @@ class BaseDeliverScript(BaseScript):
             self.process_spider_jobs(scrapername)
 
     def on_close(self):
+        _LOG.info(f"Processed a total of {self.total_items_count} items.")
         jcount = 0
         for jkey in self._all_jobs_to_tag:
-            self.add_job_tags(jkey, tags=[self.delivered_tag])
+            self.add_job_tags(jkey, tags=[self.DELIVERED_TAG])
             jcount += 1
             if jcount % 100 == 0:
                 _LOG.info("Marked %d jobs as delivered", jcount)
