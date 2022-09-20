@@ -77,7 +77,7 @@ class BaseDeliverScript(BaseScript):
     LOG_EVERY = 1000
 
     # define here the fields used to deduplicate items. All them compose the dedupe key.
-    # target item values must be hashable.
+    # target item values must be strings.
     # for changing behavior, override is_seen_item()
     DEDUPE_KEY_BY_FIELDS = ()
 
@@ -113,12 +113,16 @@ class BaseDeliverScript(BaseScript):
             if not self.args.test_mode:
                 self._all_jobs_to_tag.append(sj.key)
 
-    def is_seen_item(self, item):
+    def get_item_unique_key(self, item):
         key = tuple(item[f] for f in self.DEDUPE_KEY_BY_FIELDS)
+        return ",".join(key)
+
+    def is_seen_item(self, item):
+        key = self.get_item_unique_key(item)
         return key and key in self.seen_items
 
     def add_seen_item(self, item):
-        key = tuple(item[f] for f in self.DEDUPE_KEY_BY_FIELDS)
+        key = self.get_item_unique_key(item)
         if key:
             self.seen_items.add(key)
 
