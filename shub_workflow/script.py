@@ -236,12 +236,12 @@ class BaseScript(ArgumentParserScript):
     @dash_retry_decorator
     def get_jobs(self, project_id=None, **kwargs):
         kwargs = kwargs.copy()
-        kwargs["start"] = 0
         max_count = kwargs.get("count") or float("inf")
         kwargs["count"] = min(1000, max_count)
         seen = set()
         while True:
             count = 0
+            kwargs["start"] = len(seen)
             for job in self.get_project(project_id).jobs.iter(**kwargs):
                 count += 1
                 if job["key"] not in seen:
@@ -250,11 +250,8 @@ class BaseScript(ArgumentParserScript):
                     if len(seen) == max_count:
                         count = 0
                         break
-            if count < kwargs["count"]:
+            if count == 0:
                 break
-            else:
-                shift = len(seen)
-                kwargs["start"] += shift
 
     def get_jobs_with_tags(self, spider, tags, project_id=None, **kwargs):
         """
