@@ -14,6 +14,32 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+class CachedFinishedJobsMixin:
+    def __init__(self):
+        super().__init__()
+        self.__finished_cache = {}
+        self.__update_finished_cache_called = defaultdict(bool)
+
+    def update_finished_cache(self, project_id):
+        logger.debug("Initiating finished cache update.")
+        if not self.__update_finished_cache_called[project_id]:
+            for job in self.get_owned_jobs(project_id, state=["finished"]):
+                if job["key"] in self.__finished_cache:
+                    break
+                self.__finished_cache[job["key"]] = job["close_reason"]
+            self.__update_finished_cache_called[project_id] = True
+            logger.info(f"Finished jobs cache length: {len(self.__finished_cache)}")
+
+    def is_finished(self, jobkey):
+        project_id = jobkey.split("/", 1)[0]
+        self.update_finished_cache(project_id)
+        return self.__finished_cache.get(jobkey)
+
+    def _base_loop_tasks(self):
+        for project_id in self.__update_finished_cache_called.keys():
+            self.__update_finished_cache_called[project_id] = False
+
+
 class WorkFlowManager(BaseScript, abc.ABC):
 
     # --max-running-job command line option overrides it
@@ -40,8 +66,6 @@ class WorkFlowManager(BaseScript, abc.ABC):
         self.failed_outcomes = list(self.base_failed_outcomes)
         self.is_resumed = False
         super().__init__()
-        self.__finished_cache = {}
-        self.__update_finished_cache_called = defaultdict(bool)
 
     def set_flow_id_name(self, args):
         super().set_flow_id_name(args)
@@ -58,20 +82,6 @@ class WorkFlowManager(BaseScript, abc.ABC):
         for job in self.get_jobs(project_id, **kwargs):
             if parent_tag in job["tags"]:
                 yield job
-
-    def update_finished_cache(self, project_id):
-        if not self.__update_finished_cache_called[project_id]:
-            for job in self.get_owned_jobs(project_id, state=["finished"]):
-                if job["key"] in self.__finished_cache:
-                    break
-                self.__finished_cache[job["key"]] = job["close_reason"]
-            self.__update_finished_cache_called[project_id] = True
-            logger.info(f"Finished jobs cache length: {len(self.__finished_cache)}")
-
-    def is_finished(self, jobkey):
-        project_id = jobkey.split("/", 1)[0]
-        self.update_finished_cache(project_id)
-        return self.__finished_cache.get(jobkey)
 
     @staticmethod
     def generate_flow_id():
@@ -178,9 +188,12 @@ class WorkFlowManager(BaseScript, abc.ABC):
         self.__on_start()
         self._run_loops()
 
+    def _base_loop_tasks(self):
+        pass
+
     def _run_loops(self):
         while self.workflow_loop_enabled:
-            self.__update_finished_cache_called = defaultdict(bool)
+            self._base_loop_tasks()
             try:
                 if self.workflow_loop() and self.args.loop_mode:
                     time.sleep(self.args.loop_mode)
