@@ -192,6 +192,8 @@ class BaseDeliverScript(BaseScript):
             jcount += 1
             if jcount % 100 == 0:
                 _LOG.info("Marked %d jobs as delivered", jcount)
+        if hasattr(self.seen_items, "close"):
+            self.seen_items.close()
 
 
 class OutputFile:
