@@ -107,7 +107,7 @@ class CrawlManager(WorkFlowManager):
                         spider_args_override = spider_args_override.copy()
                     self.bad_outcome_hook(spider, outcome, spider_args_override, jobkey)
                 outcomes[jobkey] = outcome
-        _LOG.info(f"There are {len(running_job_keys)} jobs still running.")
+        _LOG.info(f"There are {len(self._running_job_keys)} jobs still running.")
 
         return outcomes
 
