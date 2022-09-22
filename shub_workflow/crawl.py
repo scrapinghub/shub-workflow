@@ -119,7 +119,7 @@ class CrawlManager(WorkFlowManager):
         outcomes = self.check_running_jobs()
         if outcomes:
             return False
-        elif not self._running_job_keys:
+        if not self._running_job_keys:
             self.schedule_spider()
         return True
 
