@@ -68,6 +68,36 @@ _FIELD_RE = re.compile(r"\{field:(.+?)\}")
 _ARGUMENT_RE = re.compile(r"\{argument:(.+?)\}")
 
 
+class SqliteDictDupesFilter:
+    def __init__(self):
+        """
+        SqlteDict based dupes filter
+        """
+        self.dupes_db_file = tempfile.mktemp()
+        self.__filter = None
+
+    def __create_db(self):
+        self.__filter = SqliteDict(self.dupes_db_file, flag="n", autocommit=True)
+
+    def __contains__(self, element):
+        if self.__filter is None:
+            self.__create_db()
+        return element in self.__filter
+
+    def add(self, element):
+        if self.__filter is None:
+            self.__create_db()
+        self.__filter[element] = "-"
+
+    def close(self):
+        if self.__filter is not None:
+            try:
+                self.__filter.close()
+                os.remove(self.dupes_db_file)
+            except Exception:
+                pass
+
+
 class BaseDeliverScript(BaseScript):
 
     DELIVERED_TAG = "delivered"
@@ -83,12 +113,14 @@ class BaseDeliverScript(BaseScript):
 
     MAX_PROCESSED_ITEMS = float("inf")
 
+    SEEN_ITEMS_CLASS = SqliteDictDupesFilter
+
     def __init__(self):
         super().__init__()
         self._all_jobs_to_tag = []
         self.total_items_count = 0
         self.total_dupe_filtered_items_count = 0
-        self.seen_items = SqliteDictDupesFilter()
+        self.seen_items = self.SEEN_ITEMS_CLASS()
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -160,36 +192,6 @@ class BaseDeliverScript(BaseScript):
             jcount += 1
             if jcount % 100 == 0:
                 _LOG.info("Marked %d jobs as delivered", jcount)
-
-
-class SqliteDictDupesFilter:
-    def __init__(self):
-        """
-        SqlteDict based dupes filter
-        """
-        self.dupes_db_file = tempfile.mktemp()
-        self.__filter = None
-
-    def __create_db(self):
-        self.__filter = SqliteDict(self.dupes_db_file, flag="n", autocommit=True)
-
-    def __contains__(self, element):
-        if self.__filter is None:
-            self.__create_db()
-        return element in self.__filter
-
-    def add(self, element):
-        if self.__filter is None:
-            self.__create_db()
-        self.__filter[element] = "-"
-
-    def close(self):
-        if self.__filter is not None:
-            try:
-                self.__filter.close()
-                os.remove(self.dupes_db_file)
-            except Exception:
-                pass
 
 
 class OutputFile:
