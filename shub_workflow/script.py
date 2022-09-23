@@ -238,6 +238,7 @@ class BaseScript(ArgumentParserScript):
         kwargs = kwargs.copy()
         max_count = kwargs.get("count") or float("inf")
         kwargs["count"] = min(1000, max_count)
+        kwargs["start"] = 0
         seen = set()
         while True:
             count = 0
