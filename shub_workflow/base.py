@@ -23,12 +23,12 @@ class CachedFinishedJobsMixin:
     def update_finished_cache(self, project_id):
         logger.debug("Initiating finished cache update.")
         if not self.__update_finished_cache_called[project_id]:
-            for job in self.get_owned_jobs(project_id, state=["finished"]):
+            for job in self.get_owned_jobs(project_id, state=["finished"], meta=["close_reason"]):
                 if job["key"] in self.__finished_cache:
                     break
                 self.__finished_cache[job["key"]] = job["close_reason"]
-            self.__update_finished_cache_called[project_id] = True
             logger.info(f"Finished jobs cache length: {len(self.__finished_cache)}")
+        self.__update_finished_cache_called[project_id] = True
 
     def is_finished(self, jobkey):
         project_id = jobkey.split("/", 1)[0]
