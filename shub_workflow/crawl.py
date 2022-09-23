@@ -230,8 +230,7 @@ class GeneratorCrawlManager(CrawlManager):
             except StopIteration:
                 if self._running_job_keys:
                     break
-                else:
-                    return False
+                return False
         return True
 
     @staticmethod

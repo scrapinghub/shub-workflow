@@ -188,7 +188,7 @@ class CrawlManagerTest(TestCase):
 
         mocked_get_jobs.side_effect = [
             # the resumed job
-            [{"tags": ["FLOW_ID=3a20"], "key": "999/10/1"}],
+            [{"tags": ["FLOW_ID=3a20", "NAME=test"], "key": "999/10/1"}],
             # the not owned job
             [{"key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=testa"]}],
         ]
@@ -478,7 +478,7 @@ class CrawlManagerTest(TestCase):
         manager.get_jobs = Mock()
         manager.get_jobs.side_effect = [
             # the resumed job
-            [{"tags": ["FLOW_ID=3a20"], "key": "999/10/1"}],
+            [{"tags": ["FLOW_ID=3a20", "NAME=test"], "key": "999/10/1"}],
             # running spiders
             [
                 {

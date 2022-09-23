@@ -79,6 +79,10 @@ class WorkFlowManager(BaseScript, abc.ABC):
         assert "state" in kwargs, "'state' parameter must be provided."
         kwargs["has_tag"] = [f"FLOW_ID={self.flow_id}"]
         parent_tag = f"PARENT_NAME={self.name}"
+        meta = kwargs.get("meta") or []
+        if "tags" not in meta:
+            meta.append("tags")
+        kwargs["meta"] = meta
         for job in self.get_jobs(project_id, **kwargs):
             if parent_tag in job["tags"]:
                 yield job
@@ -145,7 +149,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
 
     def __check_resume_workflow(self):
         resumed_job = None
-        for job in self.get_jobs(status=["finished"], meta=["tags"], has_tag=[f"NAME={self.name}"]):
+        for job in self.get_jobs(state=["finished"], meta=["tags"], has_tag=[f"NAME={self.name}"]):
             if self.get_keyvalue_job_tag("FLOW_ID", job["tags"]) == self.flow_id:
                 resumed_job = job
                 break
