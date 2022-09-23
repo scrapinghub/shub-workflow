@@ -241,7 +241,6 @@ class BaseScript(ArgumentParserScript):
         seen = set()
         while True:
             count = 0
-            kwargs["start"] = len(seen)
             for job in self.get_project(project_id).jobs.iter(**kwargs):
                 count += 1
                 if job["key"] not in seen:
@@ -252,6 +251,7 @@ class BaseScript(ArgumentParserScript):
                         break
             if count == 0:
                 break
+            kwargs["start"] += count
 
     def get_jobs_with_tags(self, spider, tags, project_id=None, **kwargs):
         """
