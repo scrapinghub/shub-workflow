@@ -7,7 +7,7 @@ from traceback import format_tb
 
 from retrying import retry
 from scrapinghub.client.exceptions import ServerError
-from requests.exceptions import ReadTimeout
+from requests.exceptions import ReadTimeout, ConnectionError
 
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ ONE_MIN_IN_S = 60
 def just_log_exception(exception):
     logger.error("".join(format_tb(exception.__traceback__)[1:]))
     logger.error(repr(exception))
-    if isinstance(exception, (ServerError, ReadTimeout)):
+    if isinstance(exception, (ServerError, ReadTimeout, ConnectionError)):
         logger.info("Waiting %d seconds", ONE_MIN_IN_S)
         return True
     return False
