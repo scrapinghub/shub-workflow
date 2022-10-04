@@ -1,3 +1,4 @@
+import re
 import logging
 import uuid
 from typing import List, Generator
@@ -14,7 +15,7 @@ import boto3
 
 from shub_workflow.deliver import gcstorage
 
-
+S3_PATH_RE = re.compile("s3://(.+?)/(.+)")
 _S3_ATTRIBUTE = "s3://"
 _GS_ATTRIBUTE = "gs://"
 BUFFER = 1024 * 1024
@@ -171,6 +172,23 @@ def rm_file(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
         fs.rm(s3_path(path), **op_kwargs)
     else:
         remove(path)
+
+
+def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
+    """
+    More efficient boto3 based path listing, that accepts prefix
+    """
+    session = boto3.Session(
+        aws_access_key_id=aws_key, aws_secret_access_key=aws_secret, aws_session_token=aws_token, **kwargs
+    )
+    if path.startswith(_S3_ATTRIBUTE):
+        s3 = session.resource("s3")
+        bucket_name, path = S3_PATH_RE.match(path).groups()
+        bucket = s3.Bucket(bucket_name)
+        for result in bucket.objects.filter(Prefix=path):
+            yield f"s3://{bucket_name}/{result.key}"
+    else:
+        raise NotImplementedError("Only implemented for s3.")
 
 
 def list_folder(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> List[str]:
@@ -330,6 +348,7 @@ class S3Helper:
             exists,
             touch,
             cp_file,
+            list_path,
             list_folder_in_ts_order,
             list_folder_files_recursive,
             s3_folder_size,
