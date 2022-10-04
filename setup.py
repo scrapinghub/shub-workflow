@@ -18,7 +18,7 @@ setup(
         "scrapinghub[msgpack]>=2.3.1",
         "jinja2>=2.7.3",
         "sqlitedict==1.6.0",
-        "s3fs==0.4.0",
+        "s3fs>=0.4.0",
         "boto3>=1.9.92",
         "google-cloud-storage>=1.38.0",
         "bloom-filter==1.3.3",
