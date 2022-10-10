@@ -123,19 +123,12 @@ class CrawlManager(WorkFlowManager):
             self.schedule_spider()
         return True
 
-    def resume_workflow(self):
-        running_jobs = []
-        count = 0
-        for job in self.get_owned_jobs(state=["running", "pending"], meta=["spider_args", "tags", "spider"]):
-            key = job["key"]
-            spider_args_override = job.get("spider_args", {}).copy()
-            spider_args_override["tags"] = job["tags"]
-            self._running_job_keys[key] = job["spider"], spider_args_override
-            _LOG.info(f"added running job {key}")
-            running_jobs.append(job)
-            count += 1
-        _LOG.info(f"Added a total of {count} running jobs.")
-        return running_jobs
+    def resume_running_job_hook(self, job):
+        key = job["key"]
+        spider_args_override = job.get("spider_args", {}).copy()
+        spider_args_override["tags"] = job["tags"]
+        self._running_job_keys[key] = job["spider"], spider_args_override
+        _LOG.info(f"added running job {key}")
 
     def on_close(self):
         job = self.get_job()
@@ -242,21 +235,20 @@ class GeneratorCrawlManager(CrawlManager):
         jid = json.dumps(jdict, sort_keys=True)
         return hashstr(jid)
 
-    def resume_workflow(self):
-        for job in super().resume_workflow():
-            jobid = self.get_job_id(job)
+    def resume_running_job_hook(self, job):
+        super().resume_running_job_hook(job)
+        jobid = self.get_job_id(job)
+        self.__jobids.add(jobid)
+        self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
+
+    def resume_finished_job_hook(self, job):
+        jobid = self.get_job_id(job)
+        if jobid not in self.__jobids:
             self.__jobids.add(jobid)
-            self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
-        count = 0
-        diff_count = 0
-        for job in self.get_owned_jobs(state=["finished"], meta=["spider_args", "tags", "spider"]):
-            jobid = self.get_job_id(job)
-            if jobid not in self.__jobids:
-                diff_count += 1
-                self.__jobids.add(jobid)
-            self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
-            count += 1
-        _LOG.info(f"Added a total of {count} completed jobs ({diff_count} different ones)")
+        self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
+
+    def resume_workflow(self):
+        super().resume_workflow()
         _LOG.info(f"Next job sequence number: {self.__next_job_seq}")
 
     def on_close(self):

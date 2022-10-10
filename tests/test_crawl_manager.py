@@ -134,15 +134,17 @@ class CrawlManagerTest(TestCase):
         self.assertFalse(mocked_super_schedule_spider.called)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_with_resume_dd(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
+    def test_schedule_spider_with_resume(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
         with script_args(["myspider", "--flow-id=3a20"]):
             manager = TestManager()
 
         mocked_get_jobs_side_effect = [
             # the resumed job
             [{"tags": ["FLOW_ID=3a20"], "key": "999/10/1"}],
-            # the owned job
+            # the owned running job
             [{"spider": "myspider", "key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=test"]}],
+            # the owned finished jobs
+            [],
         ]
         mocked_get_jobs.side_effect = mocked_get_jobs_side_effect
         manager._WorkFlowManager__on_start()
@@ -191,12 +193,12 @@ class CrawlManagerTest(TestCase):
             [{"tags": ["FLOW_ID=3a20", "NAME=test"], "key": "999/10/1"}],
             # the not owned job
             [{"key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=testa"]}],
+            # owned finished jobs
+            [],
         ]
         manager._WorkFlowManager__on_start()
         self.assertTrue(manager.is_resumed)
         self.assertEqual(len(manager._running_job_keys), 0)
-
-        self.assertEqual(manager.get_jobs.call_count, 2)
 
         # first loop: no spider, schedule one.
         manager.is_finished = lambda x: None

@@ -162,9 +162,25 @@ class WorkFlowManager(BaseScript, abc.ABC):
             self.is_resumed = True
 
     def resume_workflow(self):
-        """
-        Implement resume logic
-        """
+        rcount = 0
+        for job in self.get_owned_jobs(state=["running", "pending"], meta=["spider_args", "job_cmd", "tags", "spider"]):
+            self.resume_running_job_hook(job)
+            logger.info(f"Found running job {job['key']}")
+            rcount += 1
+        if rcount > 0:
+            logger.info(f"Found a total of {rcount} running children jobs.")
+
+        fcount = 0
+        for job in self.get_owned_jobs(state=["finished"], meta=["spider_args", "job_cmd", "tags", "spider"]):
+            self.resume_finished_job_hook(job)
+            fcount += 1
+        if fcount > 0:
+            logger.info(f"Found a total of {fcount} finished children jobs.")
+
+    def resume_running_job_hook(self, job):
+        pass
+
+    def resume_finished_job_hook(self, job):
         pass
 
     def __on_start(self):
