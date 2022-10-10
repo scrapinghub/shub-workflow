@@ -249,7 +249,7 @@ class GeneratorCrawlManager(CrawlManager):
             self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
         count = 0
         diff_count = 0
-        for job in self.get_owned_jobs(spider=self.spider, state=["finished"], meta=["spider_args", "tags", "spider"]):
+        for job in self.get_owned_jobs(state=["finished"], meta=["spider_args", "tags", "spider"]):
             jobid = self.get_job_id(job)
             if jobid not in self.__jobids:
                 diff_count += 1
