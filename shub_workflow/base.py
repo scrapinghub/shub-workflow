@@ -21,14 +21,27 @@ class CachedFinishedJobsMixin:
         self.__update_finished_cache_called = defaultdict(bool)
 
     def update_finished_cache(self, project_id):
-        logger.debug("Initiating finished cache update.")
         if not self.__update_finished_cache_called[project_id]:
+            logger.info("Initiating finished cache update.")
             for job in self.get_owned_jobs(project_id, state=["finished"], meta=["close_reason"]):
                 if job["key"] in self.__finished_cache:
                     break
                 self.__finished_cache[job["key"]] = job["close_reason"]
             logger.info(f"Finished jobs cache length: {len(self.__finished_cache)}")
         self.__update_finished_cache_called[project_id] = True
+
+    def get_finished_owned_jobs(self, project_id=None, **kwargs):
+        kwargs.setdefault("meta", []).append("close_reason")
+        # only use for updating finished cache if no filter/limit imposed.
+        update_finished_cache = not set(kwargs.keys()).intersection(["count", "has_tag", "lacks_tag"])
+        finished_cache = []
+        for job in super().get_finished_owned_jobs(project_id, **kwargs):
+            if update_finished_cache:
+                finished_cache.append((job["key"], job["close_reason"]))
+            yield job
+        while finished_cache:
+            key, close_reason = finished_cache.pop()
+            self.__finished_cache[key] = close_reason
 
     def is_finished(self, jobkey):
         project_id = jobkey.split("/", 1)[0]
@@ -161,6 +174,11 @@ class WorkFlowManager(BaseScript, abc.ABC):
             self.add_job_tags(tags=inherited_tags)
             self.is_resumed = True
 
+    def get_finished_owned_jobs(self, project_id=None, **kwargs):
+        kwargs.pop("state", None)
+        for job in self.get_owned_jobs(project_id, state=["finished"], **kwargs):
+            yield job
+
     def resume_workflow(self):
         rcount = 0
         for job in self.get_owned_jobs(state=["running", "pending"], meta=["spider_args", "job_cmd", "tags", "spider"]):
@@ -171,7 +189,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
             logger.info(f"Found a total of {rcount} running children jobs.")
 
         fcount = 0
-        for job in self.get_owned_jobs(state=["finished"], meta=["spider_args", "job_cmd", "tags", "spider"]):
+        for job in self.get_finished_owned_jobs(meta=["spider_args", "job_cmd", "tags", "spider"]):
             self.resume_finished_job_hook(job)
             fcount += 1
         if fcount > 0:
