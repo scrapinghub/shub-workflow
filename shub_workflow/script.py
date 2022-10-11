@@ -54,7 +54,7 @@ class BaseScript(ArgumentParserScript):
 
     def __init__(self):
         self.project_id = None
-        self.client = ScrapinghubClient()
+        self.client = ScrapinghubClient(max_retries=100)
         self.close_reason = None
         self.__flow_tags = []
         super().__init__()
