@@ -39,9 +39,11 @@ class CachedFinishedJobsMixin:
             if update_finished_cache:
                 finished_cache.append((job["key"], job["close_reason"]))
             yield job
+        logger.info(f"Preread {len(finished_cache)} finished jobs.")
         while finished_cache:
             key, close_reason = finished_cache.pop()
             self.__finished_cache[key] = close_reason
+        logger.info(f"Finished jobs cache length: {len(self.__finished_cache)}")
 
     def is_finished(self, jobkey):
         project_id = jobkey.split("/", 1)[0]
