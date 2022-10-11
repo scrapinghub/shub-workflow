@@ -189,6 +189,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
             logger.info(f"Found a total of {rcount} running children jobs.")
 
         fcount = 0
+        logger.info("Searching finished children jobs...")
         for job in self.get_finished_owned_jobs(meta=["spider_args", "job_cmd", "tags", "spider"]):
             self.resume_finished_job_hook(job)
             fcount += 1
