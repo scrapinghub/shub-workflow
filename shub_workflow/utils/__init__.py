@@ -69,6 +69,7 @@ def just_log_exception(exception):
     if isinstance(exception, (ServerError, ReadTimeout, ConnectionError, HTTPError)):
         logger.info("Waiting %d seconds", ONE_MIN_IN_S)
         return True
+    logger.error(f"Exception of type {type(exception)} will not be retried.")
     return False
 
 
