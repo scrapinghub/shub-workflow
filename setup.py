@@ -14,7 +14,6 @@ setup(
     packages=find_packages(),
     install_requires=(
         "pyyaml>=3.12",
-        "retrying>=1.3.3",
         "scrapinghub[msgpack]>=2.3.1",
         "jinja2>=2.7.3",
         "sqlitedict==1.6.0",
@@ -23,6 +22,7 @@ setup(
         "google-cloud-storage>=1.38.0",
         "bloom-filter==1.3.3",
         "collection-scanner",
+        "tenacity",
     ),
     scripts=[],
     classifiers=[

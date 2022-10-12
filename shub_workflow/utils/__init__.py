@@ -3,9 +3,8 @@ import json
 import os
 import hashlib
 from typing import Optional
-from traceback import format_tb
 
-from retrying import retry
+from tenacity import retry, retry_if_exception_type, before_sleep_log, stop_after_attempt, wait_fixed
 from scrapinghub.client.exceptions import ServerError
 from requests.exceptions import ReadTimeout, ConnectionError, HTTPError
 
@@ -63,18 +62,12 @@ MINS_IN_A_DAY = 24 * 60
 ONE_MIN_IN_S = 60
 
 
-def just_log_exception(exception):
-    logger.error("".join(format_tb(exception.__traceback__)[1:]))
-    logger.error(repr(exception))
-    if isinstance(exception, (ServerError, ReadTimeout, ConnectionError, HTTPError)):
-        logger.info("Waiting %d seconds", ONE_MIN_IN_S)
-        return True
-    logger.error(f"Exception of type {type(exception)} will not be retried.")
-    return False
-
-
 dash_retry_decorator = retry(
-    retry_on_exception=just_log_exception, wait_fixed=ONE_MIN_IN_S * 1000, stop_max_attempt_number=MINS_IN_A_DAY
+    retry=retry_if_exception_type((ServerError, ReadTimeout, ConnectionError, HTTPError)),
+    before_sleep=before_sleep_log(logger, logging.ERROR),
+    reraise=True,
+    stop=stop_after_attempt(MINS_IN_A_DAY),
+    wait=wait_fixed(ONE_MIN_IN_S),
 )
 
 

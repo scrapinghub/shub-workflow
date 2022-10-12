@@ -9,7 +9,6 @@ from os.path import exists as os_exists, dirname, getctime, basename
 from shutil import copyfile
 from datetime import datetime, timedelta, timezone
 
-from retrying import retry
 from s3fs import S3FileSystem as OriginalS3FileSystem
 import boto3
 
@@ -32,9 +31,6 @@ def just_log_exception(exception):
         if isinstance(exception, etype):
             return False
     return True  # retries any other exception
-
-
-retry_decorator = retry(retry_on_exception=just_log_exception, wait_fixed=60000, stop_max_attempt_number=10)
 
 
 class S3FileSystem(OriginalS3FileSystem):
