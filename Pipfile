@@ -13,6 +13,7 @@ google-cloud-storage = "==1.38.0"
 bloom-filter = "*"
 black = "==22.8.0"
 tenacity = "*"
+typing-extensions = "*"
 
 [dev-packages]
 flake8 = "*"

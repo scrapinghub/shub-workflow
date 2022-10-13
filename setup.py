@@ -23,6 +23,7 @@ setup(
         "bloom-filter==1.3.3",
         "collection-scanner",
         "tenacity",
+        "typing-extensions",
     ),
     scripts=[],
     classifiers=[
