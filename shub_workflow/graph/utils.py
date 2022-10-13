@@ -1,10 +1,13 @@
 import re
+from typing import List, Tuple, Optional, cast, Literal
 
+from shub_workflow.base import WorkFlowManager
+from shub_workflow.script import JobKey
 
 _SCHEDULED_RE = re.compile(r"Scheduled (?:(task|spider) \"(.+?)\" \()?.*?(\d+/\d+/\d+)\)?", re.I)
 
 
-def _search_scheduled_line(txt):
+def _search_scheduled_line(txt: str) -> Optional[Tuple[str, str, str]]:
     """
     graph manager scheduled task
     >>> _search_scheduled_line('Scheduled task "totalwine/productsJob" (168012/20/62)')
@@ -15,11 +18,12 @@ def _search_scheduled_line(txt):
     ('spider', 'totalwine/storesJob', '168012/27/2')
     """
     m = _SCHEDULED_RE.search(txt)
-    if m:
-        return m.groups()
+    if m is not None:
+        return cast(Tuple[Literal["task", "spider"], str, JobKey], m.groups())
+    return None
 
 
-def get_scheduled_jobs_specs(manager, job_ids):
+def get_scheduled_jobs_specs(manager: WorkFlowManager, job_ids: List[JobKey]) -> List[Tuple[str, str, str]]:
     """
     Return the jobs specs of the jobs scheduled by the jobs identified
     by given job_ids
@@ -37,6 +41,6 @@ def get_scheduled_jobs_specs(manager, job_ids):
             if "message" not in logline:
                 continue
             m = _search_scheduled_line(logline["message"])
-            if m:
+            if m is not None:
                 scheduled_jobs.append(m)
     return scheduled_jobs

@@ -4,6 +4,7 @@ Base script class for spiders crawl managers.
 import abc
 import json
 import logging
+from typing import Optional
 
 from bloom_filter import BloomFilter
 
@@ -40,7 +41,7 @@ class CrawlManager(WorkFlowManager):
     finished. Close reason of the manager will be inherited from spider one.
     """
 
-    spider = None
+    spider: Optional[str] = None
 
     def __init__(self):
         super().__init__()

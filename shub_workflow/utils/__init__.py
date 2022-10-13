@@ -34,8 +34,8 @@ def resolve_project_id(project_id=None) -> Optional[int]:
         return int(project_id)
 
     # read from environment
-    if os.environ.get("PROJECT_ID"):
-        return int(os.environ.get("PROJECT_ID"))
+    if os.environ.get("PROJECT_ID") is not None:
+        return int(os.environ["PROJECT_ID"])
 
     # for ScrapyCloud jobs:
     if os.environ.get("SHUB_JOBKEY"):

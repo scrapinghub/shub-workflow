@@ -3,21 +3,53 @@ import shlex
 import abc
 from collections import namedtuple
 from fractions import Fraction
+from typing import NewType, List, Dict, Optional, Union, Literal
+from typing_extensions import TypedDict, NotRequired
 
 from jinja2 import Template
 
-from .utils import get_scheduled_jobs_specs
+from shub_workflow.script import JobKey
+from shub_workflow.base import WorkFlowManager
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-
 Resource = namedtuple("Resource", ["name"])
+ResourcesDict = NewType("ResourcesDict", Dict[str, Union[int, Fraction]])
+TaskId = NewType("TaskId", str)
+OnFinishKey = Literal["default", "failed"]
+OnFinishTarget = List[Union[Literal["retry"], TaskId]]
+
+
+class JobGraphDict(TypedDict):
+    tags: Optional[List[str]]
+    units: Optional[int]
+    on_finish: Dict[OnFinishKey, OnFinishTarget]
+    wait_for: List[TaskId]
+    retries: int
+    wait_time: Optional[int]
+    project_id: Optional[int]
+
+    command: NotRequired[List[str]]
+    init_args: NotRequired[List[str]]
+    retry_args: NotRequired[List[str]]
+
+    origin: NotRequired[TaskId]
+    index: NotRequired[int]
 
 
 class BaseTask(abc.ABC):
-    def __init__(self, task_id, tags=None, units=None, retries=1, project_id=None, wait_time=None, on_finish=None):
+    def __init__(
+        self,
+        task_id: TaskId,
+        tags: Optional[List[str]] = None,
+        units: Optional[int] = None,
+        retries: int = 1,
+        project_id: Optional[int] = None,
+        wait_time: Optional[int] = None,
+        on_finish: Optional[Dict[OnFinishKey, OnFinishTarget]] = None,
+    ):
         assert task_id != "retry", "Reserved word 'retry' can't be used as task id"
         self.task_id = task_id
         self.tags = tags
@@ -25,47 +57,47 @@ class BaseTask(abc.ABC):
         self.retries = retries
         self.project_id = project_id
         self.wait_time = wait_time
-        self.on_finish = on_finish or {}
+        self.on_finish: Dict[OnFinishKey, OnFinishTarget] = on_finish or {}
 
-        self.__is_locked = False
-        self.__next_tasks = []
-        self.__wait_for = []
-        self.__required_resources = []
+        self.__is_locked: bool = False
+        self.__next_tasks: List[BaseTask] = []
+        self.__wait_for: List[BaseTask] = []
+        self.__required_resources: List[ResourcesDict] = []
 
-        self.__job_ids = []
+        self.__job_ids: List[JobKey] = []
 
     def set_is_locked(self):
         self.__is_locked = True
 
     @property
-    def is_locked(self):
+    def is_locked(self) -> bool:
         return self.__is_locked
 
-    def append_jobid(self, jobid):
+    def append_jobid(self, jobid: JobKey):
         self.__job_ids.append(jobid)
 
-    def get_scheduled_jobs(self):
+    def get_scheduled_jobs(self) -> List[JobKey]:
         """
         - Returns the task job ids
         """
         return self.__job_ids
 
-    def add_next_task(self, task):
+    def add_next_task(self, task: "BaseTask"):
         assert not self.__is_locked, "You can't alter a locked job."
         self.__next_tasks.append(task)
 
-    def add_wait_for(self, task):
+    def add_wait_for(self, task: "BaseTask"):
         assert not self.__is_locked, "You can't alter a locked job."
         self.__wait_for.append(task)
 
-    def add_required_resources(self, resources_dict):
+    def add_required_resources(self, resources_dict: ResourcesDict):
         assert not self.__is_locked, "You can't alter a locked job."
         self.__required_resources.append(resources_dict)
 
-    def get_next_tasks(self):
+    def get_next_tasks(self) -> List["BaseTask"]:
         return self.__next_tasks
 
-    def get_required_resources(self, partial=False):
+    def get_required_resources(self, partial: bool = False) -> List[ResourcesDict]:
         """
         If partial is True, return required resources for each splitted job.
         Otherwise return the resouces required for the full task.
@@ -75,7 +107,7 @@ class BaseTask(abc.ABC):
         required_resources = []
         parallelization = self.get_parallel_jobs()
         for reqset in self.__required_resources:
-            reqres = {}
+            reqres: ResourcesDict = ResourcesDict({})
             for resource, req_amount in reqset.items():
                 # Split required resource into N parts.  There are two
                 # ideas behind this:
@@ -94,32 +126,30 @@ class BaseTask(abc.ABC):
             required_resources.append(reqres)
         return required_resources
 
-    def get_wait_for(self):
+    def get_wait_for(self) -> List["BaseTask"]:
         return self.__wait_for
 
-    def as_jobgraph_dict(self):
-        jdict = {
+    def as_jobgraph_dict(self) -> JobGraphDict:
+        jdict: JobGraphDict = {
             "tags": self.tags,
             "units": self.units,
             "on_finish": self.on_finish,
             "wait_for": [t.task_id for t in self.get_wait_for()],
+            "retries": self.retries,
+            "project_id": self.project_id,
+            "wait_time": self.wait_time,
         }
-        jdict["on_finish"]["default"] = []
+        self.on_finish["default"] = []
         if self.retries > 0:
-            jdict["retries"] = self.retries
-            jdict["on_finish"]["failed"] = ["retry"]
-        if self.project_id:
-            jdict["project_id"] = self.project_id
-        if self.wait_time:
-            jdict["wait_time"] = self.wait_time
+            self.on_finish["failed"] = ["retry"]
 
         return jdict
 
-    def start_callback(self, manager, is_retry):
+    def start_callback(self, manager: WorkFlowManager, is_retry: bool):
         pass
 
     @abc.abstractmethod
-    def run(self, manager, is_retry=False):
+    def run(self, manager: WorkFlowManager, is_retry=False, index: Optional[int] = None):
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -162,39 +192,25 @@ class Task(BaseTask):
         self.retry_args = retry_args or []
         self.__template = Template(self.command)
 
-    def as_jobgraph_dict(self):
+    def as_jobgraph_dict(self) -> JobGraphDict:
         jdict = super(Task, self).as_jobgraph_dict()
         jdict.update({"command": self.get_commands(), "init_args": self.init_args, "retry_args": self.retry_args})
         return jdict
 
-    def get_commands(self):
+    def get_commands(self) -> List[str]:
         return self.__template.render().splitlines()
 
-    def get_command(self, index=None):
-        index = index or 0
+    def get_command(self, index: int = 0) -> List[str]:
         return shlex.split(self.get_commands()[index])
 
-    def get_parallel_jobs(self):
+    def get_parallel_jobs(self) -> int:
         """
         Returns total number of parallel jobs that this task will consist on.
         """
         return len(self.get_commands())
 
-    def get_scheduled_jobs(self, manager=None, level=0):
-        """
-        - if level == 0, just return the task job ids (this is a second way to access self.job_ids)
-        - if level == 1, return the job ids of the jobs scheduled by this task jobs (typically, a crawl
-          manager, so returned job ids are the ids of the spider jobs scheduled by it). In this case, a
-          second parameter, the manager instance that schedules this task, must be provided.
-        """
-        job_ids = super(Task, self).get_scheduled_jobs()
-        if level == 0:
-            return job_ids
-        assert level == 1, "Invalid level"
-        return [j[2] for j in get_scheduled_jobs_specs(manager, job_ids)]
-
-    def run(self, manager, is_retry=False, index=None):
-        command = self.get_command(index)
+    def run(self, manager: WorkFlowManager, is_retry: bool = False, index: Optional[int] = None) -> Optional[JobKey]:
+        command = self.get_command(index or 0)
         self.start_callback(manager, is_retry)
         if index is None:
             jobname = f"{manager.name}/{self.task_id}"
@@ -210,10 +226,11 @@ class Task(BaseTask):
         else:
             cmd = command + self.init_args
         jobid = manager.schedule_script(cmd, tags=self.tags, units=self.units, project_id=self.project_id)
-        if jobid:
+        if jobid is not None:
             logger.info('Scheduled task "%s" (%s)', jobname, jobid)
             self.append_jobid(jobid)
             return jobid
+        return None
 
 
 class SpiderTask(BaseTask):
@@ -252,7 +269,8 @@ class SpiderTask(BaseTask):
     def get_parallel_jobs(self):
         return 1
 
-    def run(self, manager, is_retry=False):
+    def run(self, manager: WorkFlowManager, is_retry=False, index: Optional[int] = None) -> Optional[JobKey]:
+        assert index is None, "Spider Task don't support parallelization."
         self.start_callback(manager, is_retry)
         jobname = "{}/{}".format(manager.name, self.task_id)
         if is_retry:
@@ -262,7 +280,8 @@ class SpiderTask(BaseTask):
         jobid = manager.schedule_spider(
             self.spider, tags=self.tags, units=self.units, project_id=self.project_id, **self.get_spider_args()
         )
-        if jobid:
+        if jobid is not None:
             logger.info('Scheduled spider "%s" (%s)', jobname, jobid)
             self.append_jobid(jobid)
             return jobid
+        return None

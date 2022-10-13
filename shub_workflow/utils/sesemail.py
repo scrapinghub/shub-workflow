@@ -3,6 +3,7 @@ import logging
 import boto3
 from botocore.client import Config
 from email.message import Message
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from email.mime.text import MIMEText
@@ -85,6 +86,7 @@ class SESHelper:
             msg.attach(imgatt)
 
         for path in text_attachments or []:
+            textatt: MIMEBase
             if path.endswith(".gz"):
                 textatt = MIMEApplication(open(path, "rb").read(), "gzip")
             else:

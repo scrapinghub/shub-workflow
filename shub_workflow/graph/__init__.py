@@ -7,19 +7,27 @@ For usage example see tests
 import re
 from time import time
 import logging
+from typing import NewType, Dict, List, Optional, Set
+from typing_extensions import TypedDict, NotRequired
 
-from collections import defaultdict, OrderedDict as odict
+from collections import defaultdict, OrderedDict
 from copy import copy, deepcopy
 
 import yaml
 
 try:
-    from yaml import CLoader as Loader
+    from yaml import CLoader
+
+    OLD_YAML = True
 except ImportError:
     from yaml import Loader
 
+    OLD_YAML = False
 
+
+from shub_workflow.script import JobKey
 from shub_workflow.base import WorkFlowManager
+from shub_workflow.graph.task import JobGraphDict, TaskId, BaseTask
 
 
 logger = logging.getLogger(__name__)
@@ -27,22 +35,30 @@ logger.setLevel(logging.INFO)
 
 
 _STARTING_JOB_RE = re.compile("--starting-job(?:=(.+))?")
+JobsGraphs = NewType("JobsGraphs", Dict[TaskId, JobGraphDict])
+
+
+class PendingJobDict(TypedDict):
+    wait_for: Set[TaskId]
+    is_retry: bool
+    wait_time: Optional[int]
+    origin: NotRequired[TaskId]
 
 
 class GraphManager(WorkFlowManager):
 
-    jobs_graph = {}
+    jobs_graph: JobsGraphs = JobsGraphs({})
 
     def __init__(self):
         # Ensure jobs are traversed in the same order as they went pending.
-        self.__pending_jobs = odict()
-        self.__running_jobs = odict()
+        self.__pending_jobs: OrderedDict[TaskId, PendingJobDict] = OrderedDict()
+        self.__running_jobs: OrderedDict[TaskId, JobKey] = OrderedDict()
         self._available_resources = {}  # map resource : ammount
         self._acquired_resources = defaultdict(list)  # map resource : list of (job, ammount)
-        self.__tasks = {}
+        self.__tasks: Dict[TaskId, BaseTask] = {}
         super(GraphManager, self).__init__()
         self.__start_time = defaultdict(time)
-        self.__starting_jobs = self.args.starting_job
+        self.__starting_jobs: List[TaskId] = self.args.starting_job
         for task in self.configure_workflow() or ():
             if self.args.root_jobs:
                 self.__starting_jobs.append(task.task_id)
@@ -52,7 +68,7 @@ class GraphManager(WorkFlowManager):
     def description(self):
         return f"Workflow manager for {self.name!r}"
 
-    def _add_task(self, task):
+    def _add_task(self, task: BaseTask):
         assert task.task_id not in self.jobs_graph, (
             "Workflow inconsistency detected: task %s referenced twice." % task.task_id
         )
@@ -61,8 +77,8 @@ class GraphManager(WorkFlowManager):
         for ntask in task.get_next_tasks():
             self._add_task(ntask)
 
-    def get_task(self, task_id):
-        return self.__tasks.get(task_id)
+    def get_task(self, task_id: TaskId) -> BaseTask:
+        return self.__tasks[task_id]
 
     def configure_workflow(self):
         raise NotImplementedError("configure_workflow() method need to be implemented.")
@@ -78,7 +94,7 @@ class GraphManager(WorkFlowManager):
         self.workflow_loop_enabled = True
         logger.info("Starting '%s' workflow", self.name)
 
-    def _setup_starting_jobs(self, ran_tasks, candidates=None):
+    def _setup_starting_jobs(self, ran_tasks: List[TaskId], candidates: Optional[List[TaskId]] = None):
         candidates = candidates or self.__starting_jobs
         for taskid in candidates:
             if taskid in ran_tasks:
@@ -115,18 +131,18 @@ class GraphManager(WorkFlowManager):
                         )
                         self._available_resources[resource] = req_amount
 
-    def get_job(self, job, pop=False):
+    def get_jobdict(self, job: TaskId, pop=False) -> JobGraphDict:
         if job not in self.jobs_graph:
             self.argparser.error("Invalid job: %s. Available jobs: %s" % (job, repr(self.jobs_graph.keys())))
         if pop:
             return self.jobs_graph.pop(job)
         return self.jobs_graph[job]
 
-    def _add_initial_pending_job(self, job):
-        wait_for = self.get_job(job).get("wait_for", [])
+    def _add_initial_pending_job(self, job: TaskId):
+        wait_for: List[TaskId] = self.get_jobdict(job).get("wait_for", [])
         self._add_pending_job(job, wait_for=tuple(wait_for))
 
-    def _add_pending_job(self, job, wait_for=(), is_retry=False):
+    def _add_pending_job(self, job: TaskId, wait_for=(), is_retry=False):
         self._maybe_add_on_finish_default(job)
         if job in self.args.skip_job:
             return
@@ -134,7 +150,7 @@ class GraphManager(WorkFlowManager):
             task = self.__tasks[job]
             parallelization = task.get_parallel_jobs()
         else:
-            task_id = self.get_job(job).get("origin", job)
+            task_id = self.get_jobdict(job).get("origin", job)
             task = self.__tasks[task_id]
             parallelization = 1
         if parallelization == 1:
@@ -145,25 +161,25 @@ class GraphManager(WorkFlowManager):
             }
         else:
             # Split parallelized task into N parallel jobs.
-            basejobconf = self.get_job(job, pop=True)
+            basejobconf = self.get_jobdict(job, pop=True)
             for i in range(parallelization):
-                job_unit = "%s_%i" % (job, i)
+                job_unit = TaskId("%s_%i" % (job, i))
                 job_unit_conf = deepcopy(basejobconf)
                 job_unit_conf["origin"] = job
                 job_unit_conf["index"] = i
 
-                for _, nextjobs in job_unit_conf.get("on_finish", {}).items():
+                for _, nextjobs in job_unit_conf["on_finish"].items():
                     if i != 0:  # only job 0 will conserve finish targets
                         for nextjob in copy(nextjobs):
                             if nextjob != "retry":
                                 if nextjob in self.jobs_graph:
-                                    self.get_job(nextjob).setdefault("wait_for", []).append(job_unit)
+                                    self.get_jobdict(nextjob)["wait_for"].append(job_unit)
                                     if nextjob in self.__pending_jobs:
                                         self.__pending_jobs[nextjob]["wait_for"].add(job_unit)
                                 else:
                                     for i in range(parallelization):
-                                        nextjobp = "%s_%i" % (job, i)
-                                        self.get_job(nextjobp).get("wait_for", []).append(job_unit)
+                                        nextjobp = TaskId("%s_%i" % (job, i))
+                                        self.get_jobdict(nextjobp)["wait_for"].append(job_unit)
                                         if nextjobp in self.__pending_jobs:
                                             self.__pending_jobs[nextjobp]["wait_for"].add(job_unit)
                                 nextjobs.remove(nextjob)
@@ -180,7 +196,7 @@ class GraphManager(WorkFlowManager):
                     if other in self.__pending_jobs:
                         self.__pending_jobs[other]["wait_for"].discard(job)
                     for i in range(parallelization):
-                        job_unit = "%s_%i" % (job, i)
+                        job_unit = TaskId("%s_%i" % (job, i))
                         oconf["wait_for"].append(job_unit)
                         if other in self.__pending_jobs:
                             self.__pending_jobs[other]["wait_for"].add(job_unit)
@@ -216,13 +232,16 @@ class GraphManager(WorkFlowManager):
 
     def parse_args(self):
         args = super(GraphManager, self).parse_args()
-        self.jobs_graph = yaml.load(args.jobs_graph, Loader=Loader) or deepcopy(self.jobs_graph)
+        if OLD_YAML:
+            self.jobs_graph = yaml.load(args.jobs_graph, Loader=CLoader) or deepcopy(self.jobs_graph)
+        else:
+            self.jobs_graph = yaml.load(args.jobs_graph, Loader=Loader) or deepcopy(self.jobs_graph)
 
         if args.starting_job and args.root_jobs:
             self.argparser.error("You can't provide both --starting-job and --root-jobs.")
         return args
 
-    def workflow_loop(self):
+    def workflow_loop(self) -> bool:
         logger.debug("Pending jobs: %r", self.__pending_jobs)
         logger.debug("Running jobs: %r", self.__running_jobs)
         logger.debug("Available resources: %r", self._available_resources)
@@ -234,12 +253,12 @@ class GraphManager(WorkFlowManager):
             return False
         return True
 
-    def run_job(self, job, is_retry=False):
+    def run_job(self, job: TaskId, is_retry=False):
         task = self.__tasks.get(job)
         if task is not None:
             return task.run(self, is_retry)
 
-        jobconf = self.get_job(job)
+        jobconf = self.get_jobdict(job)
         task = self.__tasks.get(jobconf["origin"])
         if task is not None:
             idx = jobconf["index"]
@@ -331,7 +350,7 @@ class GraphManager(WorkFlowManager):
         return self.__running_jobs.get(job)
 
     def handle_retry(self, job, outcome):
-        jobconf = self.get_job(job)
+        jobconf = self.get_jobdict(job)
         retries = jobconf.get("retries", 0)
         if retries > 0:
             self._add_pending_job(job, is_retry=True)
@@ -362,7 +381,7 @@ class GraphManager(WorkFlowManager):
                     elif nextjob in self.__pending_jobs:
                         logger.error("Job %s already pending", nextjob)
                     else:
-                        wait_for = self.get_job(nextjob).get("wait_for", [])
+                        wait_for = self.get_jobdict(nextjob).get("wait_for", [])
                         self._add_pending_job(nextjob, wait_for)
                 self._release_resources(job)
                 self.__running_jobs.pop(job)
@@ -371,7 +390,7 @@ class GraphManager(WorkFlowManager):
 
     def _try_acquire_resources(self, job):
         result = True
-        task_id = self.get_job(job).get("origin", job)
+        task_id = self.get_jobdict(job).get("origin", job)
         for required_resources in self.__tasks[task_id].get_required_resources(partial=True):
             for resource, req_amount in required_resources.items():
                 if self._available_resources[resource] < req_amount:
@@ -392,7 +411,7 @@ class GraphManager(WorkFlowManager):
                     self._acquired_resources[res].remove((rjob, res_amount))
 
     def _maybe_add_on_finish_default(self, job):
-        on_finish = self.get_job(job)["on_finish"]
+        on_finish = self.get_jobdict(job)["on_finish"]
         task = self.__tasks.get(job)
         if task is not None and not task.is_locked:
             task.set_is_locked()
@@ -406,7 +425,7 @@ class GraphManager(WorkFlowManager):
     def _get_next_jobs(self, job, outcome):
         if self.args.only_starting_jobs:
             return []
-        on_finish = self.get_job(job)["on_finish"]
+        on_finish = self.get_jobdict(job)["on_finish"]
         if outcome in on_finish:
             nextjobs = on_finish[outcome]
         elif outcome in self.failed_outcomes:
@@ -419,3 +438,6 @@ class GraphManager(WorkFlowManager):
     @property
     def pending_jobs(self):
         return self.__pending_jobs
+
+    def resume_running_job_hook(self, job):
+        pass

@@ -8,7 +8,7 @@ import logging
 import os
 import subprocess
 from argparse import ArgumentParser
-from typing import List
+from typing import List, NewType, Optional
 
 from scrapinghub import ScrapinghubClient, DuplicateJobError
 
@@ -20,6 +20,9 @@ from shub_workflow.utils import (
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+JobKey = NewType("JobKey", str)  # ScrapyCloud job key
 
 
 class ArgumentParserScript(abc.ABC):
@@ -114,10 +117,16 @@ class BaseScript(ArgumentParserScript):
     def get_project(self, project_id=None):
         return self.client.get_project(project_id or self.project_id)
 
+    def get_own_jobkey_from_env(self) -> Optional[JobKey]:
+        envjobkey = os.getenv("SHUB_JOBKEY")
+        if envjobkey is not None:
+            return JobKey(envjobkey)
+        return None
+
     @dash_retry_decorator
-    def get_job_metadata(self, jobkey=None):
+    def get_job_metadata(self, jobkey: Optional[JobKey] = None):
         """If jobkey is None, get own metadata"""
-        jobkey = jobkey or os.getenv("SHUB_JOBKEY")
+        jobkey = jobkey or self.get_own_jobkey_from_env()
         if jobkey:
             project_id = jobkey.split("/", 1)[0]
             project = self.get_project(project_id)
@@ -126,9 +135,9 @@ class BaseScript(ArgumentParserScript):
         logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
     @dash_retry_decorator
-    def get_job(self, jobkey=None):
+    def get_job(self, jobkey: Optional[JobKey] = None):
         """If jobkey is None, get own metadata"""
-        jobkey = jobkey or os.getenv("SHUB_JOBKEY")
+        jobkey = jobkey or self.get_own_jobkey_from_env()
         if jobkey:
             project_id = jobkey.split("/", 1)[0]
             project = self.get_project(project_id)
@@ -197,7 +206,7 @@ class BaseScript(ArgumentParserScript):
         return sorted(set(tags)) or None
 
     @dash_retry_decorator
-    def _schedule_job(self, spider: str, tags=None, units=None, project_id=None, **kwargs):
+    def _schedule_job(self, spider: str, tags=None, units=None, project_id=None, **kwargs) -> Optional[JobKey]:
         project = self.get_project(project_id)
         schedule_kwargs = dict(
             spider=spider,
@@ -215,8 +224,9 @@ class BaseScript(ArgumentParserScript):
         else:
             logger.info(f"Scheduled job {job.key}")
             return job.key
+        return None
 
-    def schedule_script(self, cmd: List[str], tags=None, project_id=None, units=None, meta=None):
+    def schedule_script(self, cmd: List[str], tags=None, project_id=None, units=None, meta=None) -> Optional[JobKey]:
         cmd = [str(x) for x in cmd]
         scriptname = cmd[0]
         if not scriptname.startswith("py:"):
@@ -230,7 +240,7 @@ class BaseScript(ArgumentParserScript):
             meta=json.dumps(meta) if meta else None,
         )
 
-    def schedule_spider(self, spider: str, tags=None, units=None, project_id=None, **kwargs):
+    def schedule_spider(self, spider: str, tags=None, units=None, project_id=None, **kwargs) -> Optional[JobKey]:
         return self._schedule_job(spider=spider, tags=tags, units=units, project_id=project_id, **kwargs)
 
     @dash_retry_decorator
