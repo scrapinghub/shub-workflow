@@ -402,6 +402,8 @@ class CrawlManagerTest(TestCase):
             project_id=999,
             tags=["CHECKED", "JOBSEQ=0000000001"],
         )
+        jobid = GeneratorCrawlManager.get_job_id({"spider": "myspider", "spider_args": {"argA": "valA"}})
+        self.assertTrue(jobid in manager._GeneratorCrawlManager__jobids)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_schedule_spider_list_with_resume(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):

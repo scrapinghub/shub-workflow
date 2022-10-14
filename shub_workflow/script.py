@@ -8,9 +8,12 @@ import logging
 import os
 import subprocess
 from argparse import ArgumentParser
-from typing import List, NewType, Optional
+from typing import List, NewType, Optional, Tuple, Generator, Dict
+from typing_extensions import TypedDict
 
 from scrapinghub import ScrapinghubClient, DuplicateJobError
+from scrapinghub.client.jobs import Job, JobMeta
+from scrapinghub.client.projects import Project
 
 from shub_workflow.utils import (
     resolve_project_id,
@@ -23,6 +26,15 @@ logger.setLevel(logging.INFO)
 
 
 JobKey = NewType("JobKey", str)  # ScrapyCloud job key
+
+
+class JobDict(TypedDict):
+
+    key: JobKey
+    tags: List[str]
+    close_reason: str
+    spider: str
+    spider_args: Dict[str, str]
 
 
 class ArgumentParserScript(abc.ABC):
@@ -56,7 +68,7 @@ class BaseScript(ArgumentParserScript):
     default_project_id = None  # If None, autodetect (see shub_workflow.utils.resolve_project_id)
 
     def __init__(self):
-        self.project_id = None
+        self.project_id: Optional[int] = None
         self.client = ScrapinghubClient(max_retries=100)
         self.close_reason = None
         self.__flow_tags = []
@@ -114,7 +126,7 @@ class BaseScript(ArgumentParserScript):
 
         return args
 
-    def get_project(self, project_id=None):
+    def get_project(self, project_id=None) -> Project:
         return self.client.get_project(project_id or self.project_id)
 
     def get_own_jobkey_from_env(self) -> Optional[JobKey]:
@@ -124,7 +136,7 @@ class BaseScript(ArgumentParserScript):
         return None
 
     @dash_retry_decorator
-    def get_job_metadata(self, jobkey: Optional[JobKey] = None):
+    def get_job_metadata(self, jobkey: Optional[JobKey] = None) -> JobMeta:
         """If jobkey is None, get own metadata"""
         jobkey = jobkey or self.get_own_jobkey_from_env()
         if jobkey:
@@ -135,7 +147,7 @@ class BaseScript(ArgumentParserScript):
         logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
     @dash_retry_decorator
-    def get_job(self, jobkey: Optional[JobKey] = None):
+    def get_job(self, jobkey: Optional[JobKey] = None) -> Job:
         """If jobkey is None, get own metadata"""
         jobkey = jobkey or self.get_own_jobkey_from_env()
         if jobkey:
@@ -144,34 +156,35 @@ class BaseScript(ArgumentParserScript):
             return project.jobs.get(jobkey)
         logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
-    def get_job_tags(self, jobkey=None):
+    def get_job_tags(self, jobkey=None) -> List[str]:
         """If jobkey is None, get own tags"""
         metadata = self.get_job_metadata(jobkey)
         if metadata:
             return dict(self._list_metadata(metadata)).get("tags", [])
         return []
 
-    def get_keyvalue_job_tag(self, key, tags):
+    def get_keyvalue_job_tag(self, key: str, tags: List[str]) -> Optional[str]:
         for tag in tags:
             if tag.startswith(f"{key}="):
                 return tag.replace(f"{key}=", "")
+        return None
 
     @staticmethod
     @dash_retry_decorator
-    def _update_metadata(metadata, data):
+    def _update_metadata(metadata: JobMeta, data):
         metadata.update(data)
 
     @staticmethod
     @dash_retry_decorator
-    def _list_metadata(metadata):
+    def _list_metadata(metadata: JobMeta):
         return metadata.list()
 
     @staticmethod
     @dash_retry_decorator
-    def _get_metadata_key(metadata, key):
+    def _get_metadata_key(metadata: JobMeta, key: str):
         return metadata.get(key)
 
-    def add_job_tags(self, jobkey=None, tags=None):
+    def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
         """If jobkey is None, add tags to own list of tags."""
         if tags:
             update = False
@@ -188,14 +201,14 @@ class BaseScript(ArgumentParserScript):
                 if metadata:
                     self._update_metadata(metadata, {"tags": job_tags})
 
-    def _get_flowid_name_from_tags(self, jobkey=None):
+    def _get_flowid_name_from_tags(self, jobkey: Optional[JobKey] = None) -> Tuple[Optional[str], Optional[str]]:
         """If jobkey is None, get flowid from own tags"""
         tags = self.get_job_tags(jobkey)
         flow_id = self.get_keyvalue_job_tag("FLOW_ID", tags)
         name = self.get_keyvalue_job_tag("NAME", tags)
         return flow_id, name
 
-    def _make_children_tags(self, tags):
+    def _make_children_tags(self, tags: Optional[List[str]]) -> Optional[List[str]]:
         tags = tags or []
         tags.extend(self.args.children_tag)
         if self.flow_id:
@@ -240,11 +253,18 @@ class BaseScript(ArgumentParserScript):
             meta=json.dumps(meta) if meta else None,
         )
 
-    def schedule_spider(self, spider: str, tags=None, units=None, project_id=None, **kwargs) -> Optional[JobKey]:
+    def schedule_spider(
+        self,
+        spider: str,
+        tags: Optional[List[str]] = None,
+        units: Optional[int] = None,
+        project_id: Optional[int] = None,
+        **kwargs,
+    ) -> Optional[JobKey]:
         return self._schedule_job(spider=spider, tags=tags, units=units, project_id=project_id, **kwargs)
 
     @dash_retry_decorator
-    def get_jobs(self, project_id=None, **kwargs):
+    def get_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         kwargs = kwargs.copy()
         max_count = kwargs.get("count") or float("inf")
         kwargs["count"] = min(1000, max_count)
@@ -264,17 +284,17 @@ class BaseScript(ArgumentParserScript):
                 break
             kwargs["start"] += count
 
-    def get_jobs_with_tags(self, spider, tags, project_id=None, **kwargs):
+    def get_jobs_with_tags(self, spider, tags, project_id=None, **kwargs) -> Generator[Job, None, None]:
         """
         Get jobs with target tags
         """
         has_tag, tags = tags[:1], tags[1:]
         for spider_job in self.get_jobs(project_id, spider=spider, has_tag=has_tag, **kwargs):
             if not set(tags).difference(spider_job["tags"]):
-                yield self.get_project().jobs.get(spider_job["key"])
+                yield self.get_job(spider_job["key"])
 
     @dash_retry_decorator
-    def is_running(self, jobkey):
+    def is_running(self, jobkey: JobKey) -> bool:
         """
         Checks whether a job is running (or pending)
         """
@@ -285,22 +305,23 @@ class BaseScript(ArgumentParserScript):
             return True
         return False
 
-    def is_finished(self, jobkey):
+    def is_finished(self, jobkey: JobKey) -> Optional[str]:
         """
         Checks whether a job is finished. if so, return close_reason. Otherwise return None.
         """
         metadata = self.get_job_metadata(jobkey)
         if self._get_metadata_key(metadata, "state") == "finished":
             return self._get_metadata_key(metadata, "close_reason")
+        return None
 
     @dash_retry_decorator
-    def finish(self, jobkey=None, close_reason=None):
+    def finish(self, jobkey: Optional[JobKey] = None, close_reason: Optional[str] = None):
         close_reason = close_reason or "finished"
         if jobkey is None:
             self.close_reason = close_reason
             if close_reason == "finished":
                 return
-        jobkey = jobkey or os.getenv("SHUB_JOBKEY")
+        jobkey = jobkey or self.get_own_jobkey_from_env()
         if jobkey:
             project_id = jobkey.split("/", 1)[0]
             hsp = self.client._hsclient.get_project(project_id)

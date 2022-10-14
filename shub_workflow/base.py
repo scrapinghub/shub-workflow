@@ -6,21 +6,30 @@ import logging
 from uuid import uuid4
 import abc
 from collections import defaultdict
+from typing import Optional, Generator, Protocol, List, Union
 
-from .script import BaseScript
+from .script import BaseScript, JobKey, JobDict
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class CachedFinishedJobsMixin:
+class WorkFlowManagerProtocol(Protocol):
+    def get_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
+        ...
+
+    def get_finished_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
+        ...
+
+
+class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
     def __init__(self):
         super().__init__()
         self.__finished_cache = {}
         self.__update_finished_cache_called = defaultdict(bool)
 
-    def update_finished_cache(self, project_id):
+    def update_finished_cache(self, project_id: int):
         if not self.__update_finished_cache_called[project_id]:
             logger.info("Initiating finished cache update.")
             for job in self.get_owned_jobs(project_id, state=["finished"], meta=["close_reason"]):
@@ -30,7 +39,7 @@ class CachedFinishedJobsMixin:
             logger.info(f"Finished jobs cache length: {len(self.__finished_cache)}")
         self.__update_finished_cache_called[project_id] = True
 
-    def get_finished_owned_jobs(self, project_id=None, **kwargs):
+    def get_finished_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         kwargs.setdefault("meta", []).append("close_reason")
         # only use for updating finished cache if no filter/limit imposed.
         update_finished_cache = not set(kwargs.keys()).intersection(["count", "has_tag", "lacks_tag"])
@@ -87,7 +96,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
         if not self.name:
             self.argparser.error("Manager name not set.")
 
-    def get_owned_jobs(self, project_id=None, **kwargs):
+    def get_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         assert self.flow_id, "This job doesn't have a flow id."
         assert self.name, "This job doesn't have a name."
         assert "has_tag" not in kwargs, "Filtering by flow id requires no extra has_tag."
@@ -103,11 +112,11 @@ class WorkFlowManager(BaseScript, abc.ABC):
                 yield job
 
     @staticmethod
-    def generate_flow_id():
+    def generate_flow_id() -> str:
         return str(uuid4())
 
     @property
-    def max_running_jobs(self):
+    def max_running_jobs(self) -> int:
         return self.args.max_running_jobs
 
     def add_argparser_options(self):
@@ -136,7 +145,13 @@ class WorkFlowManager(BaseScript, abc.ABC):
             self.name = args.name
         return args
 
-    def wait_for(self, jobs_keys, interval=60, timeout=float("inf"), heartbeat=None):
+    def wait_for(
+        self,
+        jobs_keys: Union[JobKey, List[JobKey]],
+        interval: int = 60,
+        timeout: float = float("inf"),
+        heartbeat: Optional[int] = None,
+    ):
         """Waits until all given jobs are not running anymore or until the
         timeout is reached, if a heartbeat is given it'll log an entry every
         heartbeat seconds (considering the interval), otherwise it'll log an
@@ -176,7 +191,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
             self.add_job_tags(tags=inherited_tags)
             self.is_resumed = True
 
-    def get_finished_owned_jobs(self, project_id=None, **kwargs):
+    def get_finished_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         kwargs.pop("state", None)
         for job in self.get_owned_jobs(project_id, state=["finished"], **kwargs):
             yield job
@@ -198,10 +213,10 @@ class WorkFlowManager(BaseScript, abc.ABC):
         if fcount > 0:
             logger.info(f"Found a total of {fcount} finished children jobs.")
 
-    def resume_running_job_hook(self, job):
+    def resume_running_job_hook(self, job: JobDict):
         pass
 
-    def resume_finished_job_hook(self, job):
+    def resume_finished_job_hook(self, job: JobDict):
         pass
 
     def __on_start(self):

@@ -4,10 +4,12 @@ Base script class for spiders crawl managers.
 import abc
 import json
 import logging
-from typing import Optional
+from typing import Optional, List, Tuple, Dict, NewType, cast
 
 from bloom_filter import BloomFilter
+from typing_extensions import TypedDict
 
+from shub_workflow.script import JobKey, JobDict
 from shub_workflow.base import WorkFlowManager
 from shub_workflow.utils import hashstr
 
@@ -16,23 +18,31 @@ _LOG = logging.getLogger(__name__)
 _LOG.setLevel(logging.INFO)
 
 
-def get_spider_args_from_params(params):
-    spider_args = params.copy()
-    for key in "spider", "units", "project_id", "tags":
+SpiderArgs = NewType("SpiderArgs", Dict[str, str])
+
+
+class JobParams(TypedDict):
+    units: Optional[int]
+    tags: Optional[List[str]]
+    job_settings: Optional[Dict[str, str]]
+    project_id: Optional[int]
+
+
+def get_spider_args_from_params(params: JobParams) -> SpiderArgs:
+    spider_args = cast(SpiderArgs, params.copy())
+    for key in tuple(JobParams.__annotations__):
         spider_args.pop(key, None)
     return spider_args
 
 
-def get_jobseq(tags):
-    jobseq, repetition = 0, 0
+def get_jobseq(tags: List[str]) -> Tuple[int, int]:
     for tag in tags:
         if tag.startswith("JOBSEQ="):
             tag = tag.replace("JOBSEQ=", "")
             jobseq, *rep = tag.split(".r")
-            rep.append(0)
-            repetition = int(rep[0])
-            jobseq = int(jobseq)
-    return jobseq, repetition
+            rep.append("0")
+            return int(jobseq), int(rep[0])
+    return 0, 0
 
 
 class CrawlManager(WorkFlowManager):
@@ -48,8 +58,8 @@ class CrawlManager(WorkFlowManager):
         self.__close_reason = None
 
         # running jobs represents the state of a crawl manager.
-        # a dict job key : (spider, spider_args_override)
-        self._running_job_keys = {}
+        # a dict job key : (spider, job_args_override)
+        self._running_job_keys: Dict[JobKey, Tuple[str, JobParams]] = {}
 
     @property
     def description(self):
@@ -69,31 +79,48 @@ class CrawlManager(WorkFlowManager):
             self.spider = args.spider
         return args
 
-    def get_spider_args(self, override=None):
+    def get_spider_args(self, override: JobParams) -> JobParams:
         spider_args = json.loads(self.args.spider_args)
-        if override:
-            spider_args.update(override)
+        spider_args.update(override)
         return spider_args
 
-    def get_job_settings(self, override=None):
+    def get_job_settings(self, override: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         job_settings = json.loads(self.args.job_settings)
         if override:
             job_settings.update(override)
         return job_settings
 
-    def schedule_spider(self, spider=None, spider_args_override=None):
-        if spider_args_override is not None:
-            spider_args_override.copy()
+    def schedule_spider_with_jobargs(
+        self,
+        job_args_override: JobParams,
+        spider: Optional[str] = None,
+    ) -> Optional[JobKey]:
         spider = spider or self.spider
-        spider_args = self.get_spider_args(spider_args_override)
-        job_settings_override = spider_args.pop("job_settings", None)
-        job_settings = self.get_job_settings(job_settings_override)
-        spider_args["job_settings"] = job_settings
-        spider_args["units"] = spider_args.get("units", self.args.units)
-        jobkey = super().schedule_spider(spider, **spider_args)
-        if jobkey is not None:
-            self._running_job_keys[jobkey] = spider, spider_args_override
-        return jobkey
+        if spider is not None:
+            spider_args = self.get_spider_args(job_args_override)
+            job_settings_override = spider_args.get("job_settings", None)
+            spider_args["job_settings"] = self.get_job_settings(job_settings_override)
+            spider_args["units"] = spider_args.get("units", self.args.units)
+            jobkey = super().schedule_spider(spider, **spider_args)
+            if jobkey is not None:
+                self._running_job_keys[jobkey] = spider, job_args_override
+            return jobkey
+        return None
+
+    def schedule_spider(
+        self,
+        spider: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        units: Optional[int] = None,
+        project_id: Optional[int] = None,
+        **kwargs,
+    ) -> Optional[JobKey]:
+        job_args_override = kwargs.pop("job_args_override", None)
+        if spider is None or job_args_override is not None:
+            job_args_override = job_args_override or {}
+            job_args_override.update(kwargs)
+            return self.schedule_spider_with_jobargs(job_args_override, spider)
+        return super().schedule_spider(spider, **kwargs)
 
     def check_running_jobs(self):
         outcomes = {}
@@ -101,18 +128,18 @@ class CrawlManager(WorkFlowManager):
         while running_job_keys:
             jobkey = running_job_keys.pop()
             if (outcome := self.is_finished(jobkey)) is not None:
-                spider, spider_args_override = self._running_job_keys.pop(jobkey)
+                spider, job_args_override = self._running_job_keys.pop(jobkey)
                 if outcome in self.failed_outcomes:
                     _LOG.warning(f"Job {jobkey} finished with outcome {outcome}.")
-                    if spider_args_override is not None:
-                        spider_args_override = spider_args_override.copy()
-                    self.bad_outcome_hook(spider, outcome, spider_args_override, jobkey)
+                    if job_args_override is not None:
+                        job_args_override = job_args_override.copy()
+                    self.bad_outcome_hook(spider, outcome, job_args_override, jobkey)
                 outcomes[jobkey] = outcome
         _LOG.info(f"There are {len(self._running_job_keys)} jobs still running.")
 
         return outcomes
 
-    def bad_outcome_hook(self, spider, outcome, spider_args_override, jobkey):
+    def bad_outcome_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
         if self.__close_reason is None:
             self.__close_reason = outcome
 
@@ -124,11 +151,11 @@ class CrawlManager(WorkFlowManager):
             self.schedule_spider()
         return True
 
-    def resume_running_job_hook(self, job):
+    def resume_running_job_hook(self, job: JobDict):
         key = job["key"]
-        spider_args_override = job.get("spider_args", {}).copy()
-        spider_args_override["tags"] = job["tags"]
-        self._running_job_keys[key] = job["spider"], spider_args_override
+        job_args_override = cast(JobParams, job.get("spider_args", {}).copy())
+        job_args_override["tags"] = job["tags"]
+        self._running_job_keys[key] = job["spider"], job_args_override
         _LOG.info(f"added running job {key}")
 
     def on_close(self):
@@ -144,7 +171,7 @@ class PeriodicCrawlManager(CrawlManager):
     parameters. Don't forget to set loop mode.
     """
 
-    def bad_outcome_hook(self, spider, outcome, spider_args_override, jobkey):
+    def bad_outcome_hook(self, spider, outcome, job_args_override, jobkey):
         pass
 
     def workflow_loop(self):
@@ -176,11 +203,11 @@ class GeneratorCrawlManager(CrawlManager):
         self.__next_job_seq = 1
         self.__jobids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
 
-    def bad_outcome_hook(self, spider, outcome, spider_args_override, jobkey):
+    def bad_outcome_hook(self, spider, outcome, job_args_override, jobkey):
         pass
 
-    def add_job(self, spider, spider_args_override):
-        params = (spider_args_override or {}).copy()
+    def add_job(self, spider, job_args_override):
+        params = (job_args_override or {}).copy()
         params["spider"] = spider
         self.__additional_jobs.append(params)
 
@@ -219,7 +246,7 @@ class GeneratorCrawlManager(CrawlManager):
                 jobid = self.get_job_id({"spider": spider, "spider_args": spider_args})
                 if jobid not in self.__jobids:
                     self.__add_jobseq_tag(next_params)
-                    self.schedule_spider(spider=spider, spider_args_override=next_params)
+                    self.schedule_spider(spider=spider, job_args_override=next_params)
                     self.__jobids.add(jobid)
             except StopIteration:
                 if self._running_job_keys:
