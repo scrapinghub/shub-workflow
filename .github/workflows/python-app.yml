@@ -31,6 +31,9 @@ jobs:
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --show-source --statistics
+    - name: Type checking
+      run: |
+        mypy --ignore-missing-imports shub_workflow/ tests/
     - name: Test with pytest
       run: |
         pytest
