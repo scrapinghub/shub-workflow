@@ -4,10 +4,11 @@ Base script class for spiders crawl managers.
 import abc
 import json
 import logging
-from typing import Optional, List, Tuple, Dict, NewType, cast
+from argparse import Namespace
+from typing import Optional, List, Tuple, Dict, NewType, cast, Generator
 
 from bloom_filter import BloomFilter
-from typing_extensions import TypedDict
+from typing_extensions import TypedDict, NotRequired
 
 from shub_workflow.script import JobKey, JobDict
 from shub_workflow.base import WorkFlowManager
@@ -22,10 +23,14 @@ SpiderArgs = NewType("SpiderArgs", Dict[str, str])
 
 
 class JobParams(TypedDict):
-    units: Optional[int]
-    tags: Optional[List[str]]
-    job_settings: Optional[Dict[str, str]]
+    units: NotRequired[int]
+    tags: NotRequired[List[str]]
+    job_settings: NotRequired[Dict[str, str]]
     project_id: Optional[int]
+
+
+class FullJobParams(JobParams):
+    spider: NotRequired[Optional[str]]
 
 
 def get_spider_args_from_params(params: JobParams) -> SpiderArgs:
@@ -73,7 +78,7 @@ class CrawlManager(WorkFlowManager):
         self.argparser.add_argument("--job-settings", help="Job settings dict in json format", default="{}")
         self.argparser.add_argument("--units", help="Set default number of ScrapyCloud units for each job", type=int)
 
-    def parse_args(self):
+    def parse_args(self) -> Namespace:
         args = super().parse_args()
         if self.spider is None:
             self.spider = args.spider
@@ -122,7 +127,7 @@ class CrawlManager(WorkFlowManager):
             return self.schedule_spider_with_jobargs(job_args_override, spider)
         return super().schedule_spider(spider, **kwargs)
 
-    def check_running_jobs(self):
+    def check_running_jobs(self) -> Dict[JobKey, str]:
         outcomes = {}
         running_job_keys = list(self._running_job_keys)
         while running_job_keys:
@@ -143,7 +148,7 @@ class CrawlManager(WorkFlowManager):
         if self.__close_reason is None:
             self.__close_reason = outcome
 
-    def workflow_loop(self):
+    def workflow_loop(self) -> bool:
         outcomes = self.check_running_jobs()
         if outcomes:
             return False
@@ -171,10 +176,10 @@ class PeriodicCrawlManager(CrawlManager):
     parameters. Don't forget to set loop mode.
     """
 
-    def bad_outcome_hook(self, spider, outcome, job_args_override, jobkey):
+    def bad_outcome_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
         pass
 
-    def workflow_loop(self):
+    def workflow_loop(self) -> bool:
         self.check_running_jobs()
         if not self._running_job_keys:
             self.schedule_spider()
@@ -199,24 +204,23 @@ class GeneratorCrawlManager(CrawlManager):
     def __init__(self):
         super().__init__()
         self.__parameters_gen = self.set_parameters_gen()
-        self.__additional_jobs = []
+        self.__additional_jobs: List[FullJobParams] = []
         self.__next_job_seq = 1
         self.__jobids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
 
-    def bad_outcome_hook(self, spider, outcome, job_args_override, jobkey):
+    def bad_outcome_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
         pass
 
-    def add_job(self, spider, job_args_override):
-        params = (job_args_override or {}).copy()
+    def add_job(self, spider: str, job_args_override: JobParams):
+        params = cast(FullJobParams, (job_args_override or {}).copy())
         params["spider"] = spider
         self.__additional_jobs.append(params)
 
     @abc.abstractmethod
-    def set_parameters_gen(self):
-        for i in []:
-            yield i
+    def set_parameters_gen(self) -> Generator[JobParams, None, None]:
+        yield from ()
 
-    def __add_jobseq_tag(self, params):
+    def __add_jobseq_tag(self, params: FullJobParams):
         tags = params.setdefault("tags", [])
         jobseq_tag = None
         for tag in tags:
@@ -232,7 +236,7 @@ class GeneratorCrawlManager(CrawlManager):
             jobseq_tag = f"JOBSEQ={jobseq:010d}.r{repn + 1}"
         tags.append(jobseq_tag)
 
-    def workflow_loop(self):
+    def workflow_loop(self) -> bool:
         self.check_running_jobs()
         while len(self._running_job_keys) < self.max_running_jobs:
             try:
@@ -255,7 +259,7 @@ class GeneratorCrawlManager(CrawlManager):
         return True
 
     @staticmethod
-    def get_job_id(job):
+    def get_job_id(job: JobDict) -> str:
         jdict = job.get("spider_args", {}).copy()
         jdict["spider"] = job["spider"]
         for k, v in jdict.items():
@@ -263,13 +267,13 @@ class GeneratorCrawlManager(CrawlManager):
         jid = json.dumps(jdict, sort_keys=True)
         return hashstr(jid)
 
-    def resume_running_job_hook(self, job):
+    def resume_running_job_hook(self, job: JobDict):
         super().resume_running_job_hook(job)
         jobid = self.get_job_id(job)
         self.__jobids.add(jobid)
         self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
 
-    def resume_finished_job_hook(self, job):
+    def resume_finished_job_hook(self, job: JobDict):
         jobid = self.get_job_id(job)
         if jobid not in self.__jobids:
             self.__jobids.add(jobid)

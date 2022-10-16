@@ -1,7 +1,6 @@
 import logging
 import shlex
 import abc
-from collections import namedtuple
 from fractions import Fraction
 from typing import NewType, List, Dict, Optional, Union, Literal
 from typing_extensions import TypedDict, NotRequired
@@ -15,8 +14,9 @@ from shub_workflow.base import WorkFlowManager
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-Resource = namedtuple("Resource", ["name"])
-ResourcesDict = NewType("ResourcesDict", Dict[str, Union[int, Fraction]])
+Resource = NewType("Resource", str)
+ResourceAmmount = Union[int, Fraction]
+ResourcesDict = NewType("ResourcesDict", Dict[Resource, ResourceAmmount])
 TaskId = NewType("TaskId", str)
 OnFinishKey = Literal["default", "failed"]
 OnFinishTarget = List[Union[Literal["retry"], TaskId]]
@@ -149,7 +149,7 @@ class BaseTask(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def run(self, manager: WorkFlowManager, is_retry=False, index: Optional[int] = None):
+    def run(self, manager: WorkFlowManager, is_retry=False, index: Optional[int] = None) -> Optional[JobKey]:
         raise NotImplementedError()
 
     @abc.abstractmethod

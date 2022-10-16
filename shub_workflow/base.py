@@ -1,12 +1,13 @@
 """
 Implements common methods for any workflow manager
 """
+import abc
 import time
 import logging
 from uuid import uuid4
-import abc
+from argparse import Namespace
 from collections import defaultdict
-from typing import Optional, Generator, Protocol, List, Union
+from typing import Optional, Generator, Protocol, List, Union, Dict
 
 from .script import BaseScript, JobKey, JobDict
 
@@ -26,8 +27,8 @@ class WorkFlowManagerProtocol(Protocol):
 class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
     def __init__(self):
         super().__init__()
-        self.__finished_cache = {}
-        self.__update_finished_cache_called = defaultdict(bool)
+        self.__finished_cache: Dict[JobKey, str] = {}
+        self.__update_finished_cache_called: Dict[int, bool] = defaultdict(bool)
 
     def update_finished_cache(self, project_id: int):
         if not self.__update_finished_cache_called[project_id]:
@@ -54,8 +55,8 @@ class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
             self.__finished_cache[key] = close_reason
         logger.info(f"Finished jobs cache length: {len(self.__finished_cache)}")
 
-    def is_finished(self, jobkey):
-        project_id = jobkey.split("/", 1)[0]
+    def is_finished(self, jobkey: JobKey) -> Optional[str]:
+        project_id = int(jobkey.split("/", 1)[0])
         self.update_finished_cache(project_id)
         return self.__finished_cache.get(jobkey)
 
@@ -139,7 +140,7 @@ class WorkFlowManager(BaseScript, abc.ABC):
                                     Default: %(default)s",
         )
 
-    def parse_args(self):
+    def parse_args(self) -> Namespace:
         args = super().parse_args()
         if not self.name:
             self.name = args.name
@@ -227,12 +228,12 @@ class WorkFlowManager(BaseScript, abc.ABC):
         self.workflow_loop_enabled = True
 
     @abc.abstractmethod
-    def workflow_loop(self):
+    def workflow_loop(self) -> bool:
         """Implement here your loop code. Return True if want to continue looping,
         False for immediate stop of the job. For continuous looping you also need
         to set `loop_mode`
         """
-        pass
+        ...
 
     def on_close(self):
         pass

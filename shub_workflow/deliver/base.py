@@ -1,12 +1,14 @@
 import json
 import logging
 from uuid import uuid1
-from typing import Set
+from typing import Set, Generator, List, Tuple, Optional, Protocol
 
 from collection_scanner import CollectionScanner
 from scrapinghub.client.exceptions import NotFound
+from scrapinghub.client.jobs import Job
+from scrapy import Item
 
-from shub_workflow.script import BaseScript
+from shub_workflow.script import BaseScript, JobKey
 from shub_workflow.deliver.dupefilter import SqliteDictDupesFilter
 
 _LOG = logging.getLogger(__name__)
@@ -24,7 +26,7 @@ class BaseDeliverScript(BaseScript):
     # define here the fields used to deduplicate items. All them compose the dedupe key.
     # target item values must be strings.
     # for changing behavior, override is_seen_item()
-    DEDUPE_KEY_BY_FIELDS = ()
+    DEDUPE_KEY_BY_FIELDS: Tuple[str, ...] = ()
 
     MAX_PROCESSED_ITEMS = float("inf")
 
@@ -46,16 +48,20 @@ class BaseDeliverScript(BaseScript):
             help="Run in test mode (performs all processes, but doesn't upload files nor consumes jobs)",
         )
 
-    def get_target_tags(self):
+    def get_target_tags(self) -> List[str]:
+        """
+        Return here additional tags (aside from FLOW_ID, which is automatically handled)
+        that jobs must have in order to be included in delivery.
+        """
         return []
 
-    def get_delivery_spider_jobs(self, scrapername, target_tags):
+    def get_delivery_spider_jobs(self, scrapername: str, target_tags: List[str]) -> Generator[Job, None, None]:
         if self.flow_id:
             flow_id_tag = [f"FLOW_ID={self.flow_id}"]
             target_tags = flow_id_tag + target_tags
         yield from self.get_jobs_with_tags(scrapername, target_tags, state=["finished"], lacks_tag=[self.DELIVERED_TAG])
 
-    def process_spider_jobs(self, scrapername):
+    def process_spider_jobs(self, scrapername: str):
         target_tags = self.get_target_tags()
         for sj in self.get_delivery_spider_jobs(scrapername, target_tags):
             self.process_job_items(scrapername, sj)
@@ -64,20 +70,20 @@ class BaseDeliverScript(BaseScript):
             if self.total_items_count >= self.MAX_PROCESSED_ITEMS:
                 break
 
-    def get_item_unique_key(self, item):
+    def get_item_unique_key(self, item: Item) -> str:
         key = tuple(item[f] for f in self.DEDUPE_KEY_BY_FIELDS)
         return ",".join(key)
 
-    def is_seen_item(self, item):
+    def is_seen_item(self, item: Item) -> bool:
         key = self.get_item_unique_key(item)
-        return key and key in self.seen_items
+        return key != "" and key in self.seen_items
 
-    def add_seen_item(self, item):
+    def add_seen_item(self, item: Item):
         key = self.get_item_unique_key(item)
         if key:
             self.seen_items.add(key)
 
-    def process_job_items(self, scrapername, spider_job):
+    def process_job_items(self, scrapername: str, spider_job: Job):
         for item in spider_job.items.iter():
             if self.is_seen_item(item):
                 self.total_dupe_filtered_items_count += 1
@@ -88,7 +94,7 @@ class BaseDeliverScript(BaseScript):
             if self.total_items_count % self.LOG_EVERY == 0:
                 _LOG.info(f"Processed {self.total_items_count} items.")
 
-    def on_item(self, item, scrapername):
+    def on_item(self, item: Item, scrapername: str):
         print(json.dumps(item))
 
     def run(self):
@@ -111,7 +117,18 @@ class BaseDeliverScript(BaseScript):
             self.seen_items.close()
 
 
-class CachedDeliveredTagsMixin:
+class DeliverScriptProtocol(Protocol):
+
+    DELIVERED_TAG: str
+
+    def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
+        ...
+
+    def get_delivery_spider_jobs(self, scrapername: str, target_tags: List[str]) -> Generator[Job, None, None]:
+        ...
+
+
+class CachedDeliveredTagsMixin(DeliverScriptProtocol):
 
     """
     Usage:
@@ -148,12 +165,13 @@ class CachedDeliveredTagsMixin:
             pass
         _LOG.info(f"Loaded {len(self._cache)} keys from delivered cache collection.")
 
-    def add_job_tags(self, jobkey=None, tags=None):
+    def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
         if jobkey is None or tags != [self.DELIVERED_TAG]:
             super().add_job_tags(jobkey, tags)
         else:
             if self._cache is None:
                 self.get_delivered_cached()
+            assert self._cache is not None
             self._cache.add(jobkey)
             self._to_store.add(jobkey)
 
@@ -170,9 +188,10 @@ class CachedDeliveredTagsMixin:
                 col.set(record)
             _LOG.info(f"Synced delivered cache ({to_store_count} jobs).")
 
-    def get_delivery_spider_jobs(self, scrapername, target_tags):
+    def get_delivery_spider_jobs(self, scrapername: str, target_tags: List[str]) -> Generator[Job, None, None]:
         if self._cache is None:
             self.get_delivered_cached()
+        assert self._cache is not None
         for sj in super().get_delivery_spider_jobs(scrapername, target_tags):
             if sj.key not in self._cache:
                 yield sj
@@ -202,9 +221,3 @@ class SyncDeliveredScript(BaseScript):
                     _LOG.info(f"Synced {len(record['data'])} jobs from {record['_key']}.")
         except NotFound:
             pass
-
-
-if __name__ == "__main__":
-    logging.basicConfig(format="%(asctime)s %(name)s [%(levelname)s]: %(message)s", level=logging.INFO)
-    script = SyncDeliveredScript()
-    script.run()

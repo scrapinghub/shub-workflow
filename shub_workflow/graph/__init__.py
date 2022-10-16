@@ -5,9 +5,10 @@ For usage example see tests
 
 """
 import re
-from time import time
 import logging
-from typing import NewType, Dict, List, Optional, Set
+from time import time
+from argparse import Namespace
+from typing import NewType, Dict, List, Optional, Set, Tuple, DefaultDict
 from typing_extensions import TypedDict, NotRequired
 
 from collections import defaultdict, OrderedDict
@@ -25,9 +26,17 @@ except ImportError:
     OLD_YAML = False
 
 
-from shub_workflow.script import JobKey
+from shub_workflow.script import JobKey, JobDict
 from shub_workflow.base import WorkFlowManager
-from shub_workflow.graph.task import JobGraphDict, TaskId, BaseTask
+from shub_workflow.graph.task import (
+    JobGraphDict,
+    TaskId,
+    BaseTask,
+    Resource,
+    ResourceAmmount,
+    OnFinishKey,
+    OnFinishTarget,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -51,13 +60,15 @@ class GraphManager(WorkFlowManager):
 
     def __init__(self):
         # Ensure jobs are traversed in the same order as they went pending.
-        self.__pending_jobs: OrderedDict[TaskId, PendingJobDict] = OrderedDict()
-        self.__running_jobs: OrderedDict[TaskId, JobKey] = OrderedDict()
-        self._available_resources = {}  # map resource : ammount
-        self._acquired_resources = defaultdict(list)  # map resource : list of (job, ammount)
+        self.__pending_jobs: Dict[TaskId, PendingJobDict] = OrderedDict()
+        self.__running_jobs: Dict[TaskId, JobKey] = OrderedDict()
+        self._available_resources: Dict[Resource, ResourceAmmount] = {}  # map resource : ammount
+        self._acquired_resources: DefaultDict[Resource, List[Tuple[TaskId, ResourceAmmount]]] = defaultdict(
+            list
+        )  # map resource : list of (job, ammount)
         self.__tasks: Dict[TaskId, BaseTask] = {}
         super(GraphManager, self).__init__()
-        self.__start_time = defaultdict(time)
+        self.__start_time: DefaultDict[TaskId, float] = defaultdict(time)
         self.__starting_jobs: List[TaskId] = self.args.starting_job
         for task in self.configure_workflow() or ():
             if self.args.root_jobs:
@@ -80,7 +91,7 @@ class GraphManager(WorkFlowManager):
     def get_task(self, task_id: TaskId) -> BaseTask:
         return self.__tasks[task_id]
 
-    def configure_workflow(self):
+    def configure_workflow(self) -> Tuple[BaseTask]:
         raise NotImplementedError("configure_workflow() method need to be implemented.")
 
     def on_start(self):
@@ -230,7 +241,7 @@ class GraphManager(WorkFlowManager):
         )
         self.argparser.add_argument("--root-jobs", action="store_true", help="Set root jobs as starting jobs.")
 
-    def parse_args(self):
+    def parse_args(self) -> Namespace:
         args = super(GraphManager, self).parse_args()
         if OLD_YAML:
             self.jobs_graph = yaml.load(args.jobs_graph, Loader=CLoader) or deepcopy(self.jobs_graph)
@@ -253,7 +264,7 @@ class GraphManager(WorkFlowManager):
             return False
         return True
 
-    def run_job(self, job: TaskId, is_retry=False):
+    def run_job(self, job: TaskId, is_retry=False) -> Optional[JobKey]:
         task = self.__tasks.get(job)
         if task is not None:
             return task.run(self, is_retry)
@@ -263,8 +274,9 @@ class GraphManager(WorkFlowManager):
         if task is not None:
             idx = jobconf["index"]
             return task.run(self, is_retry, index=idx)
+        return None
 
-    def _must_wait_time(self, job):
+    def _must_wait_time(self, job: TaskId) -> bool:
         status = self.__pending_jobs[job]
         if status["wait_time"] is not None:
             wait_time = status["wait_time"] - time() + self.__start_time[job]
@@ -346,10 +358,10 @@ class GraphManager(WorkFlowManager):
             )
         )
 
-    def get_running_jobid(self, job):
-        return self.__running_jobs.get(job)
+    def get_running_jobid(self, job: TaskId) -> JobKey:
+        return self.__running_jobs[job]
 
-    def handle_retry(self, job, outcome):
+    def handle_retry(self, job: TaskId, outcome: str) -> bool:
         jobconf = self.get_jobdict(job)
         retries = jobconf.get("retries", 0)
         if retries > 0:
@@ -388,7 +400,7 @@ class GraphManager(WorkFlowManager):
             else:
                 logger.info("Job %s (%s) still running", job, jobid)
 
-    def _try_acquire_resources(self, job):
+    def _try_acquire_resources(self, job: TaskId) -> bool:
         result = True
         task_id = self.get_jobdict(job).get("origin", job)
         for required_resources in self.__tasks[task_id].get_required_resources(partial=True):
@@ -403,14 +415,14 @@ class GraphManager(WorkFlowManager):
                 return True
         return result
 
-    def _release_resources(self, job):
+    def _release_resources(self, job: TaskId):
         for res, acquired in self._acquired_resources.items():
             for rjob, res_amount in acquired:
                 if rjob == job:
                     self._available_resources[res] += res_amount
                     self._acquired_resources[res].remove((rjob, res_amount))
 
-    def _maybe_add_on_finish_default(self, job):
+    def _maybe_add_on_finish_default(self, job) -> Dict[OnFinishKey, OnFinishTarget]:
         on_finish = self.get_jobdict(job)["on_finish"]
         task = self.__tasks.get(job)
         if task is not None and not task.is_locked:
@@ -422,7 +434,7 @@ class GraphManager(WorkFlowManager):
 
         return on_finish
 
-    def _get_next_jobs(self, job, outcome):
+    def _get_next_jobs(self, job: TaskId, outcome: OnFinishKey) -> OnFinishTarget:
         if self.args.only_starting_jobs:
             return []
         on_finish = self.get_jobdict(job)["on_finish"]
@@ -436,8 +448,11 @@ class GraphManager(WorkFlowManager):
         return nextjobs
 
     @property
-    def pending_jobs(self):
+    def pending_jobs(self) -> Dict[TaskId, PendingJobDict]:
         return self.__pending_jobs
 
-    def resume_running_job_hook(self, job):
+    def resume_running_job_hook(self, job: JobDict):
+        pass
+
+    def resume_finished_job_hook(self, job: JobDict):
         pass

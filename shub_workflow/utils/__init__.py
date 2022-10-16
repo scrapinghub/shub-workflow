@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def hashstr(text):
+def hashstr(text: str) -> str:
     u = hashlib.sha1()
     u.update(text.encode("utf8"))
     return u.hexdigest()

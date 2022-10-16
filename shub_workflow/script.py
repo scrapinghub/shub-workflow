@@ -7,9 +7,9 @@ import json
 import logging
 import os
 import subprocess
-from argparse import ArgumentParser
-from typing import List, NewType, Optional, Tuple, Generator, Dict
-from typing_extensions import TypedDict
+from argparse import ArgumentParser, Namespace
+from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any
+from typing_extensions import TypedDict, NotRequired
 
 from scrapinghub import ScrapinghubClient, DuplicateJobError
 from scrapinghub.client.jobs import Job, JobMeta
@@ -30,26 +30,26 @@ JobKey = NewType("JobKey", str)  # ScrapyCloud job key
 
 class JobDict(TypedDict):
 
-    key: JobKey
-    tags: List[str]
-    close_reason: str
     spider: str
-    spider_args: Dict[str, str]
+    key: NotRequired[JobKey]
+    tags: NotRequired[List[str]]
+    close_reason: NotRequired[str]
+    spider_args: NotRequired[Dict[str, str]]
 
 
 class ArgumentParserScript(abc.ABC):
     def __init__(self):
-        self.args = self.parse_args()
+        self.args: Namespace = self.parse_args()
 
     @property
-    def description(self):
+    def description(self) -> str:
         return "You didn't set description for this script. Please set description property accordingly."
 
     @abc.abstractmethod
     def add_argparser_options(self):
-        pass
+        ...
 
-    def parse_args(self):
+    def parse_args(self) -> Namespace:
         self.argparser = ArgumentParser(self.description)
         self.add_argparser_options()
         args = self.argparser.parse_args()
@@ -57,7 +57,7 @@ class ArgumentParserScript(abc.ABC):
 
     @abc.abstractmethod
     def run(self):
-        pass
+        ...
 
 
 class BaseScript(ArgumentParserScript):
@@ -70,12 +70,12 @@ class BaseScript(ArgumentParserScript):
     def __init__(self):
         self.project_id: Optional[int] = None
         self.client = ScrapinghubClient(max_retries=100)
-        self.close_reason = None
-        self.__flow_tags = []
+        self.close_reason: Optional[str] = None
+        self.__flow_tags: List[str] = []
         super().__init__()
         self.set_flow_id_name(self.args)
 
-    def append_flow_tag(self, tag):
+    def append_flow_tag(self, tag: str):
         """
         A flow tag is a tag that is transmited to children.
         """
@@ -83,10 +83,10 @@ class BaseScript(ArgumentParserScript):
         self.add_job_tags(tags=[tag])
 
     @staticmethod
-    def generate_flow_id():
+    def generate_flow_id() -> str:
         raise NotImplementedError("generate_flow_id() must be implemented if flow_id_required is True.")
 
-    def set_flow_id_name(self, args):
+    def set_flow_id_name(self, args: Namespace):
         flowid_from_tag, name_from_tag = self._get_flowid_name_from_tags()
         self.flow_id = flowid_from_tag or args.flow_id
         tags = []
@@ -114,10 +114,10 @@ class BaseScript(ArgumentParserScript):
             default=self.children_tags or [],
         )
 
-    def parse_project_id(self, args):
+    def parse_project_id(self, args: Namespace) -> int:
         return args.project_id
 
-    def parse_args(self):
+    def parse_args(self) -> Namespace:
         args = super().parse_args()
 
         self.project_id = resolve_project_id(self.parse_project_id(args))
@@ -126,7 +126,7 @@ class BaseScript(ArgumentParserScript):
 
         return args
 
-    def get_project(self, project_id=None) -> Project:
+    def get_project(self, project_id: Optional[Union[int, str]] = None) -> Project:
         return self.client.get_project(project_id or self.project_id)
 
     def get_own_jobkey_from_env(self) -> Optional[JobKey]:
@@ -171,17 +171,17 @@ class BaseScript(ArgumentParserScript):
 
     @staticmethod
     @dash_retry_decorator
-    def _update_metadata(metadata: JobMeta, data):
+    def _update_metadata(metadata: JobMeta, data: Dict[str, Any]):
         metadata.update(data)
 
     @staticmethod
     @dash_retry_decorator
-    def _list_metadata(metadata: JobMeta):
+    def _list_metadata(metadata: JobMeta) -> List[Tuple[str, Any]]:
         return metadata.list()
 
     @staticmethod
     @dash_retry_decorator
-    def _get_metadata_key(metadata: JobMeta, key: str):
+    def _get_metadata_key(metadata: JobMeta, key: str) -> Any:
         return metadata.get(key)
 
     def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
