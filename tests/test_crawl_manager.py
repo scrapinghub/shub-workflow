@@ -31,13 +31,14 @@ class ListTestManager(GeneratorCrawlManager):
         for args in parameters_list:
             yield args
 
-    def bad_outcome_hook(self, spider, outcome, spider_args_override, jobkey):
-        if "argR" not in spider_args_override:
-            spider_args_override.update({"argR": "valR"})
-            self.add_job(spider, spider_args_override)
-        elif "argS" not in spider_args_override:
-            spider_args_override.update({"argS": "valS"})
-            self.add_job(spider, spider_args_override)
+    def bad_outcome_hook(self, spider, outcome, job_args_override, jobkey):
+        spider_args = job_args_override.setdefault("spider_args", {})
+        if "argR" not in spider_args:
+            spider_args.update({"argR": "valR"})
+            self.add_job(spider, job_args_override)
+        elif "argS" not in spider_args:
+            spider_args.update({"argS": "valS"})
+            self.add_job(spider, job_args_override)
 
 
 class TestManagerWithSpider(CrawlManager):

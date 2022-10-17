@@ -4,6 +4,7 @@ Base script class for spiders crawl managers.
 import abc
 import json
 import logging
+from copy import deepcopy
 from argparse import Namespace
 from typing import Optional, List, Tuple, Dict, NewType, cast, Generator
 
@@ -26,19 +27,21 @@ class JobParams(TypedDict):
     units: NotRequired[int]
     tags: NotRequired[List[str]]
     job_settings: NotRequired[Dict[str, str]]
-    spider_args: Optional[Dict[str, str]]
-    project_id: Optional[int]
+    project_id: NotRequired[int]
+    spider_args: NotRequired[Dict[str, str]]
 
 
 class FullJobParams(JobParams):
-    spider: NotRequired[Optional[str]]
+    spider: NotRequired[str]
 
 
 def get_spider_args_from_params(params: JobParams) -> SpiderArgs:
-    spider_args = cast(SpiderArgs, params.copy())
+    spider_args = params.get("spider_args", None) or {}
+    result = cast(SpiderArgs, deepcopy(params))
     for key in tuple(JobParams.__annotations__):
-        spider_args.pop(key, None)
-    return spider_args
+        result.pop(key, None)
+    result.update(spider_args)
+    return result
 
 
 def get_jobseq(tags: List[str]) -> Tuple[int, int]:
@@ -85,11 +88,6 @@ class CrawlManager(WorkFlowManager):
             self.spider = args.spider
         return args
 
-    def get_spider_args(self, override: JobParams) -> JobParams:
-        spider_args = json.loads(self.args.spider_args)
-        spider_args.update(override)
-        return spider_args
-
     def get_job_settings(self, override: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         job_settings = json.loads(self.args.job_settings)
         if override:
@@ -103,11 +101,16 @@ class CrawlManager(WorkFlowManager):
     ) -> Optional[JobKey]:
         spider = spider or self.spider
         if spider is not None:
-            spider_args = self.get_spider_args(job_args_override)
-            job_settings_override = spider_args.get("job_settings", None)
-            spider_args["job_settings"] = self.get_job_settings(job_settings_override)
-            spider_args["units"] = spider_args.get("units", self.args.units)
-            jobkey = super().schedule_spider(spider, **spider_args)
+            schedule_args = json.loads(self.args.spider_args)
+            spider_args = get_spider_args_from_params(job_args_override)
+            schedule_args.update(job_args_override)
+            schedule_args.pop("spider_args", None)
+            schedule_args.update(spider_args)
+
+            job_settings_override = schedule_args.get("job_settings", None)
+            schedule_args["job_settings"] = self.get_job_settings(job_settings_override)
+            schedule_args["units"] = schedule_args.get("units", self.args.units)
+            jobkey = super().schedule_spider(spider, **schedule_args)
             if jobkey is not None:
                 self._running_job_keys[jobkey] = spider, job_args_override
             return jobkey
