@@ -33,7 +33,7 @@ class DeliverScriptProtocol(Protocol):
 class BaseDeliverScript(BaseScript, DeliverScriptProtocol):
 
     DELIVERED_TAG = "delivered"
-    SCRAPERNAME_NARGS = "+"
+    SCRAPERNAME_NARGS: Union[str, int] = "+"
 
     # print log every given items processed
     LOG_EVERY = 1000

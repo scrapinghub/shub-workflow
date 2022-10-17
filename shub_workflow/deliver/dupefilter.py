@@ -4,7 +4,7 @@ import abc
 import tempfile
 from typing import Union
 from typing_extensions import Protocol
-from collections.abc import Container
+from typing import Container
 
 from sqlitedict import SqliteDict
 
