@@ -2,7 +2,7 @@ import abc
 import json
 import logging
 from uuid import uuid1
-from typing import Set, Generator, List, Tuple, Optional, Protocol
+from typing import Set, Generator, List, Tuple, Optional, Protocol, Union, Type
 
 from collection_scanner import CollectionScanner
 from scrapinghub.client.exceptions import NotFound
@@ -10,7 +10,7 @@ from scrapinghub.client.jobs import Job
 from scrapy import Item
 
 from shub_workflow.script import BaseScript, JobKey
-from shub_workflow.deliver.dupefilter import SqliteDictDupesFilter
+from shub_workflow.deliver.dupefilter import SqliteDictDupesFilter, DupesFilterProtocol
 
 _LOG = logging.getLogger(__name__)
 _LOG.setLevel(logging.INFO)
@@ -19,13 +19,14 @@ _LOG.setLevel(logging.INFO)
 class DeliverScriptProtocol(Protocol):
 
     DELIVERED_TAG: str
-
-    @abc.abstractmethod
-    def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
-        ...
+    SCRAPERNAME_NARGS: Union[str, int]
 
     @abc.abstractmethod
     def get_delivery_spider_jobs(self, scrapername: str, target_tags: List[str]) -> Generator[Job, None, None]:
+        ...
+
+    @abc.abstractmethod
+    def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
         ...
 
 
@@ -44,14 +45,14 @@ class BaseDeliverScript(BaseScript, DeliverScriptProtocol):
 
     MAX_PROCESSED_ITEMS = float("inf")
 
-    SEEN_ITEMS_CLASS = SqliteDictDupesFilter
+    SEEN_ITEMS_CLASS: Type[DupesFilterProtocol] = SqliteDictDupesFilter
 
     def __init__(self):
         super().__init__()
         self._all_jobs_to_tag = []
         self.total_items_count = 0
         self.total_dupe_filtered_items_count = 0
-        self.seen_items = self.SEEN_ITEMS_CLASS()
+        self.seen_items: DupesFilterProtocol = self.SEEN_ITEMS_CLASS()
 
     def add_argparser_options(self):
         super().add_argparser_options()

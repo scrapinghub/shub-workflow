@@ -66,7 +66,72 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
         return args
 
 
-class BaseScript(ArgumentParserScript):
+class BaseScriptProtocol(Protocol):
+    @abc.abstractmethod
+    def append_flow_tag(self, tag: str):
+        ...
+
+    @abc.abstractmethod
+    def get_project(self, project_id: Optional[Union[int, str]] = None) -> Project:
+        ...
+
+    @abc.abstractmethod
+    def get_job_metadata(self, jobkey: Optional[JobKey] = None) -> JobMeta:
+        ...
+
+    @abc.abstractmethod
+    def get_job(self, jobkey: Optional[JobKey] = None) -> Job:
+        ...
+
+    @abc.abstractmethod
+    def get_job_tags(self, jobkey=None) -> List[str]:
+        ...
+
+    @abc.abstractmethod
+    def get_keyvalue_job_tag(self, key: str, tags: List[str]) -> Optional[str]:
+        ...
+
+    @abc.abstractmethod
+    def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
+        ...
+
+    @abc.abstractmethod
+    def schedule_script(self, cmd: List[str], tags=None, project_id=None, units=None, meta=None) -> Optional[JobKey]:
+        ...
+
+    @abc.abstractmethod
+    def schedule_spider(
+        self,
+        spider: str,
+        tags: Optional[List[str]] = None,
+        units: Optional[int] = None,
+        project_id: Optional[int] = None,
+        **kwargs,
+    ) -> Optional[JobKey]:
+        ...
+
+    @abc.abstractmethod
+    def get_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
+        ...
+
+    @abc.abstractmethod
+    def get_jobs_with_tags(self, spider, tags, project_id=None, **kwargs) -> Generator[Job, None, None]:
+        ...
+
+    @abc.abstractmethod
+    def is_running(self, jobkey: JobKey) -> bool:
+        ...
+
+    @abc.abstractmethod
+    def is_finished(self, jobkey: JobKey) -> Optional[str]:
+        ...
+
+    @abc.abstractmethod
+    def finish(self, jobkey: Optional[JobKey] = None, close_reason: Optional[str] = None):
+        ...
+
+
+class BaseScript(ArgumentParserScript, BaseScriptProtocol):
 
     name = ""  # optional, may be needed for some applications
     flow_id_required = False  # if True, script can only run in the context of a flow_id
