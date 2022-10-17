@@ -91,7 +91,7 @@ class GraphManager(WorkFlowManager):
     def get_task(self, task_id: TaskId) -> BaseTask:
         return self.__tasks[task_id]
 
-    def configure_workflow(self) -> Tuple[BaseTask]:
+    def configure_workflow(self) -> Tuple[BaseTask, ...]:
         raise NotImplementedError("configure_workflow() method need to be implemented.")
 
     def on_start(self):
