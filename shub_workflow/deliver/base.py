@@ -16,7 +16,20 @@ _LOG = logging.getLogger(__name__)
 _LOG.setLevel(logging.INFO)
 
 
-class BaseDeliverScript(BaseScript):
+class DeliverScriptProtocol(Protocol):
+
+    DELIVERED_TAG: str
+
+    @abc.abstractmethod
+    def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
+        ...
+
+    @abc.abstractmethod
+    def get_delivery_spider_jobs(self, scrapername: str, target_tags: List[str]) -> Generator[Job, None, None]:
+        ...
+
+
+class BaseDeliverScript(BaseScript, DeliverScriptProtocol):
 
     DELIVERED_TAG = "delivered"
     SCRAPERNAME_NARGS = "+"
@@ -116,19 +129,6 @@ class BaseDeliverScript(BaseScript):
                 _LOG.info("Marked %d jobs as delivered", jcount)
         if hasattr(self.seen_items, "close"):
             self.seen_items.close()
-
-
-class DeliverScriptProtocol(Protocol):
-
-    DELIVERED_TAG: str
-
-    @abc.abstractmethod
-    def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
-        ...
-
-    @abc.abstractmethod
-    def get_delivery_spider_jobs(self, scrapername: str, target_tags: List[str]) -> Generator[Job, None, None]:
-        ...
 
 
 class CachedDeliveredTagsMixin(DeliverScriptProtocol):

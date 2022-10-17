@@ -17,13 +17,20 @@ logger.setLevel(logging.INFO)
 
 
 class WorkFlowManagerProtocol(Protocol):
-
     @abc.abstractmethod
     def get_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         ...
 
     @abc.abstractmethod
     def get_finished_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
+        ...
+
+    @abc.abstractmethod
+    def workflow_loop(self) -> bool:
+        """Implement here your loop code. Return True if want to continue looping,
+        False for immediate stop of the job. For continuous looping you also need
+        to set `loop_mode`
+        """
         ...
 
 
@@ -68,7 +75,7 @@ class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
             self.__update_finished_cache_called[project_id] = False
 
 
-class WorkFlowManager(BaseScript, abc.ABC):
+class WorkFlowManager(BaseScript, WorkFlowManagerProtocol):
 
     # --max-running-job command line option overrides it
     default_max_jobs = float("inf")
@@ -229,14 +236,6 @@ class WorkFlowManager(BaseScript, abc.ABC):
             self.resume_workflow()
         self.on_start()
         self.workflow_loop_enabled = True
-
-    @abc.abstractmethod
-    def workflow_loop(self) -> bool:
-        """Implement here your loop code. Return True if want to continue looping,
-        False for immediate stop of the job. For continuous looping you also need
-        to set `loop_mode`
-        """
-        ...
 
     def on_close(self):
         pass

@@ -26,6 +26,7 @@ class JobParams(TypedDict):
     units: NotRequired[int]
     tags: NotRequired[List[str]]
     job_settings: NotRequired[Dict[str, str]]
+    spider_args: Optional[Dict[str, str]]
     project_id: Optional[int]
 
 
@@ -217,8 +218,8 @@ class GeneratorCrawlManager(CrawlManager):
         self.__additional_jobs.append(params)
 
     @abc.abstractmethod
-    def set_parameters_gen(self) -> Generator[JobParams, None, None]:
-        yield from ()
+    def set_parameters_gen(self) -> Generator[FullJobParams, None, None]:
+        ...
 
     def __add_jobseq_tag(self, params: FullJobParams):
         tags = params.setdefault("tags", [])

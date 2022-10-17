@@ -9,7 +9,7 @@ import os
 import subprocess
 from argparse import ArgumentParser, Namespace
 from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any
-from typing_extensions import TypedDict, NotRequired
+from typing_extensions import TypedDict, NotRequired, Protocol
 
 from scrapinghub import ScrapinghubClient, DuplicateJobError
 from scrapinghub.client.jobs import Job, JobMeta
@@ -37,7 +37,21 @@ class JobDict(TypedDict):
     spider_args: NotRequired[Dict[str, str]]
 
 
-class ArgumentParserScript(abc.ABC):
+class ArgumentParserScriptProtocol(Protocol):
+    @abc.abstractmethod
+    def add_argparser_options(self):
+        ...
+
+    @abc.abstractmethod
+    def parse_args(self) -> Namespace:
+        ...
+
+    @abc.abstractmethod
+    def run(self):
+        ...
+
+
+class ArgumentParserScript(ArgumentParserScriptProtocol):
     def __init__(self):
         self.args: Namespace = self.parse_args()
 
@@ -45,19 +59,11 @@ class ArgumentParserScript(abc.ABC):
     def description(self) -> str:
         return "You didn't set description for this script. Please set description property accordingly."
 
-    @abc.abstractmethod
-    def add_argparser_options(self):
-        ...
-
     def parse_args(self) -> Namespace:
         self.argparser = ArgumentParser(self.description)
         self.add_argparser_options()
         args = self.argparser.parse_args()
         return args
-
-    @abc.abstractmethod
-    def run(self):
-        ...
 
 
 class BaseScript(ArgumentParserScript):

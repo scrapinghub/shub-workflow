@@ -150,14 +150,14 @@ class BaseTask(abc.ABC):
 
     @abc.abstractmethod
     def run(self, manager: WorkFlowManager, is_retry=False, index: Optional[int] = None) -> Optional[JobKey]:
-        raise NotImplementedError()
+        ...
 
     @abc.abstractmethod
     def get_parallel_jobs(self):
         """
         Returns total number of parallel jobs that this task will consist on.
         """
-        pass
+        ...
 
 
 class Task(BaseTask):
