@@ -1,3 +1,4 @@
+import abc
 import json
 import logging
 from uuid import uuid1
@@ -121,9 +122,11 @@ class DeliverScriptProtocol(Protocol):
 
     DELIVERED_TAG: str
 
+    @abc.abstractmethod
     def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
         ...
 
+    @abc.abstractmethod
     def get_delivery_spider_jobs(self, scrapername: str, target_tags: List[str]) -> Generator[Job, None, None]:
         ...
 

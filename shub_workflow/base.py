@@ -17,9 +17,12 @@ logger.setLevel(logging.INFO)
 
 
 class WorkFlowManagerProtocol(Protocol):
+
+    @abc.abstractmethod
     def get_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         ...
 
+    @abc.abstractmethod
     def get_finished_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         ...
 
