@@ -24,6 +24,7 @@ setup(
         "collection-scanner",
         "tenacity",
         "typing-extensions",
+        "scrapy",
     ),
     scripts=[],
     classifiers=[
