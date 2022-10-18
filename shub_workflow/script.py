@@ -42,6 +42,7 @@ class JobDict(TypedDict):
 
 
 class ArgumentParserScriptProtocol(Protocol):
+
     @abc.abstractmethod
     def add_argparser_options(self):
         ...
@@ -138,7 +139,7 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, Protocol):
         ...
 
 
-class BaseScript(ArgumentParserScript):
+class BaseScript(ArgumentParserScript, BaseScriptProtocol):
 
     name = ""  # optional, may be needed for some applications
     flow_id_required = False  # if True, script can only run in the context of a flow_id
