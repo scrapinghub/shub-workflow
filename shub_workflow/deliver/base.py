@@ -86,6 +86,7 @@ class BaseDeliverScript(BaseScript, DeliverScriptProtocol):
                 break
 
     def get_item_unique_key(self, item: Item) -> str:
+        assert all(isinstance(item[f], str) for f in self.DEDUPE_KEY_BY_FIELDS)
         key = tuple(item[f] for f in self.DEDUPE_KEY_BY_FIELDS)
         return ",".join(key)
 
