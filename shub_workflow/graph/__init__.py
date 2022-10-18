@@ -154,7 +154,7 @@ class GraphManager(WorkFlowManager):
         self._add_pending_job(job, wait_for=tuple(wait_for))
 
     def _add_pending_job(self, job: TaskId, wait_for=(), is_retry=False):
-        self._maybe_add_on_finish_default(job)
+        self._maybe_add_on_finish_default(job, is_retry)
         if job in self.args.skip_job:
             return
         if job in self.__tasks:
@@ -422,10 +422,11 @@ class GraphManager(WorkFlowManager):
                     self._available_resources[res] += res_amount
                     self._acquired_resources[res].remove((rjob, res_amount))
 
-    def _maybe_add_on_finish_default(self, job) -> Dict[OnFinishKey, OnFinishTarget]:
+    def _maybe_add_on_finish_default(self, job: TaskId, is_retry: bool) -> Dict[OnFinishKey, OnFinishTarget]:
         on_finish = self.get_jobdict(job)["on_finish"]
         task = self.__tasks.get(job)
         if task is not None and not task.is_locked:
+            task.start_callback(self, is_retry)
             task.set_is_locked()
             for t in task.get_next_tasks():
                 on_finish["default"].append(t.task_id)

@@ -2,13 +2,13 @@ import logging
 import shlex
 import abc
 from fractions import Fraction
-from typing import NewType, List, Dict, Optional, Union, Literal
+from typing import NewType, List, Dict, Optional, Union, Literal, Callable, Protocol
 from typing_extensions import TypedDict, NotRequired
 
 from jinja2 import Template
 
 from shub_workflow.script import JobKey
-from shub_workflow.base import WorkFlowManager
+from shub_workflow.base import WorkFlowManagerProtocol
 
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,12 @@ ResourcesDict = NewType("ResourcesDict", Dict[Resource, ResourceAmmount])
 TaskId = NewType("TaskId", str)
 OnFinishKey = Literal["default", "failed"]
 OnFinishTarget = List[Union[Literal["retry"], TaskId]]
+
+
+class GraphManagerProtocol(WorkFlowManagerProtocol, Protocol):
+    @abc.abstractmethod
+    def get_task(self, task_id: TaskId) -> "BaseTask":
+        ...
 
 
 class JobGraphDict(TypedDict):
@@ -58,6 +64,7 @@ class BaseTask(abc.ABC):
         self.project_id = project_id
         self.wait_time = wait_time
         self.on_finish: Dict[OnFinishKey, OnFinishTarget] = on_finish or {}
+        self.start_callback: Callable[[GraphManagerProtocol, bool], None]
 
         self.__is_locked: bool = False
         self.__next_tasks: List[BaseTask] = []
@@ -65,6 +72,8 @@ class BaseTask(abc.ABC):
         self.__required_resources: List[ResourcesDict] = []
 
         self.__job_ids: List[JobKey] = []
+
+        self.set_start_callback(self._default_start_callback)
 
     def set_is_locked(self):
         self.__is_locked = True
@@ -145,11 +154,14 @@ class BaseTask(abc.ABC):
 
         return jdict
 
-    def start_callback(self, manager: WorkFlowManager, is_retry: bool):
+    def set_start_callback(self, func: Callable[[GraphManagerProtocol, bool], None]):
+        self.start_callback = func
+
+    def _default_start_callback(self, manager: GraphManagerProtocol, is_retry: bool):
         pass
 
     @abc.abstractmethod
-    def run(self, manager: WorkFlowManager, is_retry=False, index: Optional[int] = None) -> Optional[JobKey]:
+    def run(self, manager: GraphManagerProtocol, is_retry=False, index: Optional[int] = None) -> Optional[JobKey]:
         ...
 
     @abc.abstractmethod
@@ -209,9 +221,10 @@ class Task(BaseTask):
         """
         return len(self.get_commands())
 
-    def run(self, manager: WorkFlowManager, is_retry: bool = False, index: Optional[int] = None) -> Optional[JobKey]:
+    def run(
+        self, manager: GraphManagerProtocol, is_retry: bool = False, index: Optional[int] = None
+    ) -> Optional[JobKey]:
         command = self.get_command(index or 0)
-        self.start_callback(manager, is_retry)
         if index is None:
             jobname = f"{manager.name}/{self.task_id}"
         else:
@@ -269,7 +282,7 @@ class SpiderTask(BaseTask):
     def get_parallel_jobs(self):
         return 1
 
-    def run(self, manager: WorkFlowManager, is_retry=False, index: Optional[int] = None) -> Optional[JobKey]:
+    def run(self, manager: GraphManagerProtocol, is_retry=False, index: Optional[int] = None) -> Optional[JobKey]:
         assert index is None, "Spider Task don't support parallelization."
         self.start_callback(manager, is_retry)
         jobname = "{}/{}".format(manager.name, self.task_id)

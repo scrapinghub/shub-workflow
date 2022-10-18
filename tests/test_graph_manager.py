@@ -2,12 +2,13 @@ import os
 import re
 from io import StringIO
 from collections import namedtuple
+from typing import Tuple
 
 from unittest import TestCase
 from unittest.mock import patch, Mock, call
 
 from shub_workflow.graph import GraphManager
-from shub_workflow.graph.task import Task, SpiderTask, Resource
+from shub_workflow.graph.task import Task, BaseTask, SpiderTask, Resource, ResourcesDict, TaskId, GraphManagerProtocol
 
 from .utils.contexts import script_args
 
@@ -18,7 +19,7 @@ class TestManager(GraphManager):
 
     name = "test"
 
-    def configure_workflow(self):
+    def configure_workflow(self) -> Tuple[Task, ...]:
         # define jobs
         jobA = Task(
             task_id="jobA",
@@ -45,7 +46,7 @@ class TestManager2(GraphManager):
 
     name = "test"
 
-    def configure_workflow(self):
+    def configure_workflow(self) -> Tuple[Task, ...]:
         # define jobs
         jobA = Task(
             task_id="jobA",
@@ -77,7 +78,7 @@ class TestManager3(GraphManager):
 
     name = "test"
 
-    def configure_workflow(self):
+    def configure_workflow(self) -> Tuple[Task, ...]:
         # define jobs
         jobA = Task(
             task_id="jobA",
@@ -868,7 +869,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define jobs
                 jobA = Task(
                     task_id="jobA",
@@ -932,7 +933,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define jobs
                 jobA = Task(
                     task_id="jobA",
@@ -1010,7 +1011,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define jobs
                 jobA = Task(
                     task_id="jobA",
@@ -1090,7 +1091,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define jobs
                 jobA = Task(
                     task_id="jobA",
@@ -1172,7 +1173,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define jobs
                 jobA = Task(
                     task_id="jobA",
@@ -1241,7 +1242,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define jobs
                 jobA = Task(task_id="jobA", command="commandA")
                 jobB = Task(
@@ -1298,14 +1299,15 @@ class ManagerTest(BaseTestCase):
 
             fooR = Resource("foo")
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
                 jobA = Task("jobA", command="commandA")
                 jobB = Task("jobB", command="commandB")
 
                 # set required resources
-                jobA.add_required_resources({self.fooR: 1})
-                jobB.add_required_resources({self.fooR: 1})
+                required = ResourcesDict({self.fooR: 1})
+                jobA.add_required_resources(required)
+                jobB.add_required_resources(required)
 
                 return jobA, jobB
 
@@ -1349,7 +1351,7 @@ class ManagerTest(BaseTestCase):
             fooR = Resource("foo")
             barR = Resource("bar")
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
                 jobA = Task("jobA", command="commandA")
                 jobB = Task("jobB", command="commandB")
@@ -1357,11 +1359,11 @@ class ManagerTest(BaseTestCase):
                 jobD = Task("jobD", command="commandD")
 
                 # set required resources
-                jobA.add_required_resources({self.fooR: 1})
-                jobB.add_required_resources({self.fooR: 1})
-                jobC.add_required_resources({self.fooR: 1})
-                jobC.add_required_resources({self.barR: 1})
-                jobD.add_required_resources({self.barR: 1})
+                jobA.add_required_resources(ResourcesDict({self.fooR: 1}))
+                jobB.add_required_resources(ResourcesDict({self.fooR: 1}))
+                jobC.add_required_resources(ResourcesDict({self.fooR: 1}))
+                jobC.add_required_resources(ResourcesDict({self.barR: 1}))
+                jobD.add_required_resources(ResourcesDict({self.barR: 1}))
 
                 return jobA, jobB, jobC, jobD
 
@@ -1420,14 +1422,14 @@ class ManagerTest(BaseTestCase):
 
             fooR = Resource("foo")
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
                 jobA = Task("jobA", command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",)
                 jobB = Task("jobB", command="commandB")
 
                 # set required resources
-                jobA.add_required_resources({self.fooR: 1})
-                jobB.add_required_resources({self.fooR: 1})
+                jobA.add_required_resources(ResourcesDict({self.fooR: 1}))
+                jobB.add_required_resources(ResourcesDict({self.fooR: 1}))
 
                 return jobA, jobB
 
@@ -1476,17 +1478,17 @@ class ManagerTest(BaseTestCase):
             fooR = Resource("foo")
             barR = Resource("bar")
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
                 jobA = Task("jobA", command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",)
                 jobB = Task("jobB", command="commandB")
                 jobC = Task("jobC", command="{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}",)
 
                 # set required resources
-                jobA.add_required_resources({self.fooR: 1})
-                jobB.add_required_resources({self.fooR: 1})
-                jobB.add_required_resources({self.barR: 1})
-                jobC.add_required_resources({self.fooR: 1, self.barR: 1})
+                jobA.add_required_resources(ResourcesDict({self.fooR: 1}))
+                jobB.add_required_resources(ResourcesDict({self.fooR: 1}))
+                jobB.add_required_resources(ResourcesDict({self.barR: 1}))
+                jobC.add_required_resources(ResourcesDict({self.fooR: 1, self.barR: 1}))
 
                 return jobA, jobB, jobC
 
@@ -1536,18 +1538,18 @@ class ManagerTest(BaseTestCase):
             fooR = Resource("foo")
             barR = Resource("bar")
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
                 jobA = Task("jobA", command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",)
                 jobB = Task("jobB", command="commandB")
                 jobC = Task("jobC", command="{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}",)
 
                 # set required resources
-                jobA.add_required_resources({self.fooR: 1})
-                jobB.add_required_resources({self.fooR: 1})
-                jobB.add_required_resources({self.barR: 1})
-                jobC.add_required_resources({self.fooR: 1})
-                jobC.add_required_resources({self.barR: 1})
+                jobA.add_required_resources(ResourcesDict({self.fooR: 1}))
+                jobB.add_required_resources(ResourcesDict({self.fooR: 1}))
+                jobB.add_required_resources(ResourcesDict({self.barR: 1}))
+                jobC.add_required_resources(ResourcesDict({self.fooR: 1}))
+                jobC.add_required_resources(ResourcesDict({self.barR: 1}))
 
                 return jobA, jobB, jobC
 
@@ -1591,14 +1593,14 @@ class ManagerTest(BaseTestCase):
 
             fooR = Resource("foo")
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
                 jobA = Task("jobA", command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",)
                 jobC = Task("jobC", command="{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}",)
 
                 # set required resources
-                jobA.add_required_resources({self.fooR: 1})
-                jobC.add_required_resources({self.fooR: 1})
+                jobA.add_required_resources(ResourcesDict({self.fooR: 1}))
+                jobC.add_required_resources(ResourcesDict({self.fooR: 1}))
 
                 return jobA, jobC
 
@@ -1646,7 +1648,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
                 jobA = Task("jobA", command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",)
                 jobB = Task("jobB", command="commandB")
@@ -1699,7 +1701,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 command = (
                     """{% for i in range(4) %}commandB --config='{"topic": {{ i }},"""
                     """ "file": "ds_dump_{{ i }}"}'\n{% endfor %}"""
@@ -1736,7 +1738,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 jobB = Task(
                     "jobB",
                     command=(
@@ -1778,7 +1780,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 jobA = Task("jobA", "{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}", wait_time=3600,)
                 jobB = Task("jobB", "commandB")
                 jobB.add_wait_for(jobA)
@@ -1823,7 +1825,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[BaseTask, ...]:
                 # define jobs
                 jobS = SpiderTask(task_id="jobS", spider="myspiderS", tags=["tag1"], units=1, argA="valA", argB="valB",)
                 jobA = Task(task_id="jobA", command="commandA --optionA=A")
@@ -1855,7 +1857,7 @@ class ManagerTest(BaseTestCase):
             project_id = 999
             name = "test"
 
-            def configure_workflow(self):
+            def configure_workflow(self) -> Tuple[Task, ...]:
                 jobA = Task(task_id="jobA", command="commandA --optionA=A")
                 return (jobA,)
 
@@ -1871,6 +1873,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/1/1"]
         manager._WorkFlowManager__on_start()
+        self.assertEqual(manager.jobs_graph["jobA"]["on_finish"]["default"], ["jobB"])
 
         # first loop
         self.assertTrue(manager.workflow_loop())
@@ -1885,4 +1888,94 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(manager.workflow_loop())
         self.assertEqual(manager.schedule_script.call_count, 2)
 
+        manager.schedule_script.assert_any_call(["commandB", "--optionB=B"], tags=None, units=None, project_id=None)
+
+    def test_start_callback(self, mocked_get_jobs):
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = "test"
+
+            def configure_workflow(self) -> Tuple[Task, ...]:
+                jobA = Task(task_id="jobA", command="commandA --optionA=A")
+                jobB = Task(task_id="jobB", command="commandB --optionB=B")
+                jobA.add_next_task(jobB)
+
+                def _start_callback(manager: GraphManagerProtocol, is_retry: bool):
+                    jobC = Task(task_id="jobC", command="commandC --optionC=C")
+                    manager.get_task(TaskId("jobB")).add_next_task(jobC)
+
+                jobB.set_start_callback(_start_callback)
+
+                return (jobA,)
+
+        mocked_get_jobs.side_effect = [[]]
+
+        with script_args(["--root-jobs"]):
+            manager = _TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ["999/1/1"]
+        manager._WorkFlowManager__on_start()
+        self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], [])
+
+        # first loop
+        self.assertTrue(manager.workflow_loop())
+        self.assertEqual(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_any_call(
+            ["commandA", "--optionA=A"], tags=None, units=None, project_id=None,
+        )
+        self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], [])
+
+        # second loop, jobB is started, so start callback is called
+        manager.schedule_script.side_effect = ["999/2/1"]
+        manager.is_finished = lambda x: "finished"
+        self.assertTrue(manager.workflow_loop())
+        self.assertEqual(manager.schedule_script.call_count, 2)
+        manager.schedule_script.assert_any_call(["commandB", "--optionB=B"], tags=None, units=None, project_id=None)
+        self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], ["jobC"])
+
+        # second loop, jobB is started, so start callback is called
+        manager.schedule_script.side_effect = ["999/3/1"]
+        manager.is_finished = lambda x: "finished"
+        self.assertTrue(manager.workflow_loop())
+        self.assertEqual(manager.schedule_script.call_count, 3)
+        manager.schedule_script.assert_any_call(["commandC", "--optionC=C"], tags=None, units=None, project_id=None)
+
+    def test_root_job_start_callback(self, mocked_get_jobs):
+        class _TestManager(GraphManager):
+            project_id = 999
+            name = "test"
+
+            def configure_workflow(self) -> Tuple[Task, ...]:
+                jobA = Task(task_id="jobA", command="commandA --optionA=A")
+
+                def _start_callback(manager: GraphManagerProtocol, is_retry: bool):
+                    jobB = Task(task_id="jobB", command="commandB --optionB=B")
+                    manager.get_task(TaskId("jobA")).add_next_task(jobB)
+
+                jobA.set_start_callback(_start_callback)
+
+                return (jobA,)
+
+        mocked_get_jobs.side_effect = [[]]
+
+        with script_args(["--root-jobs"]):
+            manager = _TestManager()
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = ["999/1/1"]
+        manager._WorkFlowManager__on_start()
+        self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], [])
+
+        # first loop
+        self.assertTrue(manager.workflow_loop())
+        self.assertEqual(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_any_call(
+            ["commandA", "--optionA=A"], tags=None, units=None, project_id=None,
+        )
+        self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], [])
+
+        # second loop, jobB is started, so start callback is called
+        manager.schedule_script.side_effect = ["999/2/1"]
+        manager.is_finished = lambda x: "finished"
+        self.assertTrue(manager.workflow_loop())
+        self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_any_call(["commandB", "--optionB=B"], tags=None, units=None, project_id=None)

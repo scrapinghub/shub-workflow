@@ -9,14 +9,14 @@ from argparse import Namespace
 from collections import defaultdict
 from typing import Optional, Generator, Protocol, List, Union, Dict
 
-from .script import BaseScript, JobKey, JobDict
+from .script import BaseScript, JobKey, JobDict, BaseScriptProtocol
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class WorkFlowManagerProtocol(Protocol):
+class WorkFlowManagerProtocol(BaseScriptProtocol, Protocol):
     @abc.abstractmethod
     def get_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         ...

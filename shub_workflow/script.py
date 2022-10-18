@@ -70,7 +70,10 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
         return args
 
 
-class BaseScriptProtocol(Protocol):
+class BaseScriptProtocol(ArgumentParserScriptProtocol, Protocol):
+
+    name: str
+
     @abc.abstractmethod
     def append_flow_tag(self, tag: str):
         ...
@@ -135,7 +138,7 @@ class BaseScriptProtocol(Protocol):
         ...
 
 
-class BaseScript(ArgumentParserScript, BaseScriptProtocol):
+class BaseScript(ArgumentParserScript):
 
     name = ""  # optional, may be needed for some applications
     flow_id_required = False  # if True, script can only run in the context of a flow_id
