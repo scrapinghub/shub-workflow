@@ -6,7 +6,7 @@ import json
 import logging
 from copy import deepcopy
 from argparse import Namespace
-from typing import Optional, List, Tuple, Dict, NewType, cast, Generator
+from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any
 
 from bloom_filter import BloomFilter
 from typing_extensions import TypedDict, NotRequired
@@ -101,7 +101,7 @@ class CrawlManager(WorkFlowManager):
     ) -> Optional[JobKey]:
         spider = spider or self.spider
         if spider is not None:
-            schedule_args = json.loads(self.args.spider_args)
+            schedule_args: Dict[str, Any] = json.loads(self.args.spider_args)
             spider_args = get_spider_args_from_params(job_args_override)
             schedule_args.update(job_args_override)
             schedule_args.pop("spider_args", None)
@@ -221,7 +221,7 @@ class GeneratorCrawlManager(CrawlManager):
         self.__additional_jobs.append(params)
 
     @abc.abstractmethod
-    def set_parameters_gen(self) -> Generator[FullJobParams, None, None]:
+    def set_parameters_gen(self) -> Generator[Dict[str, Any], None, None]:
         ...
 
     def __add_jobseq_tag(self, params: FullJobParams):

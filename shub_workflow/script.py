@@ -35,6 +35,10 @@ class JobDict(TypedDict):
     tags: NotRequired[List[str]]
     close_reason: NotRequired[str]
     spider_args: NotRequired[Dict[str, str]]
+    job_cmd: NotRequired[List[str]]
+    pending_time: NotRequired[int]
+    running_time: NotRequired[int]
+    finished_time: NotRequired[int]
 
 
 class ArgumentParserScriptProtocol(Protocol):
