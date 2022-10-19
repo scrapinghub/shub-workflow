@@ -64,12 +64,12 @@ class BaseTask(abc.ABC):
         self.project_id = project_id
         self.wait_time = wait_time
         self.on_finish: Dict[OnFinishKey, OnFinishTarget] = on_finish or {}
-        self.start_callback: Callable[[GraphManagerProtocol, bool], None]
 
         self.__is_locked: bool = False
         self.__next_tasks: List[BaseTask] = []
         self.__wait_for: List[BaseTask] = []
         self.__required_resources: List[ResourcesDict] = []
+        self.__start_callback: Callable[[GraphManagerProtocol, bool], None]
 
         self.__job_ids: List[JobKey] = []
 
@@ -155,7 +155,11 @@ class BaseTask(abc.ABC):
         return jdict
 
     def set_start_callback(self, func: Callable[[GraphManagerProtocol, bool], None]):
-        self.start_callback = func
+        self.__start_callback = func
+
+    def get_start_callback(self) -> Callable[[GraphManagerProtocol, bool], None]:
+        assert self.__start_callback is not None, "Start callback not initialized."
+        return self.__start_callback
 
     def _default_start_callback(self, manager: GraphManagerProtocol, is_retry: bool):
         pass
@@ -284,7 +288,6 @@ class SpiderTask(BaseTask):
 
     def run(self, manager: GraphManagerProtocol, is_retry=False, index: Optional[int] = None) -> Optional[JobKey]:
         assert index is None, "Spider Task don't support parallelization."
-        self.start_callback(manager, is_retry)
         jobname = "{}/{}".format(manager.name, self.task_id)
         if is_retry:
             logger.info('Will retry spider "%s"', jobname)

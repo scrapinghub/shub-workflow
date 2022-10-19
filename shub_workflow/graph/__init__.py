@@ -426,7 +426,7 @@ class GraphManager(WorkFlowManager):
         on_finish = self.get_jobdict(job)["on_finish"]
         task = self.__tasks.get(job)
         if task is not None and not task.is_locked:
-            task.start_callback(self, is_retry)
+            task.get_start_callback()(self, is_retry)
             task.set_is_locked()
             for t in task.get_next_tasks():
                 on_finish["default"].append(t.task_id)

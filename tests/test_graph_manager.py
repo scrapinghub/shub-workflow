@@ -1896,6 +1896,7 @@ class ManagerTest(BaseTestCase):
             name = "test"
 
             def configure_workflow(self) -> Tuple[Task, ...]:
+                self.start_callback_count = 0
                 jobA = Task(task_id="jobA", command="commandA --optionA=A")
                 jobB = Task(task_id="jobB", command="commandB --optionB=B")
                 jobA.add_next_task(jobB)
@@ -1903,6 +1904,7 @@ class ManagerTest(BaseTestCase):
                 def _start_callback(manager: GraphManagerProtocol, is_retry: bool):
                     jobC = Task(task_id="jobC", command="commandC --optionC=C")
                     manager.get_task(TaskId("jobB")).add_next_task(jobC)
+                    self.start_callback_count += 1
 
                 jobB.set_start_callback(_start_callback)
 
@@ -1916,6 +1918,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/1/1"]
         manager._WorkFlowManager__on_start()
         self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], [])
+        self.assertEqual(manager.start_callback_count, 0)
 
         # first loop
         self.assertTrue(manager.workflow_loop())
@@ -1924,6 +1927,7 @@ class ManagerTest(BaseTestCase):
             ["commandA", "--optionA=A"], tags=None, units=None, project_id=None,
         )
         self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], [])
+        self.assertEqual(manager.start_callback_count, 0)
 
         # second loop, jobB is started, so start callback is called
         manager.schedule_script.side_effect = ["999/2/1"]
@@ -1932,6 +1936,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_any_call(["commandB", "--optionB=B"], tags=None, units=None, project_id=None)
         self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], ["jobC"])
+        self.assertEqual(manager.start_callback_count, 1)
 
         # second loop, jobB is started, so start callback is called
         manager.schedule_script.side_effect = ["999/3/1"]
@@ -1939,6 +1944,7 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(manager.workflow_loop())
         self.assertEqual(manager.schedule_script.call_count, 3)
         manager.schedule_script.assert_any_call(["commandC", "--optionC=C"], tags=None, units=None, project_id=None)
+        self.assertEqual(manager.start_callback_count, 1)
 
     def test_root_job_start_callback(self, mocked_get_jobs):
         class _TestManager(GraphManager):
