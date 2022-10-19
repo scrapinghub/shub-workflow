@@ -189,18 +189,15 @@ class WorkFlowManager(BaseScript, WorkFlowManagerProtocol):
         pass
 
     def __check_resume_workflow(self):
-        resumed_job = None
         for job in self.get_jobs(state=["finished"], meta=["tags"], has_tag=[f"NAME={self.name}"]):
             if self.get_keyvalue_job_tag("FLOW_ID", job["tags"]) == self.flow_id:
-                resumed_job = job
+                inherited_tags = []
+                for tag in job["tags"]:
+                    if len(tag.split("=")) == 2:
+                        inherited_tags.append(tag)
+                self.add_job_tags(tags=inherited_tags)
+                self.is_resumed = True
                 break
-        if resumed_job is not None:
-            inherited_tags = []
-            for tag in resumed_job["tags"]:
-                if tag.split("=") == 2:
-                    inherited_tags.append(tag)
-            self.add_job_tags(tags=inherited_tags)
-            self.is_resumed = True
 
     def get_finished_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         kwargs.pop("state", None)

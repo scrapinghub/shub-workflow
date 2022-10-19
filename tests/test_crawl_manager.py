@@ -57,8 +57,6 @@ class CrawlManagerTest(TestCase):
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_schedule_spider_dd(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
 
-        mocked_add_job_tags.side_effect = [[]]
-
         with script_args(["myspider"]):
             manager = TestManager()
 
@@ -88,8 +86,6 @@ class CrawlManagerTest(TestCase):
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_schedule_implicit_spider(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
 
-        mocked_add_job_tags.side_effect = [[]]
-
         with script_args([]):
             manager = TestManagerWithSpider()
 
@@ -105,8 +101,6 @@ class CrawlManagerTest(TestCase):
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_schedule_spider_bad_outcome(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
-
-        mocked_add_job_tags.side_effect = [[]]
 
         with script_args(["myspider"]):
             manager = TestManager()
@@ -141,7 +135,7 @@ class CrawlManagerTest(TestCase):
 
         mocked_get_jobs_side_effect = [
             # the resumed job
-            [{"tags": ["FLOW_ID=3a20"], "key": "999/10/1"}],
+            [{"tags": ["FLOW_ID=3a20", "NAME=test", "OTHER=other"], "key": "999/10/1"}],
             # the owned running job
             [{"spider": "myspider", "key": "999/1/1", "tags": ["FLOW_ID=3a20", "PARENT_NAME=test"]}],
             # the owned finished jobs
@@ -152,6 +146,7 @@ class CrawlManagerTest(TestCase):
         self.assertTrue(manager.is_resumed)
         self.assertEqual(len(manager._running_job_keys), 1)
         self.assertEqual(manager.get_jobs.call_count, len(mocked_get_jobs_side_effect))
+        mocked_add_job_tags.assert_any_call(tags=['FLOW_ID=3a20', 'NAME=test', 'OTHER=other'])
 
         # first loop: spider still running in workflow. Continue.
         manager.is_finished = lambda x: None
@@ -174,7 +169,7 @@ class CrawlManagerTest(TestCase):
 
         mocked_get_jobs_side_effect = [
             # the not resumed job (different flow id)
-            [{"tags": ["FLOW_ID=3344"], "key": "999/10/1"}],
+            [{"tags": ["FLOW_ID=3344", "NAME=othertest"], "key": "999/10/1"}],
         ]
         mocked_get_jobs.side_effect = mocked_get_jobs_side_effect
         manager._WorkFlowManager__on_start()
@@ -427,7 +422,7 @@ class CrawlManagerTest(TestCase):
 
         mocked_get_jobs.side_effect = [
             # the resumed job
-            [{"tags": ["FLOW_ID=3a20"], "key": "999/10/1"}],
+            [{"tags": ["FLOW_ID=3a20", "NAME=test"], "key": "999/10/1"}],
             # running spiders
             [],
             # finished spiders
