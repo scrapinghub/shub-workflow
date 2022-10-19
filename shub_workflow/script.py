@@ -1,11 +1,11 @@
 """
 Implements common methods for ScrapyCloud scripts.
 """
-
+import os
 import abc
 import json
 import logging
-import os
+import time
 import subprocess
 from argparse import ArgumentParser, Namespace
 from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any
@@ -42,7 +42,6 @@ class JobDict(TypedDict):
 
 
 class ArgumentParserScriptProtocol(Protocol):
-
     @abc.abstractmethod
     def add_argparser_options(self):
         ...
@@ -408,3 +407,63 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
             hsp.jobq.finish(hsj, close_reason=close_reason)
         else:
             logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
+
+
+class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
+    @abc.abstractmethod
+    def workflow_loop(self) -> bool:
+        """Implement here your loop code. Return True if want to continue looping,
+        False for immediate stop of the job. For continuous looping you also need
+        to set `loop_mode`
+        """
+        ...
+
+
+class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
+
+    # If 0, don't loop. If positive number, repeat loop every given number of seconds
+    # --loop-mode command line option overrides it
+    loop_mode = 0
+
+    def __init__(self):
+        self.workflow_loop_enabled = False
+        super().__init__()
+
+    def add_argparser_options(self):
+        super().add_argparser_options()
+        self.argparser.add_argument(
+            "--loop-mode",
+            help="If provided, manager will run in loop mode, with a cycle\
+                                    each given number of seconds. Default: %(default)s",
+            type=int,
+            metavar="SECONDS",
+            default=self.loop_mode,
+        )
+
+    def on_start(self):
+        pass
+
+    def run(self):
+        self._on_start()
+        self._run_loops()
+
+    def _base_loop_tasks(self):
+        pass
+
+    def _run_loops(self):
+        while self.workflow_loop_enabled:
+            self._base_loop_tasks()
+            try:
+                if self.workflow_loop() and self.args.loop_mode:
+                    time.sleep(self.args.loop_mode)
+                else:
+                    self.__close()
+                    logger.info("No more tasks")
+                    return
+            except KeyboardInterrupt:
+                logger.info("Bye")
+                return
+
+    def _on_start(self):
+        self.on_start()
+        self.workflow_loop_enabled = True

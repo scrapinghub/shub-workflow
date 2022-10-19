@@ -127,7 +127,7 @@ class ManagerTest(BaseTestCase):
             manager = TestManager()
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/1/1", "999/1/2"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -198,7 +198,7 @@ class ManagerTest(BaseTestCase):
         with script_args(["--starting-job=jobA", "--starting-job=jobN"]):
             manager = TestManager()
         with self.assertRaises(SystemExit):
-            manager._WorkFlowManager__on_start()
+            manager._on_start()
         self.assertTrue(
             "Invalid job: jobN. Available jobs: dict_keys(['jobA', 'jobC', 'jobD', 'jobB'])" in mock_stderr.getvalue()
         )
@@ -214,7 +214,7 @@ class ManagerTest(BaseTestCase):
         with script_args([]):
             manager = TestManager()
         with self.assertRaises(SystemExit):
-            manager._WorkFlowManager__on_start()
+            manager._on_start()
         self.assertTrue("You must provide either --starting-job or --root-jobs." in mock_stderr.getvalue())
 
     @patch("sys.stderr", new_callable=StringIO)
@@ -238,7 +238,7 @@ class ManagerTest(BaseTestCase):
             manager = TestManager()
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/1/1", "999/1/2"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -268,7 +268,7 @@ class ManagerTest(BaseTestCase):
             "999/1/3",
             "999/1/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -351,7 +351,7 @@ class ManagerTest(BaseTestCase):
         manager.is_finished = lambda x: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/3/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -380,7 +380,7 @@ class ManagerTest(BaseTestCase):
         manager.is_finished = lambda x: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/3/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -426,7 +426,7 @@ class ManagerTest(BaseTestCase):
             "999/1/3",
             "999/1/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -498,7 +498,7 @@ class ManagerTest(BaseTestCase):
             Job("999/1/3"),
             Job("999/1/4"),
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -529,7 +529,7 @@ class ManagerTest(BaseTestCase):
             Job("999/1/3"),
             Job("999/1/4"),
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -565,7 +565,7 @@ class ManagerTest(BaseTestCase):
             Job("999/1/3"),
             Job("999/1/4"),
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -600,7 +600,7 @@ class ManagerTest(BaseTestCase):
             Job("999/1/3"),
             Job("999/1/4"),
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -630,7 +630,7 @@ class ManagerTest(BaseTestCase):
             "999/1/3",
             "999/1/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -677,7 +677,7 @@ class ManagerTest(BaseTestCase):
             "999/1/3",
             "999/1/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -734,7 +734,7 @@ class ManagerTest(BaseTestCase):
             manager = TestManager3()
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/4/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop, jobD is scheduled
         result = manager.workflow_loop()
@@ -764,7 +764,7 @@ class ManagerTest(BaseTestCase):
             "999/1/3",
             "999/1/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop
         result = manager.workflow_loop()
@@ -809,7 +809,7 @@ class ManagerTest(BaseTestCase):
             "999/2/3",
             "999/2/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop, jobB is scheduled
         result = manager.workflow_loop()
@@ -839,7 +839,7 @@ class ManagerTest(BaseTestCase):
             "999/2/3",
             "999/2/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop, jobB is scheduled
         result = manager.workflow_loop()
@@ -899,7 +899,7 @@ class ManagerTest(BaseTestCase):
             manager = _TestManager()
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/3/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop, jobC is scheduled
         result = manager.workflow_loop()
@@ -969,7 +969,7 @@ class ManagerTest(BaseTestCase):
             "999/2/3",
             "999/2/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop, jobB is scheduled
         result = manager.workflow_loop()
@@ -1049,7 +1049,7 @@ class ManagerTest(BaseTestCase):
             "999/2/3",
             "999/2/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop, jobB is scheduled
         result = manager.workflow_loop()
@@ -1129,7 +1129,7 @@ class ManagerTest(BaseTestCase):
             "999/2/3",
             "999/2/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop, jobB is scheduled
         result = manager.workflow_loop()
@@ -1200,7 +1200,7 @@ class ManagerTest(BaseTestCase):
             "999/1/3",
             "999/1/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop, All jobs A must be scheduled
         self.assertTrue(manager.workflow_loop())
@@ -1267,7 +1267,7 @@ class ManagerTest(BaseTestCase):
 
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/2/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         result = manager.workflow_loop()
         self.assertTrue(result)
@@ -1316,7 +1316,7 @@ class ManagerTest(BaseTestCase):
 
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/2/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertEqual(manager._available_resources, {manager.fooR: 1})
 
         result = manager.workflow_loop()
@@ -1372,7 +1372,7 @@ class ManagerTest(BaseTestCase):
 
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/1/1", "999/3/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # First loop: can run jobA and jobC
         result = manager.workflow_loop()
@@ -1441,7 +1441,7 @@ class ManagerTest(BaseTestCase):
                 yield f"{proj}/{spider}/{i}"
 
         manager.schedule_script = Mock(side_effect=generate_job_keys(999, 2))
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertEqual(manager._available_resources, {manager.fooR: 1})
 
         # First loop: schedule jobA
@@ -1497,7 +1497,7 @@ class ManagerTest(BaseTestCase):
 
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [f"999/1/{i}" for i in range(1, 5)] + ["999/2/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertEqual(manager._available_resources, {manager.fooR: 1, manager.barR: 1})
 
         # first loop: run jobA and jobB
@@ -1558,7 +1558,7 @@ class ManagerTest(BaseTestCase):
 
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [f"999/1/{i}" for i in range(1, 5)] + ["999/2/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertEqual(manager._available_resources, {manager.fooR: 1, manager.barR: 1})
 
         # first loop: run commandA and command B
@@ -1609,7 +1609,7 @@ class ManagerTest(BaseTestCase):
 
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [f"999/1/{i}" for i in range(1, 5)] + [f"999/2/{i}" for i in range(1, 5)]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop: run three jobs of jobA
         result = manager.workflow_loop()
@@ -1659,7 +1659,7 @@ class ManagerTest(BaseTestCase):
             manager = _TestManager()
         manager.is_finished = lambda x: None
         manager.schedule_script = Mock()
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         # will test that all 5 jobs (4 for A and 1 for B) will run one by one
         side_effects = [f"999/1/{i+1}" for i in range(4)] + ["999/2/1"]
         for i in range(3):
@@ -1681,7 +1681,7 @@ class ManagerTest(BaseTestCase):
             manager = TestManager()
         manager.is_finished = lambda x: None
         manager.schedule_script = Mock()
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop: job A and job B are scheduled
         manager.schedule_script.side_effect = ["999/1/1", "999/2/1"]
@@ -1718,7 +1718,7 @@ class ManagerTest(BaseTestCase):
             "999/2/3",
             "999/2/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         result = manager.workflow_loop()
         self.assertTrue(result)
@@ -1759,7 +1759,7 @@ class ManagerTest(BaseTestCase):
             "1999/2/3",
             "1999/2/4",
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         result = manager.workflow_loop()
         self.assertTrue(result)
@@ -1792,7 +1792,7 @@ class ManagerTest(BaseTestCase):
             manager = _TestManager()
 
         manager.schedule_script = Mock()
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop, jobA still can't run
         self.assertTrue(manager.workflow_loop())
@@ -1842,7 +1842,7 @@ class ManagerTest(BaseTestCase):
             manager = _TestManager()
         manager.schedule_spider = Mock()
         manager.schedule_spider.side_effect = ["999/1/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop, run jobS
         result = manager.workflow_loop()
@@ -1872,7 +1872,7 @@ class ManagerTest(BaseTestCase):
             manager = _TestManager()
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/1/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertEqual(manager.jobs_graph["jobA"]["on_finish"]["default"], ["jobB"])
 
         # first loop
@@ -1916,7 +1916,7 @@ class ManagerTest(BaseTestCase):
             manager = _TestManager()
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/1/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], [])
         self.assertEqual(manager.start_callback_count, 0)
 
@@ -1968,7 +1968,7 @@ class ManagerTest(BaseTestCase):
             manager = _TestManager()
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/1/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], [])
 
         # first loop

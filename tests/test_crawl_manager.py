@@ -61,7 +61,7 @@ class CrawlManagerTest(TestCase):
             manager = TestManager()
 
         mocked_super_schedule_spider.side_effect = ["999/1/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop: schedule spider
         result = manager.workflow_loop()
@@ -90,7 +90,7 @@ class CrawlManagerTest(TestCase):
             manager = TestManagerWithSpider()
 
         mocked_super_schedule_spider.side_effect = ["999/1/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop: schedule spider
         result = manager.workflow_loop()
@@ -106,7 +106,7 @@ class CrawlManagerTest(TestCase):
             manager = TestManager()
 
         mocked_super_schedule_spider.side_effect = ["999/1/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop: schedule spider
         result = manager.workflow_loop()
@@ -142,7 +142,7 @@ class CrawlManagerTest(TestCase):
             [],
         ]
         mocked_get_jobs.side_effect = mocked_get_jobs_side_effect
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertTrue(manager.is_resumed)
         self.assertEqual(len(manager._running_job_keys), 1)
         self.assertEqual(manager.get_jobs.call_count, len(mocked_get_jobs_side_effect))
@@ -172,7 +172,7 @@ class CrawlManagerTest(TestCase):
             [{"tags": ["FLOW_ID=3344", "NAME=othertest"], "key": "999/10/1"}],
         ]
         mocked_get_jobs.side_effect = mocked_get_jobs_side_effect
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertFalse(manager.is_resumed)
         self.assertEqual(len(manager._running_job_keys), 0)
         self.assertEqual(manager.get_jobs.call_count, len(mocked_get_jobs_side_effect))
@@ -192,7 +192,7 @@ class CrawlManagerTest(TestCase):
             # owned finished jobs
             [],
         ]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertTrue(manager.is_resumed)
         self.assertEqual(len(manager._running_job_keys), 0)
 
@@ -215,7 +215,7 @@ class CrawlManagerTest(TestCase):
             manager = PeriodicTestManager()
 
         mocked_super_schedule_spider.side_effect = ["999/1/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop: schedule spider
         result = manager.workflow_loop()
@@ -255,7 +255,7 @@ class CrawlManagerTest(TestCase):
             manager = ListTestManager()
 
         mocked_super_schedule_spider.side_effect = ["999/1/1", "999/1/2", "999/1/3", "999/1/4", "999/1/5"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop: schedule spider with first set of arguments
         result = manager.workflow_loop()
@@ -342,7 +342,7 @@ class CrawlManagerTest(TestCase):
             manager = _ListTestManager()
 
         mocked_super_schedule_spider.side_effect = ["999/1/1", "999/1/2"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop: schedule spider with first set of arguments
         result = manager.workflow_loop()
@@ -383,7 +383,7 @@ class CrawlManagerTest(TestCase):
             manager = _ListTestManager()
 
         mocked_super_schedule_spider.side_effect = ["999/1/1", "999/1/2"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
 
         # first loop: schedule spider with first set of arguments
         result = manager.workflow_loop()
@@ -436,7 +436,7 @@ class CrawlManagerTest(TestCase):
             ],
         ]
         mocked_super_schedule_spider.side_effect = ["999/2/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertTrue(manager.is_resumed)
         self.assertEqual(len(manager._running_job_keys), 0)
 
@@ -492,7 +492,7 @@ class CrawlManagerTest(TestCase):
             [],
         ]
         mocked_super_schedule_spider.side_effect = ["999/2/1"]
-        manager._WorkFlowManager__on_start()
+        manager._on_start()
         self.assertTrue(manager.is_resumed)
         self.assertEqual(len(manager._running_job_keys), 1)
 

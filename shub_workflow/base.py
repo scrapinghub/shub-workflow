@@ -9,28 +9,20 @@ from argparse import Namespace
 from collections import defaultdict
 from typing import Optional, Generator, Protocol, List, Union, Dict
 
-from .script import BaseScript, JobKey, JobDict, BaseScriptProtocol
+from .script import BaseLoopScript, JobKey, JobDict, BaseLoopScriptProtocol
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class WorkFlowManagerProtocol(BaseScriptProtocol, Protocol):
+class WorkFlowManagerProtocol(BaseLoopScriptProtocol, Protocol):
     @abc.abstractmethod
     def get_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         ...
 
     @abc.abstractmethod
     def get_finished_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
-        ...
-
-    @abc.abstractmethod
-    def workflow_loop(self) -> bool:
-        """Implement here your loop code. Return True if want to continue looping,
-        False for immediate stop of the job. For continuous looping you also need
-        to set `loop_mode`
-        """
         ...
 
 
@@ -75,14 +67,10 @@ class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
             self.__update_finished_cache_called[project_id] = False
 
 
-class WorkFlowManager(BaseScript, WorkFlowManagerProtocol):
+class WorkFlowManager(BaseLoopScript, WorkFlowManagerProtocol):
 
     # --max-running-job command line option overrides it
     default_max_jobs = float("inf")
-
-    # If 0, don't loop. If positive number, repeat loop every given number of seconds
-    # --loop-mode command line option overrides it
-    loop_mode = 0
 
     flow_id_required = True
 
@@ -97,7 +85,6 @@ class WorkFlowManager(BaseScript, WorkFlowManagerProtocol):
     )
 
     def __init__(self):
-        self.workflow_loop_enabled = False
         self.failed_outcomes = list(self.base_failed_outcomes)
         self.is_resumed = False
         super().__init__()
@@ -134,14 +121,6 @@ class WorkFlowManager(BaseScript, WorkFlowManagerProtocol):
         super().add_argparser_options()
         if not self.name:
             self.argparser.add_argument("name", help="Script name.")
-        self.argparser.add_argument(
-            "--loop-mode",
-            help="If provided, manager will run in loop mode, with a cycle\
-                                    each given number of seconds. Default: %(default)s",
-            type=int,
-            metavar="SECONDS",
-            default=self.loop_mode,
-        )
         self.argparser.add_argument(
             "--max-running-jobs",
             type=int,
@@ -185,9 +164,6 @@ class WorkFlowManager(BaseScript, WorkFlowManagerProtocol):
                     break
                 still_running[key] = False
 
-    def on_start(self):
-        pass
-
     def __check_resume_workflow(self):
         for job in self.get_jobs(state=["finished"], meta=["tags"], has_tag=[f"NAME={self.name}"]):
             if self.get_keyvalue_job_tag("FLOW_ID", job["tags"]) == self.flow_id:
@@ -227,36 +203,14 @@ class WorkFlowManager(BaseScript, WorkFlowManagerProtocol):
     def resume_finished_job_hook(self, job: JobDict):
         pass
 
-    def __on_start(self):
+    def _on_start(self):
         self.__check_resume_workflow()
         if self.is_resumed:
             self.resume_workflow()
-        self.on_start()
-        self.workflow_loop_enabled = True
+        super()._on_start()
 
     def on_close(self):
         pass
 
     def __close(self):
         self.on_close()
-
-    def run(self):
-        self.__on_start()
-        self._run_loops()
-
-    def _base_loop_tasks(self):
-        pass
-
-    def _run_loops(self):
-        while self.workflow_loop_enabled:
-            self._base_loop_tasks()
-            try:
-                if self.workflow_loop() and self.args.loop_mode:
-                    time.sleep(self.args.loop_mode)
-                else:
-                    self.__close()
-                    logger.info("No more tasks")
-                    return
-            except KeyboardInterrupt:
-                logger.info("Bye")
-                return
