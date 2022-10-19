@@ -457,7 +457,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
                 if self.workflow_loop() and self.args.loop_mode:
                     time.sleep(self.args.loop_mode)
                 else:
-                    self.__close()
+                    self._close()
                     logger.info("No more tasks")
                     return
             except KeyboardInterrupt:
@@ -467,3 +467,9 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     def _on_start(self):
         self.on_start()
         self.workflow_loop_enabled = True
+
+    def on_close(self):
+        pass
+
+    def _close(self):
+        self.on_close()

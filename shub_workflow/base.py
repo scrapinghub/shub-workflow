@@ -208,9 +208,3 @@ class WorkFlowManager(BaseLoopScript, WorkFlowManagerProtocol):
         if self.is_resumed:
             self.resume_workflow()
         super()._on_start()
-
-    def on_close(self):
-        pass
-
-    def __close(self):
-        self.on_close()
