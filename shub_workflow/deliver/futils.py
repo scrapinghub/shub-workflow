@@ -18,7 +18,6 @@ S3_PATH_RE = re.compile("s3://(.+?)/(.+)")
 _S3_ATTRIBUTE = "s3://"
 _GS_ATTRIBUTE = "gs://"
 BUFFER = 1024 * 1024
-DEFAULT_REGION = "us-west-2"
 
 
 logger = logging.getLogger(__name__)
@@ -47,28 +46,26 @@ def s3_path(path, is_folder=False):
     return path[len(_S3_ATTRIBUTE):]
 
 
-def s3_credentials(key, secret, token, include_region=False):
-    if key and secret:
-        return dict(key=key, secret=secret, token=token)
-
+def s3_credentials(key, secret, token, region=None):
     creds = dict(
         key=environ.get("AWS_ACCESS_KEY_ID", key), secret=environ.get("AWS_SECRET_ACCESS_KEY", secret), token=token
     )
 
-    if not include_region:
-        return creds
-
-    return {
+    result = {
         **creds,
-        "region": environ.get("AWS_REGION", DEFAULT_REGION),
         "config_kwargs": {"retries": {"max_attempts": 20}},
     }
+    region = region or environ.get("AWS_REGION")
+    if region is not None:
+        result.update({"client_kwargs": {"region_name": region}})
+    return result
 
 
 def get_file(path, *args, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     op_kwargs = kwargs.pop("op_kwargs", {})
+    region = kwargs.pop("region", None)
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token), **kwargs)
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         if "ACL" in op_kwargs:
             op_kwargs["acl"] = op_kwargs.pop("ACL")
         fp = fs.open(s3_path(path), *args, **op_kwargs)
@@ -122,8 +119,9 @@ def upload_file(path, dest, aws_key=None, aws_secret=None, aws_token=None, **kwa
 
 
 def get_glob(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
+    region = kwargs.pop("region", None)
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token), **kwargs)
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         fp = [_S3_ATTRIBUTE + p for p in fs.glob(s3_path(path))]
     else:
         fp = iglob(path)
@@ -132,9 +130,10 @@ def get_glob(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
 
 
 def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
+    region = kwargs.pop("region", None)
     if src_path.startswith(_S3_ATTRIBUTE):
         op_kwargs = kwargs.pop("op_kwargs", {})
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token), **kwargs)
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         fs.copy(s3_path(src_path), s3_path(dest_path), **op_kwargs)
     else:
         copyfile(src_path, dest_path)
@@ -162,9 +161,10 @@ def mv_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, 
 
 
 def rm_file(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
+    region = kwargs.pop("region", None)
     if path.startswith(_S3_ATTRIBUTE):
         op_kwargs = kwargs.pop("op_kwargs", {})
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token), **kwargs)
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         fs.rm(s3_path(path), **op_kwargs)
     else:
         remove(path)
@@ -174,8 +174,13 @@ def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     """
     More efficient boto3 based path listing, that accepts prefix
     """
+    region = kwargs.pop("region", None)
     session = boto3.Session(
-        aws_access_key_id=aws_key, aws_secret_access_key=aws_secret, aws_session_token=aws_token, **kwargs
+        aws_access_key_id=aws_key,
+        aws_secret_access_key=aws_secret,
+        aws_session_token=aws_token,
+        region_name=region,
+        **kwargs,
     )
     if path.startswith(_S3_ATTRIBUTE):
         s3 = session.resource("s3")
@@ -188,8 +193,9 @@ def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
 
 
 def list_folder(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> List[str]:
+    region = kwargs.pop("region", None)
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token), **kwargs)
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
 
         try:
             path = s3_path(path, is_folder=True)
@@ -235,22 +241,25 @@ def list_folder_files_recursive(
 
 
 def s3_folder_size(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
+    region = kwargs.pop("region", None)
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token), **kwargs)
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         return sum(fs.du(s3_path(path, is_folder=True), deep=True).values())
 
 
 def exists(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
+    region = kwargs.pop("region", None)
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token), **kwargs)
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         return fs.exists(path)
     return os_exists(path)
 
 
 def empty_folder(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> List[str]:
+    region = kwargs.pop("region", None)
     removed_files = []
     if path.startswith(_S3_ATTRIBUTE):
-        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token), **kwargs)
+        fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         for s3file in list_folder(path, aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token):
             try:
                 fs.rm(s3file)
