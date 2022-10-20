@@ -4,8 +4,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from shub_workflow.base import WorkFlowManager
-
-from .utils.contexts import script_args
+from shub_workflow.utils.contexts import script_args
 
 
 @patch("shub_workflow.base.WorkFlowManager.get_job_tags")

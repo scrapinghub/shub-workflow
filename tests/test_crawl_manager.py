@@ -3,8 +3,7 @@ from unittest import TestCase
 from unittest.mock import patch, Mock
 
 from shub_workflow.crawl import CrawlManager, PeriodicCrawlManager, GeneratorCrawlManager
-
-from .utils.contexts import script_args
+from shub_workflow.utils.contexts import script_args
 
 
 class TestManager(CrawlManager):

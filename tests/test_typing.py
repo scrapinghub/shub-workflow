@@ -7,8 +7,7 @@ from shub_workflow.base import WorkFlowManager, WorkFlowManagerProtocol
 from shub_workflow.graph import GraphManager
 from shub_workflow.graph.task import Task
 from shub_workflow.deliver import BaseDeliverScript
-
-from .utils.contexts import script_args
+from shub_workflow.utils.contexts import script_args
 
 
 class MyDeliverScript(BaseDeliverScript):

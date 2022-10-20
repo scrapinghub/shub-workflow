@@ -9,8 +9,7 @@ from unittest.mock import patch, Mock, call
 
 from shub_workflow.graph import GraphManager
 from shub_workflow.graph.task import Task, BaseTask, SpiderTask, Resource, ResourcesDict, TaskId, GraphManagerProtocol
-
-from .utils.contexts import script_args
+from shub_workflow.utils.contexts import script_args
 
 Job = namedtuple("Job", "key")
 
