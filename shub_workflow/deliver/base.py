@@ -9,7 +9,7 @@ from scrapinghub.client.exceptions import NotFound
 from scrapinghub.client.jobs import Job
 from scrapy import Item
 
-from shub_workflow.script import BaseScript, JobKey
+from shub_workflow.script import BaseScript, BaseLoopScript, JobKey
 from shub_workflow.deliver.dupefilter import SqliteDictDupesFilter, DupesFilterProtocol
 
 _LOG = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class DeliverScriptProtocol(Protocol):
         ...
 
 
-class BaseDeliverScript(BaseScript, DeliverScriptProtocol):
+class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
 
     DELIVERED_TAG = "delivered"
     SCRAPERNAME_NARGS: Union[str, int] = "+"
@@ -113,11 +113,10 @@ class BaseDeliverScript(BaseScript, DeliverScriptProtocol):
     def on_item(self, item: Item, scrapername: str):
         print(json.dumps(item))
 
-    def run(self):
+    def workflow_loop(self):
         for scrapername in self.args.scrapername:
             _LOG.info(f"Processing spider {scrapername}")
             self.process_spider_jobs(scrapername)
-        self.on_close()
 
     def on_close(self):
         _LOG.info(f"Processed a total of {self.total_items_count} items.")
