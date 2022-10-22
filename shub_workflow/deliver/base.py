@@ -23,12 +23,18 @@ class DeliverScriptProtocol(Protocol):
 
     @abc.abstractmethod
     def get_delivery_spider_jobs(
-        self, scrapername: str, target_tags: List[str], include_running: bool = False
+        self,
+        scrapername: str,
+        target_tags: List[str],
     ) -> Generator[Job, None, None]:
         ...
 
     @abc.abstractmethod
     def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
+        ...
+
+    @abc.abstractmethod
+    def has_delivery_running_spider_jobs(self, scrapername: str, target_tags: List[str]) -> bool:
         ...
 
 
@@ -72,28 +78,31 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         """
         return []
 
-    def get_delivery_spider_jobs(
-        self, scrapername: str, target_tags: List[str], include_running: bool = False
-    ) -> Generator[Job, None, None]:
+    def get_delivery_spider_jobs(self, scrapername: str, target_tags: List[str]) -> Generator[Job, None, None]:
         if self.flow_id:
             flow_id_tag = [f"FLOW_ID={self.flow_id}"]
             target_tags = flow_id_tag + target_tags
-        state = ["finished", "running", "pending"] if include_running else ["finished"]
-        yield from self.get_jobs_with_tags(scrapername, target_tags, state=state, lacks_tag=[self.DELIVERED_TAG])
+        yield from self.get_jobs_with_tags(scrapername, target_tags, state=["finished"], lacks_tag=[self.DELIVERED_TAG])
+
+    def has_delivery_running_spider_jobs(self, scrapername: str, target_tags: List[str]) -> bool:
+        if self.flow_id:
+            flow_id_tag = [f"FLOW_ID={self.flow_id}"]
+            target_tags = flow_id_tag + target_tags
+        for _ in self.get_jobs_with_tags(scrapername, target_tags, state=["running", "pending"], count=1):
+            return True
+        return False
 
     def process_spider_jobs(self, scrapername: str) -> bool:
         target_tags = self.get_target_tags()
-        there_are_running = False
-        for sj in self.get_delivery_spider_jobs(scrapername, target_tags, include_running=True):
-            if sj.metadata.get("state") == "finished":
-                self.process_job_items(scrapername, sj)
-                if not self.args.test_mode:
-                    self._all_jobs_to_tag.append(sj.key)
-                if self.total_items_count >= self.MAX_PROCESSED_ITEMS:
-                    break
-            else:
-                there_are_running = True
-        return there_are_running
+        for sj in self.get_delivery_spider_jobs(scrapername, target_tags):
+            self.process_job_items(scrapername, sj)
+            if not self.args.test_mode:
+                self._all_jobs_to_tag.append(sj.key)
+            if self.total_items_count >= self.MAX_PROCESSED_ITEMS:
+                return False
+        if self.loop_mode:
+            return self.has_delivery_running_spider_jobs(scrapername, target_tags)
+        return False
 
     def get_item_unique_key(self, item: Item) -> str:
         assert all(isinstance(item[f], str) for f in self.DEDUPE_KEY_BY_FIELDS)
@@ -204,13 +213,11 @@ class CachedDeliveredTagsMixin(DeliverScriptProtocol):
                 col.set(record)
             _LOG.info(f"Synced delivered cache ({to_store_count} jobs).")
 
-    def get_delivery_spider_jobs(
-        self, scrapername: str, target_tags: List[str], include_running: bool = False
-    ) -> Generator[Job, None, None]:
+    def get_delivery_spider_jobs(self, scrapername: str, target_tags: List[str]) -> Generator[Job, None, None]:
         if self._cache is None:
             self.get_delivered_cached()
         assert self._cache is not None
-        for sj in super().get_delivery_spider_jobs(scrapername, target_tags, include_running):
+        for sj in super().get_delivery_spider_jobs(scrapername, target_tags):
             if sj.key not in self._cache:
                 yield sj
 
