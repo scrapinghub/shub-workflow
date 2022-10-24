@@ -88,13 +88,16 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         if self.flow_id:
             flow_id_tag = [f"FLOW_ID={self.flow_id}"]
             target_tags = flow_id_tag + target_tags
-        for _ in self.get_jobs_with_tags(scrapername, target_tags, state=["running", "pending"], count=1):
-            return True
+        for sj in self.get_jobs_with_tags(scrapername, target_tags, state=["running", "pending"]):
+            if sj.key not in self._all_jobs_to_tag:
+                return True
         return False
 
     def process_spider_jobs(self, scrapername: str) -> bool:
         target_tags = self.get_target_tags()
         for sj in self.get_delivery_spider_jobs(scrapername, target_tags):
+            if sj.key in self._all_jobs_to_tag:
+                continue
             self.process_job_items(scrapername, sj)
             if not self.args.test_mode:
                 self._all_jobs_to_tag.append(sj.key)
