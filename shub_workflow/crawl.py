@@ -240,27 +240,36 @@ class GeneratorCrawlManager(CrawlManager):
             jobseq_tag = f"JOBSEQ={jobseq:010d}.r{repn + 1}"
         tags.append(jobseq_tag)
 
-    def workflow_loop(self) -> bool:
-        self.check_running_jobs()
-        for _ in range(self.max_running_jobs - len(self._running_job_keys)):
+    def _workflow_step_gen(self, max_next_params: int) -> Generator[JobKey, None, None]:
+        new_params = []
+        for i in range(max_next_params):
             try:
                 if self.__additional_jobs:
                     next_params = self.__additional_jobs.pop(0)
                 else:
                     next_params = next(self.__parameters_gen)
-                spider = next_params.pop("spider", self.spider)
-                assert spider is not None, "No spider set."
-                spider_args = get_spider_args_from_params(next_params)
-                jobid = self.get_job_unique_id({"spider": spider, "spider_args": spider_args})
-                if jobid not in self.__jobuids:
-                    self.__add_jobseq_tag(next_params)
-                    self.schedule_spider(spider=spider, job_args_override=next_params)
-                    self.__jobuids.add(jobid)
+                new_params.append(next_params)
             except StopIteration:
-                if self._running_job_keys:
-                    break
-                return False
-        return True
+                break
+        for next_params in new_params:
+            spider = next_params.pop("spider", self.spider)
+            assert spider is not None, "No spider set."
+            spider_args = get_spider_args_from_params(next_params)
+            jobuid = self.get_job_unique_id({"spider": spider, "spider_args": spider_args})
+            if jobuid not in self.__jobuids:
+                self.__add_jobseq_tag(next_params)
+                jobid = self.schedule_spider(spider=spider, job_args_override=next_params)
+                if jobid is not None:
+                    self.__jobuids.add(jobuid)
+                    yield jobid
+
+    def workflow_loop(self) -> bool:
+        self.check_running_jobs()
+        max_next_params = self.max_running_jobs - len(self._running_job_keys)
+        retval = False
+        for _ in self._workflow_step_gen(max_next_params):
+            retval = True
+        return retval or bool(self._running_job_keys)
 
     @staticmethod
     def get_job_unique_id(job: JobDict) -> str:
