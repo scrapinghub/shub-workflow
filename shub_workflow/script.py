@@ -445,24 +445,27 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
 
     def run(self):
         self._on_start()
-        self._run_loops()
+        for _ in self._run_loops():
+            pass
 
     def _base_loop_tasks(self):
         pass
 
-    def _run_loops(self):
+    def _run_loops(self) -> Generator[bool, None, None]:
         while self.workflow_loop_enabled:
             self._base_loop_tasks()
             try:
-                if self.workflow_loop() and self.args.loop_mode:
+                loop_result = self.workflow_loop()
+                yield loop_result
+                if loop_result and self.args.loop_mode:
                     time.sleep(self.args.loop_mode)
                 else:
                     self._close()
                     logger.info("No more tasks")
-                    return
+                    break
             except KeyboardInterrupt:
                 logger.info("Bye")
-                return
+                break
 
     def _on_start(self):
         self.on_start()
