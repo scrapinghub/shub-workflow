@@ -210,7 +210,7 @@ class GeneratorCrawlManager(CrawlManager):
         self.__parameters_gen = self.set_parameters_gen()
         self.__additional_jobs: List[FullJobParams] = []
         self.__next_job_seq = 1
-        self.__jobids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
+        self.__jobuids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
 
     def bad_outcome_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
         pass
@@ -242,7 +242,7 @@ class GeneratorCrawlManager(CrawlManager):
 
     def workflow_loop(self) -> bool:
         self.check_running_jobs()
-        while len(self._running_job_keys) < self.max_running_jobs:
+        for _ in range(self.max_running_jobs - len(self._running_job_keys)):
             try:
                 if self.__additional_jobs:
                     next_params = self.__additional_jobs.pop(0)
@@ -251,11 +251,11 @@ class GeneratorCrawlManager(CrawlManager):
                 spider = next_params.pop("spider", self.spider)
                 assert spider is not None, "No spider set."
                 spider_args = get_spider_args_from_params(next_params)
-                jobid = self.get_job_id({"spider": spider, "spider_args": spider_args})
-                if jobid not in self.__jobids:
+                jobid = self.get_job_unique_id({"spider": spider, "spider_args": spider_args})
+                if jobid not in self.__jobuids:
                     self.__add_jobseq_tag(next_params)
                     self.schedule_spider(spider=spider, job_args_override=next_params)
-                    self.__jobids.add(jobid)
+                    self.__jobuids.add(jobid)
             except StopIteration:
                 if self._running_job_keys:
                     break
@@ -263,7 +263,7 @@ class GeneratorCrawlManager(CrawlManager):
         return True
 
     @staticmethod
-    def get_job_id(job: JobDict) -> str:
+    def get_job_unique_id(job: JobDict) -> str:
         jdict = job.get("spider_args", {}).copy()
         jdict["spider"] = job["spider"]
         for k, v in jdict.items():
@@ -273,14 +273,14 @@ class GeneratorCrawlManager(CrawlManager):
 
     def resume_running_job_hook(self, job: JobDict):
         super().resume_running_job_hook(job)
-        jobid = self.get_job_id(job)
-        self.__jobids.add(jobid)
+        jobuid = self.get_job_unique_id(job)
+        self.__jobuids.add(jobuid)
         self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
 
     def resume_finished_job_hook(self, job: JobDict):
-        jobid = self.get_job_id(job)
-        if jobid not in self.__jobids:
-            self.__jobids.add(jobid)
+        jobuid = self.get_job_unique_id(job)
+        if jobuid not in self.__jobuids:
+            self.__jobuids.add(jobuid)
         self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
 
     def resume_workflow(self):
