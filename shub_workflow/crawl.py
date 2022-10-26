@@ -7,10 +7,9 @@ import logging
 from copy import deepcopy
 from argparse import Namespace
 from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, Awaitable, AsyncGenerator
-from typing_extensions import Protocol
 
 from bloom_filter import BloomFilter
-from typing_extensions import TypedDict, NotRequired
+from typing_extensions import TypedDict, NotRequired, Protocol
 
 from shub_workflow.script import (
     JobKey,
@@ -187,11 +186,15 @@ class PeriodicCrawlManager(CrawlManager):
 
 class GeneratorCrawlManagerProtocol(Protocol):
 
-    max_running_jobs: int
     _running_job_keys: Dict[JobKey, Tuple[str, JobParams]]
 
+    @property
     @abc.abstractmethod
-    def _workflow_step_gen(self, max_next_params: int) -> Generator[Awaitable[JobKey], None, None]:
+    def max_running_jobs(self) -> int:
+        ...
+
+    @abc.abstractmethod
+    def _workflow_step_gen(self, max_next_params: int) -> Generator[JobKey, None, None]:
         ...
 
     @abc.abstractmethod
@@ -311,7 +314,7 @@ class AsyncSchedulerCrawlManagerMixin(
 ):
     async def _async_workflow_step_gen(self, max_next_params: int) -> AsyncGenerator[JobKey, None]:
         for jobid in super()._workflow_step_gen(max_next_params):
-            yield await jobid
+            yield await cast(Awaitable[JobKey], jobid)
 
     async def workflow_loop(self) -> bool:
         self.check_running_jobs()

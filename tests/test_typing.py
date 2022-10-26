@@ -54,7 +54,7 @@ class MyGraphManager(MyMixin, GraphManager):
         return (jobA,)
 
 
-class MyAsyncCrawlManager(AsyncSchedulerCrawlManagerMixin, GeneratorCrawlManager):
+class MyAsyncCrawlManager(AsyncSchedulerCrawlManagerMixin, GeneratorCrawlManager): # type: ignore
     def set_parameters_gen(self):
         yield from ()
 
