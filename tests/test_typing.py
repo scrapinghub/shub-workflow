@@ -54,7 +54,7 @@ class MyGraphManager(MyMixin, GraphManager):
         return (jobA,)
 
 
-class MyAsyncCrawlManager(AsyncSchedulerCrawlManagerMixin, GeneratorCrawlManager): # type: ignore
+class MyAsyncCrawlManager(AsyncSchedulerCrawlManagerMixin, GeneratorCrawlManager):  # type: ignore
     def set_parameters_gen(self):
         yield from ()
 
@@ -98,4 +98,4 @@ class TypingTest(TestCase):
 
     def test_asyncrawlmanager(self):
         with script_args(["myname", "myspider"]):
-            manager = MyAsyncCrawlManager()
+            MyAsyncCrawlManager()
