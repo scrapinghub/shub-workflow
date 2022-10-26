@@ -445,8 +445,13 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
 
     def run(self):
         self._on_start()
-        for _ in self._run_loops():
-            pass
+        for loop_result in self._run_loops():
+            if loop_result and self.args.loop_mode:
+                time.sleep(self.args.loop_mode)
+            else:
+                self._close()
+                logger.info("No more tasks")
+                break
 
     def _base_loop_tasks(self):
         pass
@@ -457,12 +462,6 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
             try:
                 loop_result = self.workflow_loop()
                 yield loop_result
-                if loop_result and self.args.loop_mode:
-                    time.sleep(self.args.loop_mode)
-                else:
-                    self._close()
-                    logger.info("No more tasks")
-                    break
             except KeyboardInterrupt:
                 logger.info("Bye")
                 break
