@@ -54,7 +54,7 @@ class CrawlManagerTest(TestCase):
         os.environ["PROJECT_ID"] = "999"
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_schedule_spider_dd(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
+    def test_schedule_spider(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
 
         with script_args(["myspider"]):
             manager = TestManager()

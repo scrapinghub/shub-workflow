@@ -6,12 +6,13 @@ import json
 import logging
 from copy import deepcopy
 from argparse import Namespace
-from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any
+from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, Awaitable, AsyncGenerator
+from typing_extensions import Protocol
 
 from bloom_filter import BloomFilter
 from typing_extensions import TypedDict, NotRequired
 
-from shub_workflow.script import JobKey, JobDict
+from shub_workflow.script import JobKey, JobDict, BaseLoopScriptAsyncSchedulerMixin
 from shub_workflow.base import WorkFlowManager
 from shub_workflow.utils import hashstr
 
@@ -96,9 +97,10 @@ class CrawlManager(WorkFlowManager):
 
     def schedule_spider_with_jobargs(
         self,
-        job_args_override: JobParams,
+        job_args_override: Optional[JobParams] = None,
         spider: Optional[str] = None,
     ) -> Optional[JobKey]:
+        job_args_override = job_args_override or {}
         spider = spider or self.spider
         if spider is not None:
             schedule_args: Dict[str, Any] = json.loads(self.args.spider_args)
@@ -115,21 +117,6 @@ class CrawlManager(WorkFlowManager):
                 self._running_job_keys[jobkey] = spider, job_args_override
             return jobkey
         return None
-
-    def schedule_spider(
-        self,
-        spider: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        units: Optional[int] = None,
-        project_id: Optional[int] = None,
-        **kwargs,
-    ) -> Optional[JobKey]:
-        job_args_override = kwargs.pop("job_args_override", None)
-        if spider is None or job_args_override is not None:
-            job_args_override = job_args_override or {}
-            job_args_override.update(kwargs)
-            return self.schedule_spider_with_jobargs(job_args_override, spider)
-        return super().schedule_spider(spider, **kwargs)
 
     def check_running_jobs(self) -> Dict[JobKey, str]:
         outcomes = {}
@@ -157,7 +144,7 @@ class CrawlManager(WorkFlowManager):
         if outcomes:
             return False
         if not self._running_job_keys:
-            self.schedule_spider()
+            self.schedule_spider_with_jobargs()
         return True
 
     def resume_running_job_hook(self, job: JobDict):
@@ -186,7 +173,7 @@ class PeriodicCrawlManager(CrawlManager):
     def workflow_loop(self) -> bool:
         self.check_running_jobs()
         if not self._running_job_keys:
-            self.schedule_spider()
+            self.schedule_spider_with_jobargs()
         return True
 
     def on_close(self):
@@ -258,7 +245,7 @@ class GeneratorCrawlManager(CrawlManager):
             jobuid = self.get_job_unique_id({"spider": spider, "spider_args": spider_args})
             if jobuid not in self.__jobuids:
                 self.__add_jobseq_tag(next_params)
-                jobid = self.schedule_spider(spider=spider, job_args_override=next_params)
+                jobid = self.schedule_spider_with_jobargs(next_params, spider)
                 if jobid is not None:
                     self.__jobuids.add(jobuid)
                     yield jobid
@@ -298,3 +285,31 @@ class GeneratorCrawlManager(CrawlManager):
 
     def on_close(self):
         pass
+
+
+class GeneratorCrawlManagerProtocol(Protocol):
+
+    max_running_jobs: int
+    _running_job_keys: Dict[JobKey, Tuple[str, JobParams]]
+
+    @abc.abstractmethod
+    def _workflow_step_gen(self, max_next_params: int) -> Generator[Awaitable[JobKey], None, None]:
+        ...
+
+    @abc.abstractmethod
+    def check_running_jobs(self) -> Dict[JobKey, str]:
+        ...
+
+
+class AsyncSchedulerCrawlManagerMixin(BaseLoopScriptAsyncSchedulerMixin, GeneratorCrawlManagerProtocol):
+    async def _async_workflow_step_gen(self, max_next_params: int) -> AsyncGenerator[JobKey, None]:
+        for jobid in super()._workflow_step_gen(max_next_params):
+            yield await jobid
+
+    async def workflow_loop(self) -> bool:
+        self.check_running_jobs()
+        max_next_params = self.max_running_jobs - len(self._running_job_keys)
+        retval = False
+        async for _ in self._async_workflow_step_gen(max_next_params):
+            retval = True
+        return retval or bool(self._running_job_keys)

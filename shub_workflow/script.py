@@ -4,11 +4,13 @@ Implements common methods for ScrapyCloud scripts.
 import os
 import abc
 import json
+import asyncio
 import logging
 import time
 import subprocess
+from functools import partial
 from argparse import ArgumentParser, Namespace
-from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any
+from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any, AsyncGenerator, Awaitable
 from typing_extensions import TypedDict, NotRequired, Protocol
 
 from scrapinghub import ScrapinghubClient, DuplicateJobError
@@ -475,3 +477,49 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
 
     def _close(self):
         self.on_close()
+
+
+class BaseLoopScriptAsyncSchedulerProtocol(Protocol):
+    @abc.abstractmethod
+    def _run_loops(self) -> Generator[Awaitable[bool], None, None]:
+        ...
+
+    @abc.abstractmethod
+    def workflow_loop(self) -> Awaitable[bool]:
+        ...
+
+    @abc.abstractmethod
+    def _schedule_job(self, spider: str, tags=None, units=None, project_id=None, **kwargs) -> Optional[JobKey]:
+        ...
+
+
+class BaseLoopScriptAsyncSchedulerMixin(BaseLoopScriptAsyncSchedulerProtocol):
+    async def _async_run_loops(self) -> AsyncGenerator[bool, None]:
+        for result in self._run_loops():
+            yield await result
+
+    async def run(self):
+        self._on_start()
+        async for loop_result in self._async_run_loops():
+            if loop_result and self.args.loop_mode:
+                await asyncio.sleep(self.args.loop_mode)
+            else:
+                self._close()
+                logger.info("No more tasks")
+                break
+
+    async def schedule_spider(
+        self,
+        spider: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        units: Optional[int] = None,
+        project_id: Optional[int] = None,
+        **kwargs,
+    ) -> Optional[JobKey]:
+        loop = asyncio.get_event_loop()
+        future = loop.run_in_executor(
+            None,
+            partial(super()._schedule_job, spider, tags, units, project_id, **kwargs),
+        )
+        result: Optional[JobKey] = await future
+        return result
