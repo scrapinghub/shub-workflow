@@ -12,7 +12,12 @@ from typing_extensions import Protocol
 from bloom_filter import BloomFilter
 from typing_extensions import TypedDict, NotRequired
 
-from shub_workflow.script import JobKey, JobDict, BaseLoopScriptAsyncSchedulerMixin
+from shub_workflow.script import (
+    JobKey,
+    JobDict,
+    BaseLoopScriptAsyncSchedulerMixin,
+    BaseLoopScriptAsyncSchedulerProtocol,
+)
 from shub_workflow.base import WorkFlowManager
 from shub_workflow.utils import hashstr
 
@@ -180,7 +185,21 @@ class PeriodicCrawlManager(CrawlManager):
         pass
 
 
-class GeneratorCrawlManager(CrawlManager):
+class GeneratorCrawlManagerProtocol(Protocol):
+
+    max_running_jobs: int
+    _running_job_keys: Dict[JobKey, Tuple[str, JobParams]]
+
+    @abc.abstractmethod
+    def _workflow_step_gen(self, max_next_params: int) -> Generator[Awaitable[JobKey], None, None]:
+        ...
+
+    @abc.abstractmethod
+    def check_running_jobs(self) -> Dict[JobKey, str]:
+        ...
+
+
+class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
     """
     Schedule a spider periodically, each time with different parameters yielded by a generator, until stop.
     Number of simultaneos spider jobs will be limited by max running jobs (see WorkFlowManager).
@@ -287,21 +306,9 @@ class GeneratorCrawlManager(CrawlManager):
         pass
 
 
-class GeneratorCrawlManagerProtocol(Protocol):
-
-    max_running_jobs: int
-    _running_job_keys: Dict[JobKey, Tuple[str, JobParams]]
-
-    @abc.abstractmethod
-    def _workflow_step_gen(self, max_next_params: int) -> Generator[Awaitable[JobKey], None, None]:
-        ...
-
-    @abc.abstractmethod
-    def check_running_jobs(self) -> Dict[JobKey, str]:
-        ...
-
-
-class AsyncSchedulerCrawlManagerMixin(BaseLoopScriptAsyncSchedulerMixin, GeneratorCrawlManagerProtocol):
+class AsyncSchedulerCrawlManagerMixin(
+    BaseLoopScriptAsyncSchedulerMixin, GeneratorCrawlManagerProtocol, BaseLoopScriptAsyncSchedulerProtocol
+):
     async def _async_workflow_step_gen(self, max_next_params: int) -> AsyncGenerator[JobKey, None]:
         for jobid in super()._workflow_step_gen(max_next_params):
             yield await jobid

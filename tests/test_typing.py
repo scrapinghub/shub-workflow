@@ -6,6 +6,7 @@ from shub_workflow.script import BaseScript, BaseScriptProtocol
 from shub_workflow.base import WorkFlowManager, WorkFlowManagerProtocol
 from shub_workflow.graph import GraphManager
 from shub_workflow.graph.task import Task
+from shub_workflow.crawl import GeneratorCrawlManager, AsyncSchedulerCrawlManagerMixin
 from shub_workflow.deliver import BaseDeliverScript
 from shub_workflow.utils.contexts import script_args
 
@@ -53,6 +54,11 @@ class MyGraphManager(MyMixin, GraphManager):
         return (jobA,)
 
 
+class MyAsyncCrawlManager(AsyncSchedulerCrawlManagerMixin, GeneratorCrawlManager):
+    def set_parameters_gen(self):
+        yield from ()
+
+
 class TypingTest(TestCase):
     def setUp(self):
         os.environ["SH_APIKEY"] = "ffff"
@@ -89,3 +95,7 @@ class TypingTest(TestCase):
             manager.append_flow_tag("mytag")
         # self.assertEqual(mocked_add_job_tags.call_count, 0)
         self.assertEqual(manager.target, 1)
+
+    def test_asyncrawlmanager(self):
+        with script_args(["myname", "myspider"]):
+            manager = MyAsyncCrawlManager()
