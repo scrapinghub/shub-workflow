@@ -8,7 +8,6 @@ import asyncio
 import logging
 import time
 import subprocess
-from functools import partial
 from argparse import ArgumentParser, Namespace
 from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any, AsyncGenerator, Awaitable
 from typing_extensions import TypedDict, NotRequired, Protocol
@@ -479,7 +478,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
         self.on_close()
 
 
-class BaseLoopScriptAsyncSchedulerProtocol(Protocol):
+class BaseLoopScriptAsyncProtocol(Protocol):
     @abc.abstractmethod
     def _run_loops(self) -> Generator[Awaitable[bool], None, None]:
         ...
@@ -488,12 +487,8 @@ class BaseLoopScriptAsyncSchedulerProtocol(Protocol):
     def workflow_loop(self) -> Awaitable[bool]:
         ...
 
-    @abc.abstractmethod
-    def _schedule_job(self, spider: str, tags=None, units=None, project_id=None, **kwargs) -> Optional[JobKey]:
-        ...
 
-
-class BaseLoopScriptAsyncSchedulerMixin(BaseLoopScriptAsyncSchedulerProtocol):
+class BaseLoopScriptAsyncMixin(BaseLoopScriptAsyncProtocol):
     async def _async_run_loops(self) -> AsyncGenerator[bool, None]:
         for result in self._run_loops():
             yield await result
@@ -507,19 +502,3 @@ class BaseLoopScriptAsyncSchedulerMixin(BaseLoopScriptAsyncSchedulerProtocol):
                 self._close()
                 logger.info("No more tasks")
                 break
-
-    async def schedule_spider(
-        self,
-        spider: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        units: Optional[int] = None,
-        project_id: Optional[int] = None,
-        **kwargs,
-    ) -> Optional[JobKey]:
-        loop = asyncio.get_event_loop()
-        future = loop.run_in_executor(
-            None,
-            partial(super()._schedule_job, spider, tags, units, project_id, **kwargs),
-        )
-        result: Optional[JobKey] = await future
-        return result
