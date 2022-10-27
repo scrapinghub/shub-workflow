@@ -6,7 +6,6 @@ import json
 import asyncio
 import logging
 from copy import deepcopy
-from functools import partial
 from argparse import Namespace
 from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, Awaitable, AsyncGenerator
 
@@ -17,7 +16,6 @@ from shub_workflow.script import (
     JobKey,
     JobDict,
     BaseLoopScriptAsyncMixin,
-    BaseLoopScriptAsyncProtocol,
 )
 from shub_workflow.base import WorkFlowManager
 from shub_workflow.utils import hashstr
@@ -189,6 +187,8 @@ class PeriodicCrawlManager(CrawlManager):
 class GeneratorCrawlManagerProtocol(Protocol):
 
     _running_job_keys: Dict[JobKey, Tuple[str, JobParams]]
+    _jobuids: BloomFilter
+    spider: Optional[str]
 
     @property
     @abc.abstractmethod
@@ -196,7 +196,7 @@ class GeneratorCrawlManagerProtocol(Protocol):
         ...
 
     @abc.abstractmethod
-    def _workflow_step_gen(self, max_next_params: int) -> Generator[JobKey, None, None]:
+    def _workflow_step_gen(self, max_next_params: int) -> Generator[Tuple[str, Optional[JobKey]], None, None]:
         ...
 
     @abc.abstractmethod
@@ -209,6 +209,10 @@ class GeneratorCrawlManagerProtocol(Protocol):
         job_args_override: Optional[JobParams] = None,
         spider: Optional[str] = None,
     ) -> Optional[JobKey]:
+        ...
+
+    @abc.abstractmethod
+    def get_job_settings(self, override: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         ...
 
 
@@ -229,7 +233,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         self.__parameters_gen = self.set_parameters_gen()
         self.__additional_jobs: List[FullJobParams] = []
         self.__next_job_seq = 1
-        self.__jobuids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
+        self._jobuids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
 
     def bad_outcome_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
         pass
@@ -259,7 +263,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
             jobseq_tag = f"JOBSEQ={jobseq:010d}.r{repn + 1}"
         tags.append(jobseq_tag)
 
-    def _workflow_step_gen(self, max_next_params: int) -> Generator[JobKey, None, None]:
+    def _workflow_step_gen(self, max_next_params: int) -> Generator[Tuple[str, Optional[JobKey]], None, None]:
         new_params = []
         for i in range(max_next_params):
             try:
@@ -275,19 +279,21 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
             assert spider is not None, "No spider set."
             spider_args = get_spider_args_from_params(next_params)
             jobuid = self.get_job_unique_id({"spider": spider, "spider_args": spider_args})
-            if jobuid not in self.__jobuids:
+            if jobuid not in self._jobuids:
                 self.__add_jobseq_tag(next_params)
-                jobid = self.schedule_spider_with_jobargs(next_params, spider)
-                if jobid is not None:
-                    self.__jobuids.add(jobuid)
-                    yield jobid
+                yield jobuid, self.schedule_spider_with_jobargs(next_params, spider)
 
     def workflow_loop(self) -> bool:
         self.check_running_jobs()
         max_next_params = self.max_running_jobs - len(self._running_job_keys)
+        jobuids_jobids = [_ for _ in self._workflow_step_gen(max_next_params)]
         retval = False
-        for _ in self._workflow_step_gen(max_next_params):
-            retval = True
+        if jobuids_jobids:
+            jobuids, jobids = zip(*jobuids_jobids)
+            for jobuid, jobid in zip(jobuids, jobids):
+                retval = True
+                if jobid is not None:
+                    self._jobuids.add(jobuid)
         return retval or bool(self._running_job_keys)
 
     @staticmethod
@@ -302,13 +308,13 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
     def resume_running_job_hook(self, job: JobDict):
         super().resume_running_job_hook(job)
         jobuid = self.get_job_unique_id(job)
-        self.__jobuids.add(jobuid)
+        self._jobuids.add(jobuid)
         self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
 
     def resume_finished_job_hook(self, job: JobDict):
         jobuid = self.get_job_unique_id(job)
-        if jobuid not in self.__jobuids:
-            self.__jobuids.add(jobuid)
+        if jobuid not in self._jobuids:
+            self._jobuids.add(jobuid)
         self.__next_job_seq = max(self.__next_job_seq, get_jobseq(job["tags"])[0] + 1)
 
     def resume_workflow(self):
@@ -320,18 +326,24 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
 
 
 class AsyncSchedulerCrawlManagerMixin(
-    BaseLoopScriptAsyncMixin, GeneratorCrawlManagerProtocol, BaseLoopScriptAsyncProtocol
+    BaseLoopScriptAsyncMixin, GeneratorCrawlManagerProtocol
 ):
     async def _async_workflow_step_gen(self, max_next_params: int) -> AsyncGenerator[JobKey, None]:
         for jobid in super()._workflow_step_gen(max_next_params):
             yield await cast(Awaitable[JobKey], jobid)
 
-    async def workflow_loop(self) -> bool:
+    async def workflow_loop(self) -> bool:  # type: ignore
         self.check_running_jobs()
         max_next_params = self.max_running_jobs - len(self._running_job_keys)
+        jobuids_cors = [_ for _ in self._workflow_step_gen(max_next_params)]
         retval = False
-        async for _ in self._async_workflow_step_gen(max_next_params):
-            retval = True
+        if jobuids_cors:
+            jobuids, cors = zip(*jobuids_cors)
+            results = await asyncio.gather(*cors)
+            for jobuid, jobid in zip(jobuids, results):
+                retval = True
+                if jobid is not None:
+                    self._jobuids.add(jobuid)
         return retval or bool(self._running_job_keys)
 
     async def schedule_spider_with_jobargs(  # type: ignore
@@ -339,9 +351,19 @@ class AsyncSchedulerCrawlManagerMixin(
         job_args_override: Optional[JobParams] = None,
         spider: Optional[str] = None,
     ) -> Optional[JobKey]:
-        loop = asyncio.get_event_loop()
-        future = loop.run_in_executor(
-            None,
-            partial(super().schedule_spider_with_jobargs, job_args_override, spider),
-        )
-        return await future
+        job_args_override = job_args_override or {}
+        spider = spider or self.spider
+        assert spider is not None
+        schedule_args: Dict[str, Any] = json.loads(self.args.spider_args)
+        spider_args = get_spider_args_from_params(job_args_override)
+        schedule_args.update(job_args_override)
+        schedule_args.pop("spider_args", None)
+        schedule_args.update(spider_args)
+
+        job_settings_override = schedule_args.get("job_settings", None)
+        schedule_args["job_settings"] = self.get_job_settings(job_settings_override)
+        schedule_args["units"] = schedule_args.get("units", self.args.units)
+        jobkey = await self.async_schedule_spider(spider, **schedule_args)
+        if jobkey is not None:
+            self._running_job_keys[jobkey] = spider, job_args_override
+        return jobkey

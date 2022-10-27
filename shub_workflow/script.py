@@ -7,9 +7,10 @@ import json
 import asyncio
 import logging
 import time
+from functools import partial
 import subprocess
 from argparse import ArgumentParser, Namespace
-from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any, AsyncGenerator, Awaitable
+from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any, AsyncGenerator, Awaitable, cast
 from typing_extensions import TypedDict, NotRequired, Protocol
 
 from scrapinghub import ScrapinghubClient, DuplicateJobError
@@ -43,6 +44,9 @@ class JobDict(TypedDict):
 
 
 class ArgumentParserScriptProtocol(Protocol):
+
+    args: Namespace
+
     @abc.abstractmethod
     def add_argparser_options(self):
         ...
@@ -136,6 +140,10 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, Protocol):
 
     @abc.abstractmethod
     def finish(self, jobkey: Optional[JobKey] = None, close_reason: Optional[str] = None):
+        ...
+
+    @abc.abstractmethod
+    def _make_children_tags(self, tags: Optional[List[str]]) -> Optional[List[str]]:
         ...
 
 
@@ -306,7 +314,7 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
             units=units,
             **kwargs,
         )
-        logger.info("Scheduling a job:\n%s", schedule_kwargs)
+        logger.debug("Scheduling a job:\n%s", schedule_kwargs)
         try:
             job = project.jobs.run(**schedule_kwargs)
         except DuplicateJobError as e:
@@ -419,6 +427,10 @@ class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
         """
         ...
 
+    @abc.abstractmethod
+    def _run_loops(self) -> Generator[bool, None, None]:
+        ...
+
 
 class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
 
@@ -461,8 +473,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
         while self.workflow_loop_enabled:
             self._base_loop_tasks()
             try:
-                loop_result = self.workflow_loop()
-                yield loop_result
+                yield self.workflow_loop()
             except KeyboardInterrupt:
                 logger.info("Bye")
                 break
@@ -478,20 +489,45 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
         self.on_close()
 
 
-class BaseLoopScriptAsyncProtocol(Protocol):
-    @abc.abstractmethod
-    def _run_loops(self) -> Generator[Awaitable[bool], None, None]:
-        ...
+class BaseLoopScriptAsyncMixin(BaseLoopScriptProtocol):
+    @dash_retry_decorator
+    async def _async_schedule_job(
+        self, spider: str, tags=None, units=None, project_id=None, **kwargs
+    ) -> Optional[JobKey]:
+        project = self.get_project(project_id)
+        schedule_kwargs = dict(
+            spider=spider,
+            add_tag=self._make_children_tags(tags),
+            debugunits=units,
+            **kwargs,
+        )
+        logger.debug("Scheduling a job with jobargs:\n%s", schedule_kwargs)
+        try:
+            loop = asyncio.get_event_loop()
+            future = loop.run_in_executor(None, partial(project.jobs.run, **schedule_kwargs))
+            job = await future
+        except DuplicateJobError as e:
+            logger.error(str(e))
+        except Exception:
+            raise
+        else:
+            logger.info(f"Scheduled job {job.key}.")
+            return job.key
+        return None
 
-    @abc.abstractmethod
-    def workflow_loop(self) -> Awaitable[bool]:
-        ...
+    async def async_schedule_spider(
+        self,
+        spider: str,
+        tags: Optional[List[str]] = None,
+        units: Optional[int] = None,
+        project_id: Optional[int] = None,
+        **kwargs,
+    ) -> Optional[JobKey]:
+        return await self._async_schedule_job(spider=spider, tags=tags, units=units, project_id=project_id, **kwargs)
 
-
-class BaseLoopScriptAsyncMixin(BaseLoopScriptAsyncProtocol):
     async def _async_run_loops(self) -> AsyncGenerator[bool, None]:
         for result in self._run_loops():
-            yield await result
+            yield await cast(Awaitable[bool], result)
 
     async def run(self):
         self._on_start()
