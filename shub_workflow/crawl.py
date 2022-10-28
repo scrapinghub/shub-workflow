@@ -7,7 +7,7 @@ import asyncio
 import logging
 from copy import deepcopy
 from argparse import Namespace
-from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, Awaitable, AsyncGenerator
+from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, AsyncGenerator
 
 from bloom_filter import BloomFilter
 from typing_extensions import TypedDict, NotRequired, Protocol
@@ -286,14 +286,11 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
     def workflow_loop(self) -> bool:
         self.check_running_jobs()
         max_next_params = self.max_running_jobs - len(self._running_job_keys)
-        jobuids_jobids = [_ for _ in self._workflow_step_gen(max_next_params)]
         retval = False
-        if jobuids_jobids:
-            jobuids, jobids = zip(*jobuids_jobids)
-            for jobuid, jobid in zip(jobuids, jobids):
-                retval = True
-                if jobid is not None:
-                    self._jobuids.add(jobuid)
+        for jobuid, jobid in self._workflow_step_gen(max_next_params):
+            retval = True
+            if jobid is not None:
+                self._jobuids.add(jobuid)
         return retval or bool(self._running_job_keys)
 
     @staticmethod
@@ -328,22 +325,22 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
 class AsyncSchedulerCrawlManagerMixin(
     BaseLoopScriptAsyncMixin, GeneratorCrawlManagerProtocol
 ):
-    async def _async_workflow_step_gen(self, max_next_params: int) -> AsyncGenerator[JobKey, None]:
-        for jobid in super()._workflow_step_gen(max_next_params):
-            yield await cast(Awaitable[JobKey], jobid)
+    async def _async_workflow_step_gen(self, max_next_params: int) -> AsyncGenerator[Tuple[str, JobKey], None]:
+        jobuids_cors = list(self._workflow_step_gen(max_next_params))
+        if jobuids_cors:
+            jobuids, cors = zip(*jobuids_cors)
+            results: List[JobKey] = await asyncio.gather(*cors)
+            for jobuid, jobid in zip(jobuids, results):
+                yield jobuid, jobid
 
     async def workflow_loop(self) -> bool:  # type: ignore
         self.check_running_jobs()
         max_next_params = self.max_running_jobs - len(self._running_job_keys)
-        jobuids_cors = [_ for _ in self._workflow_step_gen(max_next_params)]
         retval = False
-        if jobuids_cors:
-            jobuids, cors = zip(*jobuids_cors)
-            results = await asyncio.gather(*cors)
-            for jobuid, jobid in zip(jobuids, results):
-                retval = True
-                if jobid is not None:
-                    self._jobuids.add(jobuid)
+        async for jobuid, jobid in self._async_workflow_step_gen(max_next_params):
+            retval = True
+            if jobid is not None:
+                self._jobuids.add(jobuid)
         return retval or bool(self._running_job_keys)
 
     async def schedule_spider_with_jobargs(  # type: ignore
