@@ -119,7 +119,7 @@ class GraphManager(WorkFlowManager):
                     self._setup_starting_jobs(ran_tasks, next_tasks)
             else:
                 self._add_initial_pending_job(taskid)
-                logger.info("Resuming at task %s", taskid)
+                logger.info("Starting at task %s", taskid)
 
     def _fill_available_resources(self):
         """
