@@ -129,7 +129,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_any_call(
@@ -143,7 +143,7 @@ class ManagerTest(BaseTestCase):
         manager.is_finished = lambda x: "failed" if x == "999/1/1" else None
         manager.schedule_script.reset_mock()
         manager.schedule_script.side_effect = ["999/1/3"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
             ["commandA", "argA"], tags=["tag1", "tag2"], units=2, project_id=None
@@ -152,20 +152,20 @@ class ManagerTest(BaseTestCase):
         # third loop, both jobs are still running
         manager.is_finished = lambda x: None
         manager.schedule_script.reset_mock()
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # fourth loop, jobA finished (but has to wait for jobB for next job)
         manager.is_finished = lambda x: "finished" if x == "999/1/3" else None
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # fifth loop, jobB finished, now we can run jobC
         manager.is_finished = lambda x: "finished" if x == "999/1/2" else None
         manager.schedule_script.side_effect = ["999/1/4"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
@@ -174,7 +174,7 @@ class ManagerTest(BaseTestCase):
         manager.is_finished = lambda x: "finished" if x == "999/1/4" else None
         manager.schedule_script.reset_mock()
         manager.schedule_script.side_effect = ["999/1/5"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_called_with(["commandD", "argD"], tags=None, units=None, project_id=None)
@@ -182,7 +182,7 @@ class ManagerTest(BaseTestCase):
         # last loop, jobD finished, workflow finished
         manager.is_finished = lambda x: "finished" if x == "999/1/5" else None
         manager.schedule_script.reset_mock()
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertFalse(result)
         self.assertFalse(manager.schedule_script.called)
 
@@ -240,7 +240,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_any_call(
@@ -270,7 +270,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 4)
         for i in range(4):
@@ -280,14 +280,14 @@ class ManagerTest(BaseTestCase):
 
         # second loop still running job A
         manager.schedule_script.reset_mock()
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # third loop, job A_0 fails, must be retried
         manager.is_finished = lambda x: "failed" if x == "999/1/1" else None
         manager.schedule_script.side_effect = ["999/1/5"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
             ["commandA", "--parg=0", "argA"], tags=["tag1", "tag2"], units=None, project_id=None,
@@ -297,7 +297,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.reset_mock()
         manager.is_finished = lambda x: "failed" if x == "999/1/5" else None
         manager.schedule_script.side_effect = ["999/1/6"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
             ["commandA", "--parg=0", "argA"], tags=["tag1", "tag2"], units=None, project_id=None,
@@ -306,7 +306,7 @@ class ManagerTest(BaseTestCase):
         # fifth loop, job A_0 fails again, cannot be retried (retries=2)
         manager.schedule_script.reset_mock()
         manager.is_finished = lambda x: "failed" if x == "999/1/6" else None
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
@@ -314,7 +314,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.reset_mock()
         manager.is_finished = lambda x: "failed" if x == "999/1/2" else None
         manager.schedule_script.side_effect = ["999/1/7"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
             ["commandA", "--parg=1", "argA"], tags=["tag1", "tag2"], units=None, project_id=None,
@@ -324,7 +324,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.reset_mock()
         manager.is_finished = lambda x: "failed" if x == "999/1/7" else None
         manager.schedule_script.side_effect = ["999/1/8"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
             ["commandA", "--parg=1", "argA"], tags=["tag1", "tag2"], units=None, project_id=None,
@@ -333,7 +333,7 @@ class ManagerTest(BaseTestCase):
         # 8th loop, job A_1 fails again, cannot be retried (retries=2)
         manager.schedule_script.reset_mock()
         manager.is_finished = lambda x: "failed" if x == "999/1/8" else None
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
@@ -353,7 +353,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_any_call(["commandC", "argC"], tags=None, units=None, project_id=None)
@@ -361,7 +361,7 @@ class ManagerTest(BaseTestCase):
         # second loop, job C fails, must be retried.
         manager.is_finished = lambda x: "failed" if x == "999/3/1" else None
         manager.schedule_script.side_effect = ["999/3/2"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
@@ -382,14 +382,14 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
 
         # second loop, job C fails, must be retried.
         manager.is_finished = lambda x: "failed" if x == "999/3/1" else None
         manager.schedule_script.side_effect = ["999/3/2"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
@@ -397,14 +397,14 @@ class ManagerTest(BaseTestCase):
         # third loop, job C fails again, must be retried (last retry).
         manager.is_finished = lambda x: "failed" if x == "999/3/2" else None
         manager.schedule_script.side_effect = ["999/3/3"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 3)
         manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
 
         # fourth loop, job C fails again, give up.
         manager.is_finished = lambda x: "failed" if x == "999/3/3" else None
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertFalse(result)
         self.assertEqual(manager.schedule_script.call_count, 3)
 
@@ -428,7 +428,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 4)
         for i in range(4):
@@ -438,14 +438,14 @@ class ManagerTest(BaseTestCase):
 
         # second loop still running job A
         manager.schedule_script.reset_mock()
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # third loop, job A_0 fails, must be resumed
         manager.is_finished = lambda x: "failed" if x == "999/1/1" else None
         manager.schedule_script.side_effect = ["999/1/5"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
             ["commandA", "--parg=0", "argA"], tags=["tag1", "tag2"], units=None, project_id=None,
@@ -459,7 +459,7 @@ class ManagerTest(BaseTestCase):
             "999/2/3",
             "999/2/4",
         ]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
@@ -469,14 +469,14 @@ class ManagerTest(BaseTestCase):
         # fifth loop, jobB finishes partially, neither jobD nor jobC can still be scheduled
         manager.is_finished = lambda x: "finished" if x == "999/2/1" else None
         manager.schedule_script.reset_mock()
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # sixth loop, jobB finishes, jobD now can run, also jobC is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/3/1", "999/3/2"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandC", "argC"], tags=None, units=None, project_id=None)
         manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
@@ -500,7 +500,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(project.jobs.run.call_count, 4)
         for i in range(4):
@@ -531,7 +531,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(project.jobs.run.call_count, 4)
         for i in range(4):
@@ -567,7 +567,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(project.jobs.run.call_count, 4)
         for i in range(4):
@@ -602,7 +602,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(project.jobs.run.call_count, 4)
         for i in range(4):
@@ -632,7 +632,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 4)
         for i in range(4):
@@ -648,7 +648,7 @@ class ManagerTest(BaseTestCase):
             "999/2/3",
             "999/2/4",
         ]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
@@ -658,7 +658,7 @@ class ManagerTest(BaseTestCase):
         # last loop, jobB finished, workflow finished
         manager.is_finished = lambda x: "finished" if x.startswith("999/2") else None
         manager.schedule_script.reset_mock()
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertFalse(result)
         self.assertFalse(manager.schedule_script.called)
 
@@ -679,7 +679,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 4)
         for i in range(4):
@@ -696,7 +696,7 @@ class ManagerTest(BaseTestCase):
             "999/2/4",
             "999/3/1",
         ]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
@@ -707,21 +707,21 @@ class ManagerTest(BaseTestCase):
         # third loop, jobB finishes
         manager.is_finished = lambda x: "finished" if x.startswith("999/2/") else None
         manager.schedule_script.reset_mock()
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # fourth loop, jobC finishes, jobD is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/4/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
 
         # fifth loop, jobD finishes, jobE is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
@@ -736,7 +736,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop, jobD is scheduled
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
 
@@ -745,7 +745,7 @@ class ManagerTest(BaseTestCase):
         # already scheduled/finished by another instance of the manager)
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
@@ -766,7 +766,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 4)
         for i in range(4):
@@ -777,21 +777,21 @@ class ManagerTest(BaseTestCase):
         # second loop, jobA finishes, jobC is scheduled, but not jobB as it is skipped.
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/3/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandC", "argC"], tags=None, units=None, project_id=None)
 
         # third loop, jobC finishes, jobD is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/4/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
 
         # fourth loop, jobD finishes, jobE is scheduled (will not wait for B as it was skipped)
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
@@ -811,7 +811,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop, jobB is scheduled
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
@@ -821,7 +821,7 @@ class ManagerTest(BaseTestCase):
         # second loop, jobB finishes, jobE is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
@@ -841,7 +841,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop, jobB is scheduled
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
@@ -851,7 +851,7 @@ class ManagerTest(BaseTestCase):
         # second loop, one jobB finishes, jobC must not still be scheduled
         manager.is_finished = lambda x: "finished" if x == "999/2/1" else None
         manager.schedule_script.reset_mock()
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
@@ -901,21 +901,21 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop, jobC is scheduled
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
 
         # second loop, jobC finishes, jobD is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/4/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
 
         # third loop, jobD finishes, jobE is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
@@ -971,7 +971,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop, jobB is scheduled
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
@@ -981,21 +981,21 @@ class ManagerTest(BaseTestCase):
         # second loop, jobB finishes, jobC is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/3/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
 
         # third loop, jobC finishes, jobD is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/4/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
 
         # fourth loop, jobD finishes, jobE is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
@@ -1051,7 +1051,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop, jobB is scheduled
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
@@ -1061,21 +1061,21 @@ class ManagerTest(BaseTestCase):
         # second loop, jobB finishes, jobC must be scheduled, but not jobD
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/3/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
 
         # third loop, jobC finishes, jobD is scheduled, but not jobE
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/4/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
 
         # fourth loop, jobD finishes, jobE is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
@@ -1131,7 +1131,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop, jobB is scheduled
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
@@ -1141,21 +1141,21 @@ class ManagerTest(BaseTestCase):
         # second loop, jobB finishes, jobC must be scheduled, but not jobE
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/3/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
 
         # third loop, jobC finishes, jobE is scheduled, but not jobD
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
 
         # fourth loop, jobE finishes, jobD is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/4/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
 
@@ -1202,7 +1202,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop, All jobs A must be scheduled
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         for i in range(4):
             manager.schedule_script.assert_any_call(
                 ["commandA", f"--parg={i}", "argA", "--optionA"], tags=None, units=None, project_id=None,
@@ -1210,24 +1210,24 @@ class ManagerTest(BaseTestCase):
 
         # second loop, jobs still running, nothing scheduled
         manager.is_finished = lambda x: None
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
 
         # third loop, jobs A finishes, jobB scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/2/1"]
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         manager.schedule_script.assert_called_with(
             ["commandB", "argB", "--optionB"], tags=None, units=None, project_id=None
         )
 
         # fourth loop, jobs still running, nothing scheduled
         manager.is_finished = lambda x: None
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
 
         # 5th loop, job B finishes, jobC scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/3/1"]
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         manager.schedule_script.assert_called_with(
             ["commandC", "argC", "--optionC"], tags=None, units=None, project_id=None
         )
@@ -1268,7 +1268,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/2/1"]
         manager._on_start()
 
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandA"], tags=None, units=None, project_id=None)
 
@@ -1285,7 +1285,7 @@ class ManagerTest(BaseTestCase):
                 " jobD waits for ['jobB_0', 'jobB_1', 'jobB_2', 'jobB_3']"
             ),
         ):
-            manager.workflow_loop()
+            next(manager._run_loops())
 
     def test_job_required_resource(self, mocked_get_jobs):
         """If a jobs depends on an unavailable resource, it should not run."""
@@ -1318,7 +1318,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
         self.assertEqual(manager._available_resources, {manager.fooR: 1})
 
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_called_with(["commandA"], tags=None, units=None, project_id=None)
@@ -1328,12 +1328,12 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/2/2"]
 
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         manager.is_finished = lambda x: "finished"
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_called_with(["commandB"], tags=None, units=None, project_id=None)
@@ -1374,7 +1374,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # First loop: can run jobA and jobC
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandA"], tags=None, units=None, project_id=None)
         manager.schedule_script.assert_any_call(["commandC"], tags=None, units=None, project_id=None)
@@ -1383,14 +1383,14 @@ class ManagerTest(BaseTestCase):
         manager.is_finished = lambda x: None
         manager.schedule_script.reset_mock()
 
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # third loop: commandC finishes so commandD can run
         manager.is_finished = lambda x: "finished" if x == "999/3/1" else None
         manager.schedule_script.side_effect = ["999/4/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_called_with(["commandD"], tags=None, units=None, project_id=None)
@@ -1398,14 +1398,14 @@ class ManagerTest(BaseTestCase):
         # fourth loop: commandD finishes. commandB, can't still run
         manager.schedule_script.reset_mock()
         manager.is_finished = lambda x: "finished" if x == "999/4/1" else None
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # fifth loop: commandA finishes so commandB can run
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/2/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_called_with(["commandB"], tags=None, units=None, project_id=None)
@@ -1444,7 +1444,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager._available_resources, {manager.fooR: 1})
 
         # First loop: schedule jobA
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 4)
         calls = [call(["commandA", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)]
@@ -1454,13 +1454,13 @@ class ManagerTest(BaseTestCase):
         manager.is_finished = lambda x: None
         manager.schedule_script.reset_mock()
 
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # Third loop. All jobA subjobs finished. Schedule jobB.
         manager.is_finished = lambda x: "finished"
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_called_with(["commandB"], tags=None, units=None, project_id=None)
@@ -1500,7 +1500,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager._available_resources, {manager.fooR: 1, manager.barR: 1})
 
         # first loop: run jobA and jobB
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 5)
         calls = [call(["commandA", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)] + [
@@ -1512,14 +1512,14 @@ class ManagerTest(BaseTestCase):
         manager.is_finished = lambda x: "finished" if x.startswith("999/1/") else None
         manager.schedule_script.reset_mock()
 
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # finished jobB, jobC can run
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = [f"999/3/{i}" for i in range(1, 5)]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 4)
         calls = [call(["commandC", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)]
@@ -1561,7 +1561,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager._available_resources, {manager.fooR: 1, manager.barR: 1})
 
         # first loop: run commandA and command B
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 5)
         calls = [call(["commandA", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)] + [
@@ -1574,7 +1574,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.reset_mock()
 
         manager.schedule_script.side_effect = [f"999/3/{i}" for i in range(1, 5)]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 4)
         calls = [call(["commandC", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)]
@@ -1611,7 +1611,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop: run three jobs of jobA
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 3)
         calls = [call(["commandA", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(3)]
@@ -1620,7 +1620,7 @@ class ManagerTest(BaseTestCase):
         # second loop: run remaining jobA and two jobC
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.reset_mock()
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 3)
         calls = [call(["commandA", "--parg=3"], tags=None, units=None, project_id=None)] + [
@@ -1630,7 +1630,7 @@ class ManagerTest(BaseTestCase):
 
         # third loop: run remaining two jobC
         manager.schedule_script.reset_mock()
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
         calls = [call(["commandC", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(2, 4)]
@@ -1664,12 +1664,12 @@ class ManagerTest(BaseTestCase):
         for i in range(3):
             side_effect, side_effects = side_effects[:2], side_effects[2:]
             manager.schedule_script.side_effect = side_effect
-            result = manager.workflow_loop()
+            result = next(manager._run_loops())
             self.assertTrue(result)
             self.assertEqual(manager.schedule_script.call_count, len(side_effect))
             manager.is_finished = lambda x: "finished"
             manager.schedule_script.reset_mock()
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertFalse(result)
 
     def test_only_starting_jobs(self, mocked_get_jobs):
@@ -1684,12 +1684,12 @@ class ManagerTest(BaseTestCase):
 
         # first loop: job A and job B are scheduled
         manager.schedule_script.side_effect = ["999/1/1", "999/2/1"]
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.is_finished = lambda x: "finished"
 
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertFalse(result)
 
     def test_multiple_parallel_arg_substitution(self, mocked_get_jobs):
@@ -1719,7 +1719,7 @@ class ManagerTest(BaseTestCase):
         ]
         manager._on_start()
 
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
@@ -1760,7 +1760,7 @@ class ManagerTest(BaseTestCase):
         ]
         manager._on_start()
 
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
@@ -1794,14 +1794,14 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop, jobA still can't run
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # second loop, jobA can run now
         mocked_time.side_effect = [3660] * 4
         manager.schedule_script.side_effect = [f"999/1/{i}" for i in range(1, 5)]
 
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 4)
         calls = [call(["commandA", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)]
         manager.schedule_script.assert_has_calls(calls)
@@ -1809,12 +1809,12 @@ class ManagerTest(BaseTestCase):
         # third loop: jobA finishes, can run jobB
         manager.schedule_script.side_effect = ["999/2/1"]
         manager.is_finished = lambda x: "finished"
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 5)
         manager.schedule_script.assert_called_with(["commandB"], tags=None, units=None, project_id=None)
 
         # fourth loop: joB finishes, all finishes
-        self.assertFalse(manager.workflow_loop())
+        self.assertFalse(next(manager._run_loops()))
 
     def test_spider_task(self, mocked_get_jobs):
 
@@ -1844,7 +1844,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
 
         # first loop, run jobS
-        result = manager.workflow_loop()
+        result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_spider.call_count, 1)
         manager.schedule_spider.assert_any_call(
@@ -1875,7 +1875,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.jobs_graph["jobA"]["on_finish"]["default"], ["jobB"])
 
         # first loop
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_any_call(
             ["commandA", "--optionA=A"], tags=None, units=None, project_id=None,
@@ -1884,7 +1884,7 @@ class ManagerTest(BaseTestCase):
         # second loop
         manager.schedule_script.side_effect = ["999/2/1"]
         manager.is_finished = lambda x: "finished"
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 2)
 
         manager.schedule_script.assert_any_call(["commandB", "--optionB=B"], tags=None, units=None, project_id=None)
@@ -1920,7 +1920,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.start_callback_count, 0)
 
         # first loop
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_any_call(
             ["commandA", "--optionA=A"], tags=None, units=None, project_id=None,
@@ -1931,7 +1931,7 @@ class ManagerTest(BaseTestCase):
         # second loop, jobB is started, so start callback is called
         manager.schedule_script.side_effect = ["999/2/1"]
         manager.is_finished = lambda x: "finished"
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_any_call(["commandB", "--optionB=B"], tags=None, units=None, project_id=None)
         self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], ["jobC"])
@@ -1940,7 +1940,7 @@ class ManagerTest(BaseTestCase):
         # second loop, jobB is started, so start callback is called
         manager.schedule_script.side_effect = ["999/3/1"]
         manager.is_finished = lambda x: "finished"
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 3)
         manager.schedule_script.assert_any_call(["commandC", "--optionC=C"], tags=None, units=None, project_id=None)
         self.assertEqual(manager.start_callback_count, 1)
@@ -1971,7 +1971,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], [])
 
         # first loop
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_any_call(
             ["commandA", "--optionA=A"], tags=None, units=None, project_id=None,
@@ -1981,6 +1981,6 @@ class ManagerTest(BaseTestCase):
         # second loop, jobB is started, so start callback is called
         manager.schedule_script.side_effect = ["999/2/1"]
         manager.is_finished = lambda x: "finished"
-        self.assertTrue(manager.workflow_loop())
+        self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_any_call(["commandB", "--optionB=B"], tags=None, units=None, project_id=None)

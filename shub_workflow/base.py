@@ -65,6 +65,7 @@ class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
     def base_loop_tasks(self):
         for project_id in self.__update_finished_cache_called.keys():
             self.__update_finished_cache_called[project_id] = False
+        return super().base_loop_tasks()
 
 
 class WorkFlowManager(BaseLoopScript, WorkFlowManagerProtocol):
