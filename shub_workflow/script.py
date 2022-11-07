@@ -436,6 +436,9 @@ class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
     def base_loop_tasks(self) -> bool:
         ...
 
+    def _base_loop_tasks(self) -> bool:
+        ...
+
 
 class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
 
@@ -483,7 +486,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     def base_loop_tasks(self) -> bool:
         return True
 
-    def __base_loop_tasks(self) -> bool:
+    def _base_loop_tasks(self) -> bool:
         user_result = self.base_loop_tasks()
         if self.args.max_running_time and time.time() - self.__start_time > self.args.max_running_time:
             logger.info("Time limit reached. Closing.")
@@ -492,7 +495,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
 
     def _run_loops(self) -> Generator[bool, None, None]:
         while self.workflow_loop_enabled:
-            if not self.__base_loop_tasks():
+            if not self._base_loop_tasks():
                 yield False
             try:
                 yield self.workflow_loop()
@@ -546,6 +549,9 @@ class BaseLoopScriptAsyncMixin(BaseLoopScriptProtocol):
         **kwargs,
     ) -> Optional[JobKey]:
         return await self._async_schedule_job(spider=spider, tags=tags, units=units, project_id=project_id, **kwargs)
+
+    async def _base_loop_tasks(self) -> bool:  # type: ignore
+        return super()._base_loop_tasks()
 
     async def _async_run_loops(self) -> AsyncGenerator[bool, None]:
         for result in self._run_loops():
