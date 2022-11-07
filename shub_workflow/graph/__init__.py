@@ -299,20 +299,22 @@ class GraphManager(WorkFlowManager):
         """
 
         # Normal mode: start jobs without dependencies.
-        for job in sorted(self.__pending_jobs.keys()):
+        for task_id in sorted(self.__pending_jobs.keys()):
             if len(self.__running_jobs) >= self.max_running_jobs:
                 break
-            status = self.__pending_jobs[job]
+            status = self.__pending_jobs[task_id]
 
-            job_can_run = not status["wait_for"] and not self._must_wait_time(job) and self._try_acquire_resources(job)
+            job_can_run = (
+                not status["wait_for"] and not self._must_wait_time(task_id) and self._try_acquire_resources(task_id)
+            )
             if job_can_run:
                 try:
-                    jobid = self.run_job(job, status["is_retry"])
+                    jobid = self.run_job(task_id, status["is_retry"])
                 except Exception:
-                    self._release_resources(job)
+                    self._release_resources(task_id)
                     raise
-                self.__pending_jobs.pop(job)
-                self.__running_jobs[job] = jobid
+                self.__pending_jobs.pop(task_id)
+                self.__running_jobs[task_id] = jobid
 
         if (
             not self.__pending_jobs
@@ -325,24 +327,24 @@ class GraphManager(WorkFlowManager):
         # of dependencies, try "skip unknown deps" mode: start one job that
         # only has "unseen" dependencies to try to break the "stalemate."
         origin_job = None
-        for job in sorted(self.__pending_jobs.keys()):
+        for task_id in sorted(self.__pending_jobs.keys()):
             if len(self.__running_jobs) >= self.max_running_jobs:
                 break
-            status = self.__pending_jobs[job]
+            status = self.__pending_jobs[task_id]
             job_can_run = (
                 all(w not in self.__pending_jobs for w in status["wait_for"])
                 and (not origin_job or status.get("origin") == origin_job)
-                and self._try_acquire_resources(job)
+                and self._try_acquire_resources(task_id)
             )
             origin_job = status.get("origin")
             if job_can_run:
                 try:
-                    jobid = self.run_job(job, status["is_retry"])
+                    jobid = self.run_job(task_id, status["is_retry"])
                 except Exception:
-                    self._release_resources(job)
+                    self._release_resources(task_id)
                     raise
-                self.__pending_jobs.pop(job)
-                self.__running_jobs[job] = jobid
+                self.__pending_jobs.pop(task_id)
+                self.__running_jobs[task_id] = jobid
             if not origin_job and self.__running_jobs:
                 return
 
@@ -353,13 +355,13 @@ class GraphManager(WorkFlowManager):
         raise RuntimeError(
             "Job dependency cycle detected: %s"
             % ", ".join(
-                "%s waits for %s" % (job, sorted(self.__pending_jobs[job]["wait_for"]))
-                for job in sorted(self.__pending_jobs.keys())
+                "%s waits for %s" % (task_id, sorted(self.__pending_jobs[task_id]["wait_for"]))
+                for task_id in sorted(self.__pending_jobs.keys())
             )
         )
 
-    def get_running_jobid(self, job: TaskId) -> JobKey:
-        return self.__running_jobs[job]
+    def get_running_jobid(self, task_id: TaskId) -> JobKey:
+        return self.__running_jobs[task_id]
 
     def handle_retry(self, job: TaskId, outcome: str) -> bool:
         jobconf = self.get_jobdict(job)
@@ -378,27 +380,27 @@ class GraphManager(WorkFlowManager):
         return False
 
     def check_running_jobs(self):
-        for job, jobid in list(self.__running_jobs.items()):
+        for task_id, jobid in list(self.__running_jobs.items()):
             outcome = self.is_finished(jobid)
             if outcome is not None:
-                logger.info('Job "%s/%s" (%s) finished', self.name, job, jobid)
+                logger.info('Job "%s/%s" (%s) finished', self.name, task_id, jobid)
                 for st in self.__pending_jobs.values():
-                    st["wait_for"].discard(job)
+                    st["wait_for"].discard(task_id)
                 for conf in self.jobs_graph.values():
-                    if job in conf.get("wait_for", []):
-                        conf["wait_for"].remove(job)
-                for nextjob in self._get_next_jobs(job, outcome):
+                    if task_id in conf.get("wait_for", []):
+                        conf["wait_for"].remove(task_id)
+                for nextjob in self._get_next_jobs(task_id, outcome):
                     if nextjob == "retry":
-                        self.handle_retry(job, outcome)
+                        self.handle_retry(task_id, outcome)
                     elif nextjob in self.__pending_jobs:
                         logger.error("Job %s already pending", nextjob)
                     else:
                         wait_for = self.get_jobdict(nextjob).get("wait_for", [])
                         self._add_pending_job(nextjob, wait_for)
-                self._release_resources(job)
-                self.__running_jobs.pop(job)
+                self._release_resources(task_id)
+                self.__running_jobs.pop(task_id)
             else:
-                logger.info("Job %s (%s) still running", job, jobid)
+                logger.info("Job %s (%s) still running", task_id, jobid)
 
     def _try_acquire_resources(self, job: TaskId) -> bool:
         result = True
