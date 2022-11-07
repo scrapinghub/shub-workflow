@@ -442,10 +442,12 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     # If 0, don't loop. If positive number, repeat loop every given number of seconds
     # --loop-mode command line option overrides it
     loop_mode = 0
+    max_running_time = 0
 
     def __init__(self):
         self.workflow_loop_enabled = False
         super().__init__()
+        self.__start_time = time.time()
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -474,9 +476,16 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     def base_loop_tasks(self) -> bool:
         return True
 
+    def __base_loop_tasks(self) -> bool:
+        user_result = self.base_loop_tasks()
+        if self.max_running_time and time.time() - self.__start_time > self.max_running_time:
+            logger.info("Time limit reached. Closing.")
+            return False
+        return user_result
+
     def _run_loops(self) -> Generator[bool, None, None]:
         while self.workflow_loop_enabled:
-            if not self.base_loop_tasks():
+            if not self.__base_loop_tasks():
                 yield False
             try:
                 yield self.workflow_loop()
