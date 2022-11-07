@@ -371,7 +371,7 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
                 break
             kwargs["start"] += count
 
-    def get_jobs_with_tags(self, spider, tags, project_id=None, **kwargs) -> Generator[Job, None, None]:
+    def get_jobs_with_tags(self, spider: str, tags: List[str], project_id:Optional[int]=None, **kwargs) -> Generator[Job, None, None]:
         """
         Get jobs with target tags
         """
@@ -466,12 +466,12 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
                 logger.info("No more tasks")
                 break
 
-    def _base_loop_tasks(self):
+    def base_loop_tasks(self):
         pass
 
     def _run_loops(self) -> Generator[bool, None, None]:
         while self.workflow_loop_enabled:
-            self._base_loop_tasks()
+            self.base_loop_tasks()
             try:
                 yield self.workflow_loop()
             except KeyboardInterrupt:
