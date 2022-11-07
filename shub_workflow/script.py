@@ -459,6 +459,13 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
             metavar="SECONDS",
             default=self.loop_mode,
         )
+        self.argparser.add_argument(
+            "--max-running-time",
+            type=int,
+            default=self.max_running_time,
+            metavar="SECONDS",
+            help="Set max time after which the script will auto shutdown.",
+        )
 
     def on_start(self):
         pass
@@ -478,7 +485,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
 
     def __base_loop_tasks(self) -> bool:
         user_result = self.base_loop_tasks()
-        if self.max_running_time and time.time() - self.__start_time > self.max_running_time:
+        if self.args.max_running_time and time.time() - self.__start_time > self.args.max_running_time:
             logger.info("Time limit reached. Closing.")
             return False
         return user_result
