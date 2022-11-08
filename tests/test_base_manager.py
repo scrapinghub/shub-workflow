@@ -37,3 +37,37 @@ class WorkFlowManagerTest(TestCase):
         with script_args(["my_fantasy_name"]):
             manager = TestManager()
         self.assertEqual(manager.name, "my_fantasy_name")
+
+    @patch("shub_workflow.base.WorkFlowManager._check_resume_workflow")
+    def test_check_resume_workflow_not_called(
+        self, mocked_check_resume_workflow, mocked_update_metadata, mocked_get_job_tags
+    ):
+        class TestManager(WorkFlowManager):
+            def workflow_loop(self):
+                return True
+
+        mocked_get_job_tags.side_effect = [[], []]
+
+        with script_args(["my_fantasy_name"]):
+            manager = TestManager()
+        self.assertEqual(manager.name, "my_fantasy_name")
+
+        manager._on_start()
+        self.assertFalse(manager._check_resume_workflow.called)
+
+    @patch("shub_workflow.base.WorkFlowManager._check_resume_workflow")
+    def test_check_resume_workflow_called(
+        self, mocked_check_resume_workflow, mocked_update_metadata, mocked_get_job_tags
+    ):
+        class TestManager(WorkFlowManager):
+            def workflow_loop(self):
+                return True
+
+        mocked_get_job_tags.side_effect = [[], []]
+
+        with script_args(["my_fantasy_name", "--flow-id=3456"]):
+            manager = TestManager()
+        self.assertEqual(manager.name, "my_fantasy_name")
+
+        manager._on_start()
+        self.assertTrue(manager._check_resume_workflow.called)

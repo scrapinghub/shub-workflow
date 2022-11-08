@@ -169,8 +169,7 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
         self.__flow_tags.append(tag)
         self.add_job_tags(tags=[tag])
 
-    @staticmethod
-    def generate_flow_id() -> str:
+    def generate_flow_id(self) -> str:
         raise NotImplementedError("generate_flow_id() must be implemented if flow_id_required is True.")
 
     def set_flow_id_name(self, args: Namespace):
