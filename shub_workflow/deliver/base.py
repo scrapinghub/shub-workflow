@@ -147,14 +147,16 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         _LOG.info(f"Processed a total of {self.total_items_count} items.")
         if self.DEDUPE_KEY_BY_FIELDS:
             _LOG.info(f"A total of {self.total_dupe_filtered_items_count} items were duplicated.")
-        jcount = 0
-        for jkey in self._all_jobs_to_tag:
-            self.add_job_tags(jkey, tags=[self.DELIVERED_TAG])
-            jcount += 1
-            if jcount % 100 == 0:
-                _LOG.info("Marked %d jobs as delivered", jcount)
+        asyncio.run(self._tag_all())
         if hasattr(self.seen_items, "close"):
             self.seen_items.close()
+
+    async def _tag_all(self):
+        while self._all_jobs_to_tag:
+            to_tag, self._all_jobs_to_tag = self._all_jobs_to_tag[:1000], self._all_jobs_to_tag[1000:]
+            cors = [self.async_add_job_tags(jkey, tags=[self.DELIVERED_TAG]) for jkey in to_tag]
+            await asyncio.gather(*cors)
+            _LOG.info("Marked %d jobs as delivered", len(to_tag))
 
 
 class CachedDeliveredTagsMixin(DeliverScriptProtocol):
