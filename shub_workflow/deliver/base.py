@@ -2,15 +2,12 @@ import abc
 import json
 import asyncio
 import logging
-from uuid import uuid1
-from typing import Set, Generator, List, Tuple, Optional, Protocol, Union, Type
+from typing import Generator, List, Tuple, Optional, Protocol, Union, Type
 
-from collection_scanner import CollectionScanner
-from scrapinghub.client.exceptions import NotFound
 from scrapinghub.client.jobs import Job
 from scrapy import Item
 
-from shub_workflow.script import BaseScript, BaseLoopScript, JobKey
+from shub_workflow.script import BaseLoopScript, JobKey
 from shub_workflow.deliver.dupefilter import SqliteDictDupesFilter, DupesFilterProtocol
 
 _LOG = logging.getLogger(__name__)
@@ -157,106 +154,3 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
             cors = [self.async_add_job_tags(jkey, tags=[self.DELIVERED_TAG]) for jkey in to_tag]
             await asyncio.gather(*cors)
             _LOG.info("Marked %d jobs as delivered", len(to_tag))
-
-
-class CachedDeliveredTagsMixin(DeliverScriptProtocol):
-
-    """
-    Usage:
-
-    class MyDeliveryScript(CachedDeliveredTagsMixin, BaseDeliverScript):
-        pass
-
-    Under situations where you need speed and you have lots of jobs to deliver from,
-    this mixin caches in a collection the delivered jobs instead of tagging them
-    one by one.
-
-    An external job scheduled from time to time may take care of tagging jobs while
-    cleaning the collection. This is the recommended approach. Use the class
-    SyncDeliveredScript for creating a script for that purpose.
-    """
-
-    TAGS_COLLECTION = "delivered"
-
-    def __init__(self):
-        super().__init__()
-        self._cache = None
-        self._to_store: Set = set()
-
-    def get_delivered_cached(self):
-        self._cache = set()
-        try:
-            for batch in CollectionScanner(
-                collection_name=self.TAGS_COLLECTION,
-                project_id=super().get_project().key,
-            ).scan_collection_batches():
-                for record in batch:
-                    self._cache.update(record["data"])
-        except NotFound:
-            pass
-        _LOG.info(f"Loaded {len(self._cache)} keys from delivered cache collection.")
-
-    def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
-        if jobkey is None or tags != [self.DELIVERED_TAG]:
-            super().add_job_tags(jobkey, tags)
-        else:
-            if self._cache is None:
-                self.get_delivered_cached()
-            assert self._cache is not None
-            self._cache.add(jobkey)
-            self._to_store.add(jobkey)
-
-    def sync(self):
-        if self._to_store:
-            col = super().get_project().collections.get_store(self.TAGS_COLLECTION)
-            to_store_all = list(self._to_store)
-            self._to_store = set()
-            to_store_count = len(to_store_all)
-            while to_store_all:
-                to_store, to_store_all = to_store_all[:100], to_store_all[100:]
-                key = str(uuid1())
-                record = {"_key": key, "data": list(to_store)}
-                col.set(record)
-            _LOG.info(f"Synced delivered cache ({to_store_count} jobs).")
-
-    def get_delivery_spider_jobs(self, scrapername: str, target_tags: List[str]) -> Generator[Job, None, None]:
-        if self._cache is None:
-            self.get_delivered_cached()
-        assert self._cache is not None
-        for sj in super().get_delivery_spider_jobs(scrapername, target_tags):
-            if sj.key not in self._cache:
-                yield sj
-
-    def on_close(self):
-        super().on_close()
-        self.sync()
-
-
-class SyncDeliveredScript(BaseScript):
-
-    TAGS_COLLECTION = "delivered"
-    DELIVERED_TAG = "delivered"
-
-    def run(self):
-        asyncio.run(self._run())
-
-    async def _run(self):
-        cors = list(self._main())
-        if cors:
-            await asyncio.gather(*cors)
-
-    def _main(self):
-        store = self.get_project().collections.get_store(self.TAGS_COLLECTION)
-        try:
-            for batch in CollectionScanner(
-                collection_name=self.TAGS_COLLECTION,
-                project_id=super().get_project().key,
-                meta=["_key"],
-            ).scan_collection_batches():
-                for record in batch:
-                    for key in record["data"]:
-                        yield self.async_add_job_tags(key, [self.DELIVERED_TAG])
-                    store.delete([record["_key"]])
-                    _LOG.info(f"Synced {len(record['data'])} jobs from {record['_key']}.")
-        except NotFound:
-            pass
