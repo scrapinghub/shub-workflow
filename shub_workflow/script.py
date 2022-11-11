@@ -479,9 +479,9 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
             if loop_result and self.args.loop_mode:
                 time.sleep(self.args.loop_mode)
             else:
-                self._close()
-                logger.info("No more tasks")
                 break
+        self._close()
+        logger.info("No more tasks")
 
     def base_loop_tasks(self):
         pass
@@ -560,6 +560,6 @@ class BaseLoopScriptAsyncMixin(BaseLoopScriptProtocol):
             if loop_result and self.args.loop_mode:
                 await asyncio.sleep(self.args.loop_mode)
             else:
-                self._close()
-                logger.info("No more tasks")
                 break
+        self._close()
+        logger.info("No more tasks")
