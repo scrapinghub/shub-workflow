@@ -1,5 +1,6 @@
 import abc
 import json
+import asyncio
 import logging
 from uuid import uuid1
 from typing import Set, Generator, List, Tuple, Optional, Protocol, Union, Type
@@ -235,6 +236,14 @@ class SyncDeliveredScript(BaseScript):
     DELIVERED_TAG = "delivered"
 
     def run(self):
+        asyncio.run(self._run())
+
+    async def _run(self):
+        cors = list(self._main())
+        if cors:
+            await asyncio.gather(*cors)
+
+    def _main(self):
         store = self.get_project().collections.get_store(self.TAGS_COLLECTION)
         try:
             for batch in CollectionScanner(
@@ -244,7 +253,7 @@ class SyncDeliveredScript(BaseScript):
             ).scan_collection_batches():
                 for record in batch:
                     for key in record["data"]:
-                        self.add_job_tags(key, [self.DELIVERED_TAG])
+                        yield self.async_add_job_tags(key, [self.DELIVERED_TAG])
                     store.delete([record["_key"]])
                     _LOG.info(f"Synced {len(record['data'])} jobs from {record['_key']}.")
         except NotFound:

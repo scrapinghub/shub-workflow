@@ -287,6 +287,10 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
                 if metadata:
                     self._update_metadata(metadata, {"tags": job_tags})
 
+    async def async_add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, partial(self.add_job_tags, jobkey, tags))
+
     def _get_flowid_name_from_tags(self, jobkey: Optional[JobKey] = None) -> Tuple[Optional[str], Optional[str]]:
         """If jobkey is None, get flowid from own tags"""
         tags = self.get_job_tags(jobkey)
