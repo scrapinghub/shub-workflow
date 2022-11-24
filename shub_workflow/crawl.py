@@ -118,6 +118,7 @@ class CrawlManager(WorkFlowManager):
             jobkey = self.schedule_spider(spider, **schedule_args)
             if jobkey is not None:
                 self._running_job_keys[jobkey] = spider, job_args_override
+                self.stats.inc_value("crawlmanager/scheduled_jobs")
             return jobkey
         return None
 
