@@ -2,7 +2,8 @@ import abc
 import json
 import asyncio
 import logging
-from typing import Generator, List, Tuple, Optional, Protocol, Union, Type
+from collections import defaultdict
+from typing import Generator, List, Tuple, Optional, Protocol, Union, Type, Dict
 
 from scrapinghub.client.jobs import Job
 from scrapy import Item
@@ -59,6 +60,7 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         self.total_items_count = 0
         self.total_dupe_filtered_items_count = 0
         self.seen_items: DupesFilterProtocol = self.SEEN_ITEMS_CLASS()
+        self.seen_fields: Dict[str, int] = defaultdict(int)
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -126,6 +128,9 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
             else:
                 self.on_item(item, scrapername)
                 self.add_seen_item(item)
+                for key, value in item.items():
+                    if value:
+                        self.seen_fields[key] += 1
             self.total_items_count += 1
             if self.total_items_count % self.LOG_EVERY == 0:
                 _LOG.info(f"Processed {self.total_items_count} items.")
@@ -147,6 +152,9 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         asyncio.run(self._tag_all())
         if hasattr(self.seen_items, "close"):
             self.seen_items.close()
+        for key, value in self.seen_fields.items():
+            self.stats.set_value(f"delivery/fields/count/{key}", value)
+        self.stats.set_value("delivery/items/count/", self.total_items_count)
 
     async def _tag_all(self):
         while self._all_jobs_to_tag:
