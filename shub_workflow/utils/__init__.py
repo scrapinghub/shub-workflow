@@ -24,7 +24,6 @@ def resolve_project_id(project_id=None) -> Optional[int]:
     Gets project id from following sources in following order of precedence:
     - default parameter values
     - environment variables
-    - sh_scrapy.hsref (kumo)
     - scrapinghub.yml file
 
     in order to allow to use codes that needs HS or dash API,
@@ -87,4 +86,11 @@ def get_project_settings():
 
     settings = scrapy_get_project_settings()
     settings.setdict(kumo_settings(), priority="project")
+    try:
+        # test sh_scrapy is available
+        import sh_scrapy  # noqa: F401
+
+        settings.setdict({"STATS_CLASS": "sh_scrapy.stats.HubStorageStatsCollector"}, priority="cmdline")
+    except ImportError:
+        pass
     return settings
