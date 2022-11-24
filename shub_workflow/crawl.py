@@ -69,7 +69,6 @@ class CrawlManager(WorkFlowManager):
 
     def __init__(self):
         super().__init__()
-        self.__close_reason = None
 
         # running jobs represents the state of a crawl manager.
         # a dict job key : (spider, job_args_override)
@@ -140,8 +139,8 @@ class CrawlManager(WorkFlowManager):
         return outcomes
 
     def bad_outcome_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
-        if self.__close_reason is None:
-            self.__close_reason = outcome
+        if self.get_close_reason() is None:
+            self.set_close_reason(outcome)
 
     def workflow_loop(self) -> bool:
         outcomes = self.check_running_jobs()
@@ -161,7 +160,7 @@ class CrawlManager(WorkFlowManager):
     def on_close(self):
         job = self.get_job()
         if job:
-            close_reason = self.__close_reason
+            close_reason = self.get_close_reason()
             self.finish(close_reason=close_reason)
 
 

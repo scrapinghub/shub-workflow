@@ -13,9 +13,11 @@ from argparse import ArgumentParser, Namespace
 from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any, AsyncGenerator, Awaitable, cast
 from typing_extensions import TypedDict, NotRequired, Protocol
 
+from scrapy.utils.misc import load_object
 from scrapinghub import ScrapinghubClient, DuplicateJobError
 from scrapinghub.client.jobs import Job, JobMeta
 from scrapinghub.client.projects import Project
+from shub_workflow.utils import get_project_settings
 
 from shub_workflow.utils import (
     resolve_project_id,
@@ -161,6 +163,7 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
         self.__flow_tags: List[str] = []
         super().__init__()
         self.set_flow_id_name(self.args)
+        self.project_settings = get_project_settings()
 
     def append_flow_tag(self, tag: str):
         """
@@ -452,6 +455,19 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
         super().__init__()
         self.__start_time = time.time()
 
+        class PseudoCrawler:
+            def __init__(self, script):
+                self.settings = script.project_settings
+
+        self.stats = load_object(self.project_settings["STATS_CLASS"])(PseudoCrawler(self))
+        self.__close_reason = None
+
+    def set_close_reason(self, reason):
+        self.__close_reason = reason
+
+    def get_close_reason(self):
+        return self.__close_reason
+
     def add_argparser_options(self):
         super().add_argparser_options()
         self.argparser.add_argument(
@@ -512,6 +528,8 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
 
     def _close(self):
         self.on_close()
+        self.__close_reason = self.__close_reason or "finished"
+        self.stats.close_spider(self, self.__close_reason)
 
 
 class BaseLoopScriptAsyncMixin(BaseLoopScriptProtocol):
