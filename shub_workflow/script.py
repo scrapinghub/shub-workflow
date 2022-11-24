@@ -524,6 +524,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     def _on_start(self):
         self.on_start()
         self.workflow_loop_enabled = True
+        self.stats.open_spider(self)
 
     def on_close(self):
         pass
