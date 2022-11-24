@@ -1,4 +1,5 @@
 import abc
+import time
 import json
 import asyncio
 import logging
@@ -45,6 +46,9 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
     # print log every given items processed
     LOG_EVERY = 1000
 
+    # minimal run time in order to ensure target jobs started to be scheduled
+    MIN_RUN_TIME = 30
+
     # define here the fields used to deduplicate items. All them compose the dedupe key.
     # target item values must be strings.
     # for changing behavior, override is_seen_item()
@@ -61,6 +65,7 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         self.total_dupe_filtered_items_count = 0
         self.seen_items: DupesFilterProtocol = self.SEEN_ITEMS_CLASS()
         self.seen_fields: Dict[str, int] = defaultdict(int)
+        self.start_time = time.time()
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -144,6 +149,8 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         if self.loop_mode:
             target_tags = self.get_target_tags()
             if self.has_delivery_running_spider_jobs(scrapername, target_tags):
+                return True
+            if time.time() - self.start_time < self.MIN_RUN_TIME:
                 return True
             for scrapername in self.args.scrapername:
                 _LOG.info(f"Processing spider {scrapername}")
