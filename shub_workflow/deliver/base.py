@@ -151,6 +151,8 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         return False
 
     def on_close(self):
+        jobs_count = len(self._all_jobs_to_tag)
+        _LOG.info(f"Processed a total of {jobs_count} jobs.")
         _LOG.info(f"Processed a total of {self.total_items_count} items.")
         if self.DEDUPE_KEY_BY_FIELDS:
             _LOG.info(f"A total of {self.total_dupe_filtered_items_count} items were duplicated.")
@@ -159,7 +161,9 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
             self.seen_items.close()
         for key, value in self.seen_fields.items():
             self.stats.set_value(f"delivery/fields/count/{key}", value)
-        self.stats.set_value("delivery/items/count/", self.total_items_count)
+        self.stats.set_value("delivery/items/count", self.total_items_count)
+        self.stats.set_value("delivery/items/duplicated", self.total_dupe_filtered_items_count)
+        self.stats.set_value("delivery/jobs/count", jobs_count)
 
     async def _tag_all(self):
         while self._all_jobs_to_tag:
