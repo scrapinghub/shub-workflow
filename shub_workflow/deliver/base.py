@@ -103,9 +103,7 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
                 self._all_jobs_to_tag.append(sj.key)
             if self.total_items_count >= self.MAX_PROCESSED_ITEMS:
                 return False
-        if self.loop_mode:
-            return self.has_delivery_running_spider_jobs(scrapername, target_tags)
-        return False
+        return True
 
     def get_item_unique_key(self, item: Item) -> str:
         assert all(isinstance(item[f], str) for f in self.DEDUPE_KEY_BY_FIELDS)
@@ -139,11 +137,18 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         print(json.dumps(item))
 
     def workflow_loop(self) -> bool:
-        retval = False
         for scrapername in self.args.scrapername:
             _LOG.info(f"Processing spider {scrapername}")
-            retval = retval or self.process_spider_jobs(scrapername)
-        return retval
+            if not self.process_spider_jobs(scrapername):
+                return False
+        if self.loop_mode:
+            target_tags = self.get_target_tags()
+            if self.has_delivery_running_spider_jobs(scrapername, target_tags):
+                return True
+            for scrapername in self.args.scrapername:
+                _LOG.info(f"Processing spider {scrapername}")
+                self.process_spider_jobs(scrapername)
+        return False
 
     def on_close(self):
         _LOG.info(f"Processed a total of {self.total_items_count} items.")
