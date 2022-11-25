@@ -443,6 +443,7 @@ class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
     def _run_loops(self) -> Generator[bool, None, None]:
         ...
 
+    @abc.abstractmethod
     def base_loop_tasks(self):
         ...
 
