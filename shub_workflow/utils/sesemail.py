@@ -104,11 +104,11 @@ class SESMailSenderMixin:
     """Use this mixin for enabling ses email sending capabilities on your script class"""
 
     def __init__(self):
+        self.notification_emails = []
         super().__init__()
         self.seshelper = SESHelper(
             self.project_settings["AWS_EMAIL_ACCESS_KEY"], self.project_settings["AWS_EMAIL_SECRET_KEY"]
         )
-        self.notification_emails = []
 
     def send_ses_email(self, body, subject, text_attachments=None, image_attachments=None):
         if self.notification_emails:
