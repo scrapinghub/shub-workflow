@@ -14,6 +14,7 @@ from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any, 
 from typing_extensions import TypedDict, NotRequired, Protocol
 
 from scrapy.utils.misc import load_object
+from scrapy.statscollectors import StatsCollector
 from scrapinghub import ScrapinghubClient, DuplicateJobError
 from scrapinghub.client.jobs import Job, JobMeta
 from scrapinghub.client.projects import Project
@@ -427,6 +428,9 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
 
 
 class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
+
+    stats: StatsCollector
+
     @abc.abstractmethod
     def workflow_loop(self) -> bool:
         """Implement here your loop code. Return True if want to continue looping,
