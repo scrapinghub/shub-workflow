@@ -98,3 +98,24 @@ class SESHelper:
             msg.attach(att)
 
         return msg
+
+
+class SESMailSenderMixin:
+    """Use this mixin for enabling ses email sending capabilities on your script class"""
+
+    def __init__(self):
+        super().__init__()
+        self.seshelper = SESHelper(
+            self.project_settings["AWS_EMAIL_ACCESS_KEY"], self.project_settings["AWS_EMAIL_SECRET_KEY"]
+        )
+        self.notification_emails = []
+
+    def send_ses_email(self, body, subject, text_attachments=None, image_attachments=None):
+        if self.notification_emails:
+            msg = self.seshelper.build_email_message(
+                body,
+                text_attachments=text_attachments,
+                image_attachments=image_attachments,
+                subject=subject,
+            )
+            self.seshelper.send_ses_email("noreply@zyte.com", self.notification_emails, msg)

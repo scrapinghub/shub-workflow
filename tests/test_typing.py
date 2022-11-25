@@ -1,4 +1,5 @@
 import os
+from argparse import Namespace
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -22,6 +23,12 @@ class MyMixin(BaseScriptProtocol):
 
     def append_flow_tag(self, tag: str):
         self.target = 1
+
+    def parse_args(self) -> Namespace:
+        args = super().parse_args()
+        if hasattr(args, "exec_id"):
+            self.append_flow_tag(f"EXEC_ID={args.exec_id}")
+        return args
 
 
 class MyWFMixin(WorkFlowManagerProtocol):
