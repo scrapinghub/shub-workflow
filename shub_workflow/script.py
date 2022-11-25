@@ -464,7 +464,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
                 self.settings = script.project_settings
 
         stats_collector_class = self.project_settings["STATS_CLASS"]
-        logger.info(f"Stats collection class: {stats_collector_class}")
+        logger.debug(f"Stats collection class: {stats_collector_class}")
         self.stats = load_object(stats_collector_class)(PseudoCrawler(self))
         self.__close_reason = None
 
