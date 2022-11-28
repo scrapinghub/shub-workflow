@@ -25,6 +25,7 @@ class SESHelper:
     def __init__(self, aws_key: str, aws_secret: str, aws_region: Optional[str] = None):
         self.aws_key = aws_key
         self.aws_secret = aws_secret
+        assert self.aws_key and self.aws_secret, "SES Credentials not set."
         self.aws_region = aws_region or self.DEFAULT_SES_REGION
 
     def send_ses_email(
