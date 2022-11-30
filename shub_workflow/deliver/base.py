@@ -99,6 +99,8 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         return False
 
     def process_spider_jobs(self, scrapername: str) -> bool:
+        if self.total_items_count >= self.MAX_PROCESSED_ITEMS:
+            return False
         target_tags = self.get_target_tags()
         for sj in self.get_delivery_spider_jobs(scrapername, target_tags):
             if sj.key in self._all_jobs_to_tag:
