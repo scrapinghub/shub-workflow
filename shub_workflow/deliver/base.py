@@ -26,6 +26,7 @@ class DeliverScriptProtocol(Protocol):
         self,
         scrapername: str,
         target_tags: List[str],
+        only_finished: bool = True,
     ) -> Generator[Job, None, None]:
         ...
 
@@ -83,11 +84,16 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         """
         return []
 
-    def get_delivery_spider_jobs(self, scrapername: str, target_tags: List[str]) -> Generator[Job, None, None]:
+    def get_delivery_spider_jobs(
+        self, scrapername: str, target_tags: List[str], only_finished: bool = True
+    ) -> Generator[Job, None, None]:
         if self.flow_id:
             flow_id_tag = [f"FLOW_ID={self.flow_id}"]
             target_tags = flow_id_tag + target_tags
-        yield from self.get_jobs_with_tags(scrapername, target_tags, state=["finished"], lacks_tag=[self.DELIVERED_TAG])
+        state = ["finished"]
+        if not only_finished:
+            state.append("running")
+        yield from self.get_jobs_with_tags(scrapername, target_tags, state=state, lacks_tag=[self.DELIVERED_TAG])
 
     def has_delivery_running_spider_jobs(self, scrapername: str, target_tags: List[str]) -> bool:
         if self.flow_id:
@@ -98,11 +104,11 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
                 return True
         return False
 
-    def process_spider_jobs(self, scrapername: str) -> bool:
+    def process_spider_jobs(self, scrapername: str, only_finished: bool = True) -> bool:
         if self.total_items_count >= self.MAX_PROCESSED_ITEMS:
             return False
         target_tags = self.get_target_tags()
-        for sj in self.get_delivery_spider_jobs(scrapername, target_tags):
+        for sj in self.get_delivery_spider_jobs(scrapername, target_tags, only_finished):
             if sj.key in self._all_jobs_to_tag:
                 continue
             self.process_job_items(scrapername, sj)
@@ -156,7 +162,7 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
                 return True
             for scrapername in self.args.scrapername:
                 _LOG.info(f"Processing spider {scrapername}")
-                self.process_spider_jobs(scrapername)
+                self.process_spider_jobs(scrapername, only_finished=False)
         return False
 
     def on_close(self):
