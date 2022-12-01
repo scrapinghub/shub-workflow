@@ -160,12 +160,13 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
                 return True
             if time.time() - self.start_time < self.MIN_RUN_TIME:
                 return True
-            for scrapername in self.args.scrapername:
-                _LOG.info(f"Processing spider {scrapername}")
-                self.process_spider_jobs(scrapername, only_finished=False)
         return False
 
     def on_close(self):
+        if self.loop_mode:
+            for scrapername in self.args.scrapername:
+                _LOG.info(f"Processing remaining spider {scrapername}")
+                self.process_spider_jobs(scrapername, only_finished=False)
         jobs_count = len(self._all_jobs_to_tag)
         _LOG.info(f"Processed a total of {jobs_count} jobs.")
         _LOG.info(f"Processed a total of {self.total_items_count} items.")
