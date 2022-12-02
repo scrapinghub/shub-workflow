@@ -107,12 +107,16 @@ class SESMailSenderMixin:
     def __init__(self):
         self.notification_emails = []
         super().__init__()
-        self.seshelper = SESHelper(
-            self.project_settings["AWS_EMAIL_ACCESS_KEY"], self.project_settings["AWS_EMAIL_SECRET_KEY"]
-        )
+        self.seshelper = None
+        try:
+            self.seshelper = SESHelper(
+                self.project_settings["AWS_EMAIL_ACCESS_KEY"], self.project_settings["AWS_EMAIL_SECRET_KEY"]
+            )
+        except AssertionError:
+            logger.warning("No SES credentials set. No mails will be sent.")
 
     def send_ses_email(self, body, subject, text_attachments=None, image_attachments=None):
-        if self.notification_emails:
+        if self.notification_emails and self.seshelper is not None:
             msg = self.seshelper.build_email_message(
                 body,
                 text_attachments=text_attachments,
