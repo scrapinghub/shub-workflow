@@ -71,7 +71,7 @@ class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
 class WorkFlowManager(BaseLoopScript, WorkFlowManagerProtocol):
 
     # --max-running-job command line option overrides it
-    default_max_jobs = float("inf")
+    default_max_jobs: int = 1000
 
     flow_id_required = True
 
