@@ -162,9 +162,9 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
         self.client = ScrapinghubClient(max_retries=100)
         self.close_reason: Optional[str] = None
         self.__flow_tags: List[str] = []
+        self.project_settings = get_project_settings()
         super().__init__()
         self.set_flow_id_name(self.args)
-        self.project_settings = get_project_settings()
 
     def append_flow_tag(self, tag: str):
         """
@@ -509,9 +509,12 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     def base_loop_tasks(self):
         pass
 
+    def is_max_time_ran_out(self):
+        return self.args.max_running_time > 0 and time.time() - self.__start_time > self.args.max_running_time
+
     def __base_loop_tasks(self):
         self.base_loop_tasks()
-        if self.args.max_running_time and time.time() - self.__start_time > self.args.max_running_time:
+        if self.is_max_time_ran_out():
             logger.info("Time limit reached. Closing.")
             self.workflow_loop_enabled = False
 
