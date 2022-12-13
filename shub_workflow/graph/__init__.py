@@ -62,6 +62,7 @@ class GraphManager(WorkFlowManager):
         # Ensure jobs are traversed in the same order as they went pending.
         self.__pending_jobs: Dict[TaskId, PendingJobDict] = OrderedDict()
         self.__running_jobs: Dict[TaskId, JobKey] = OrderedDict()
+        self.__completed_jobs: Set[TaskId] = set()
         self._available_resources: Dict[Resource, ResourceAmmount] = {}  # map resource : ammount
         self._acquired_resources: DefaultDict[Resource, List[Tuple[TaskId, ResourceAmmount]]] = defaultdict(
             list
@@ -97,7 +98,6 @@ class GraphManager(WorkFlowManager):
     def on_start(self):
         if not self.jobs_graph:
             self.argparser.error("Jobs graph configuration is empty.")
-        self.__starting_jobs = self.args.starting_job or self.__starting_jobs
         if not self.__starting_jobs:
             self.argparser.error("You must provide either --starting-job or --root-jobs.")
         self._fill_available_resources()
@@ -382,6 +382,7 @@ class GraphManager(WorkFlowManager):
     def check_running_jobs(self):
         for task_id, jobid in list(self.__running_jobs.items()):
             outcome = self.is_finished(jobid)
+            will_retry = False
             if outcome is not None:
                 logger.info('Job "%s/%s" (%s) finished', self.name, task_id, jobid)
                 for st in self.__pending_jobs.values():
@@ -391,7 +392,7 @@ class GraphManager(WorkFlowManager):
                         conf["wait_for"].remove(task_id)
                 for nextjob in self._get_next_jobs(task_id, outcome):
                     if nextjob == "retry":
-                        self.handle_retry(task_id, outcome)
+                        will_retry = self.handle_retry(task_id, outcome)
                     elif nextjob in self.__pending_jobs:
                         logger.error("Job %s already pending", nextjob)
                     else:
@@ -399,6 +400,8 @@ class GraphManager(WorkFlowManager):
                         self._add_pending_job(nextjob, wait_for)
                 self._release_resources(task_id)
                 self.__running_jobs.pop(task_id)
+                if not will_retry:
+                    self.__completed_jobs.append(task_id)
             else:
                 logger.info("Job %s (%s) still running", task_id, jobid)
 
