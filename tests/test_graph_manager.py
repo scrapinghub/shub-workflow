@@ -133,10 +133,13 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_any_call(
-            ["commandA", "argA", "--optionA"], tags=["tag1", "tag2"], units=2, project_id=None,
+            ["commandA", "argA", "--optionA"],
+            tags=["tag1", "tag2", "TASK_ID=jobA"],
+            units=2,
+            project_id=None,
         )
         manager.schedule_script.assert_any_call(
-            ["commandB", "argB", "--optionB"], tags=None, units=None, project_id=None
+            ["commandB", "argB", "--optionB"], tags=["TASK_ID=jobB"], units=None, project_id=None
         )
 
         # second loop, something went wrong with jobA, retry with retry_args instead
@@ -146,7 +149,7 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
-            ["commandA", "argA"], tags=["tag1", "tag2"], units=2, project_id=None
+            ["commandA", "argA"], tags=["tag1", "tag2", "TASK_ID=jobA"], units=2, project_id=None
         )
 
         # third loop, both jobs are still running
@@ -168,7 +171,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
-        manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
 
         # sixth loop, jobC finished, schedule jobD
         manager.is_finished = lambda x: "finished" if x == "999/1/4" else None
@@ -177,7 +182,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
-        manager.schedule_script.assert_called_with(["commandD", "argD"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(
+            ["commandD", "argD"], tags=["TASK_ID=jobD"], units=None, project_id=None
+        )
 
         # last loop, jobD finished, workflow finished
         manager.is_finished = lambda x: "finished" if x == "999/1/5" else None
@@ -244,10 +251,13 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_any_call(
-            ["commandA", "argA", "--optionA"], tags=["tag1", "tag2"], units=2, project_id=None,
+            ["commandA", "argA", "--optionA"],
+            tags=["tag1", "tag2", "TASK_ID=jobA"],
+            units=2,
+            project_id=None,
         )
         manager.schedule_script.assert_any_call(
-            ["commandB", "argB", "--optionB"], tags=None, units=None, project_id=None
+            ["commandB", "argB", "--optionB"], tags=["TASK_ID=jobB"], units=None, project_id=None
         )
 
     def test_retry_job(self, mocked_get_jobs):
@@ -275,7 +285,10 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 4)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandA", f"--parg={i}", "argA", "--optionA"], tags=["tag1", "tag2"], units=None, project_id=None,
+                ["commandA", f"--parg={i}", "argA", "--optionA"],
+                tags=["tag1", "tag2", "TASK_ID=jobA"],
+                units=None,
+                project_id=None,
             )
 
         # second loop still running job A
@@ -290,7 +303,10 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
-            ["commandA", "--parg=0", "argA"], tags=["tag1", "tag2"], units=None, project_id=None,
+            ["commandA", "--parg=0", "argA"],
+            tags=["tag1", "tag2", "TASK_ID=jobA"],
+            units=None,
+            project_id=None,
         )
 
         # fourth loop, job A_0 fails, must be retried
@@ -300,7 +316,10 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
-            ["commandA", "--parg=0", "argA"], tags=["tag1", "tag2"], units=None, project_id=None,
+            ["commandA", "--parg=0", "argA"],
+            tags=["tag1", "tag2", "TASK_ID=jobA"],
+            units=None,
+            project_id=None,
         )
 
         # fifth loop, job A_0 fails again, cannot be retried (retries=2)
@@ -317,7 +336,10 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
-            ["commandA", "--parg=1", "argA"], tags=["tag1", "tag2"], units=None, project_id=None,
+            ["commandA", "--parg=1", "argA"],
+            tags=["tag1", "tag2", "TASK_ID=jobA"],
+            units=None,
+            project_id=None,
         )
 
         # 7th loop, job A_1 fails again, must be retried
@@ -327,7 +349,10 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
-            ["commandA", "--parg=1", "argA"], tags=["tag1", "tag2"], units=None, project_id=None,
+            ["commandA", "--parg=1", "argA"],
+            tags=["tag1", "tag2", "TASK_ID=jobA"],
+            units=None,
+            project_id=None,
         )
 
         # 8th loop, job A_1 fails again, cannot be retried (retries=2)
@@ -356,7 +381,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
-        manager.schedule_script.assert_any_call(["commandC", "argC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
 
         # second loop, job C fails, must be retried.
         manager.is_finished = lambda x: "failed" if x == "999/3/1" else None
@@ -364,7 +391,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
-        manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
 
     def test_max_retries(self, mocked_get_jobs):
         """
@@ -392,7 +421,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
-        manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
 
         # third loop, job C fails again, must be retried (last retry).
         manager.is_finished = lambda x: "failed" if x == "999/3/2" else None
@@ -400,7 +431,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 3)
-        manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
 
         # fourth loop, job C fails again, give up.
         manager.is_finished = lambda x: "failed" if x == "999/3/3" else None
@@ -433,7 +466,10 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 4)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandA", f"--parg={i}", "argA", "--optionA"], tags=["tag1", "tag2"], units=None, project_id=None,
+                ["commandA", f"--parg={i}", "argA", "--optionA"],
+                tags=["tag1", "tag2", "TASK_ID=jobA"],
+                units=None,
+                project_id=None,
             )
 
         # second loop still running job A
@@ -448,7 +484,10 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(
-            ["commandA", "--parg=0", "argA"], tags=["tag1", "tag2"], units=None, project_id=None,
+            ["commandA", "--parg=0", "argA"],
+            tags=["tag1", "tag2", "TASK_ID=jobA"],
+            units=None,
+            project_id=None,
         )
 
         # fourth loop, job A finishes, will start now parallel job B
@@ -463,7 +502,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandB", f"--parg={i}", "argB", "--optionB"], tags=None, units=None, project_id=None,
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=["TASK_ID=jobB"],
+                units=None,
+                project_id=None,
             )
 
         # fifth loop, jobB finishes partially, neither jobD nor jobC can still be scheduled
@@ -478,8 +520,10 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/3/1", "999/3/2"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandC", "argC"], tags=None, units=None, project_id=None)
-        manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
+        manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
     def test_tags(self, mocked_get_jobs):
 
@@ -506,7 +550,15 @@ class ManagerTest(BaseTestCase):
         for i in range(4):
             project.jobs.run.assert_any_call(
                 spider="py:commandA",
-                add_tag=["FLOW_ID=mygeneratedflowid", "PARENT_NAME=test", "tag1", "tag2", "tag3", "tag4"],
+                add_tag=[
+                    "FLOW_ID=mygeneratedflowid",
+                    "PARENT_NAME=test",
+                    "TASK_ID=jobA",
+                    "tag1",
+                    "tag2",
+                    "tag3",
+                    "tag4",
+                ],
                 units=None,
                 cmd_args=f"--parg={i} argA --optionA",
                 meta=None,
@@ -537,7 +589,7 @@ class ManagerTest(BaseTestCase):
         for i in range(4):
             project.jobs.run.assert_any_call(
                 spider="py:commandA",
-                add_tag=["FLOW_ID=myclflowid", "PARENT_NAME=test", "tag1", "tag2"],
+                add_tag=["FLOW_ID=myclflowid", "PARENT_NAME=test", "TASK_ID=jobA", "tag1", "tag2"],
                 units=None,
                 cmd_args=f"--parg={i} argA --optionA",
                 meta=None,
@@ -573,7 +625,7 @@ class ManagerTest(BaseTestCase):
         for i in range(4):
             project.jobs.run.assert_any_call(
                 spider="py:commandA",
-                add_tag=["FLOW_ID=myflowidfromtag", "PARENT_NAME=test", "tag1", "tag2"],
+                add_tag=["FLOW_ID=myflowidfromtag", "PARENT_NAME=test", "TASK_ID=jobA", "tag1", "tag2"],
                 units=None,
                 cmd_args=f"--parg={i} argA --optionA",
                 meta=None,
@@ -608,7 +660,14 @@ class ManagerTest(BaseTestCase):
         for i in range(4):
             project.jobs.run.assert_any_call(
                 spider="py:commandA",
-                add_tag=["EXEC_ID=myexecid", "FLOW_ID=mygeneratedflowid", "PARENT_NAME=test", "tag1", "tag2"],
+                add_tag=[
+                    "EXEC_ID=myexecid",
+                    "FLOW_ID=mygeneratedflowid",
+                    "PARENT_NAME=test",
+                    "TASK_ID=jobA",
+                    "tag1",
+                    "tag2",
+                ],
                 units=None,
                 cmd_args=f"--parg={i} argA --optionA",
                 meta=None,
@@ -637,7 +696,10 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 4)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandA", f"--parg={i}", "argA", "--optionA"], tags=["tag1", "tag2"], units=None, project_id=None,
+                ["commandA", f"--parg={i}", "argA", "--optionA"],
+                tags=["tag1", "tag2", "TASK_ID=jobA"],
+                units=None,
+                project_id=None,
             )
 
         # second loop, jobA finishes, jobB is scheduled, not jobC or next ones as it was skipped
@@ -652,7 +714,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandB", f"--parg={i}", "argB", "--optionB"], tags=None, units=None, project_id=None,
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=["TASK_ID=jobB"],
+                units=None,
+                project_id=None,
             )
 
         # last loop, jobB finished, workflow finished
@@ -684,7 +749,10 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 4)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandA", f"--parg={i}", "argA", "--optionA"], tags=["tag1", "tag2"], units=None, project_id=None,
+                ["commandA", f"--parg={i}", "argA", "--optionA"],
+                tags=["tag1", "tag2", "TASK_ID=jobA"],
+                units=None,
+                project_id=None,
             )
 
         # second loop, jobA finishes, jobB and jobC are scheduled
@@ -700,9 +768,14 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandB", f"--parg={i}", "argB", "--optionB"], tags=None, units=None, project_id=None,
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=["TASK_ID=jobB"],
+                units=None,
+                project_id=None,
             )
-        manager.schedule_script.assert_any_call(["commandC", "argC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
 
         # third loop, jobB finishes
         manager.is_finished = lambda x: "finished" if x.startswith("999/2/") else None
@@ -716,14 +789,14 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # fifth loop, jobD finishes, jobE is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandE"], tags=["TASK_ID=jobE"], units=None, project_id=None)
 
     def test_no_wait_for_a_job_that_will_not_be_run(self, mocked_get_jobs):
 
@@ -738,7 +811,7 @@ class ManagerTest(BaseTestCase):
         # first loop, jobD is scheduled
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # second loop, jobD finishes, jobE is scheduled, regardless it should wait for jobB to finish.
         # However, as defined in the start jobs, jobB will never be scheduled (i.e. could have been
@@ -747,7 +820,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandE"], tags=["TASK_ID=jobE"], units=None, project_id=None)
 
     def test_skip_job_no_wait_for_skipped(self, mocked_get_jobs):
 
@@ -771,7 +844,10 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 4)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandA", f"--parg={i}", "argA", "--optionA"], tags=["tag1", "tag2"], units=None, project_id=None,
+                ["commandA", f"--parg={i}", "argA", "--optionA"],
+                tags=["tag1", "tag2", "TASK_ID=jobA"],
+                units=None,
+                project_id=None,
             )
 
         # second loop, jobA finishes, jobC is scheduled, but not jobB as it is skipped.
@@ -779,21 +855,23 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/3/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandC", "argC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
 
         # third loop, jobC finishes, jobD is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # fourth loop, jobD finishes, jobE is scheduled (will not wait for B as it was skipped)
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandE"], tags=["TASK_ID=jobE"], units=None, project_id=None)
 
     def test_start_job_wait_for_another_in_start_jobs(self, mocked_get_jobs):
 
@@ -815,7 +893,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandB", f"--parg={i}", "argB", "--optionB"], tags=None, units=None, project_id=None,
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=["TASK_ID=jobB"],
+                units=None,
+                project_id=None,
             )
 
         # second loop, jobB finishes, jobE is scheduled
@@ -823,7 +904,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandE"], tags=["TASK_ID=jobE"], units=None, project_id=None)
 
     def test_wait_for_a_starting_parallel_job(self, mocked_get_jobs):
 
@@ -845,7 +926,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandB", f"--parg={i}", "argB", "--optionB"], tags=None, units=None, project_id=None,
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=["TASK_ID=jobB"],
+                units=None,
+                project_id=None,
             )
 
         # second loop, one jobB finishes, jobC must not still be scheduled
@@ -903,21 +987,23 @@ class ManagerTest(BaseTestCase):
         # first loop, jobC is scheduled
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
 
         # second loop, jobC finishes, jobD is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # third loop, jobD finishes, jobE is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandE"], tags=["TASK_ID=jobE"], units=None, project_id=None)
 
     def test_start_job_wait_for_another_that_must_wait_another(self, mocked_get_jobs):
         """
@@ -975,7 +1061,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandB", f"--parg={i}", "argB", "--optionB"], tags=None, units=None, project_id=None,
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=["TASK_ID=jobB"],
+                units=None,
+                project_id=None,
             )
 
         # second loop, jobB finishes, jobC is scheduled
@@ -983,21 +1072,23 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/3/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
 
         # third loop, jobC finishes, jobD is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # fourth loop, jobD finishes, jobE is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandE"], tags=["TASK_ID=jobE"], units=None, project_id=None)
 
     def test_job_wait_for_another_that_must_wait_another_that_will_not_run(self, mocked_get_jobs):
         """
@@ -1055,7 +1146,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandB", f"--parg={i}", "argB", "--optionB"], tags=None, units=None, project_id=None,
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=["TASK_ID=jobB"],
+                units=None,
+                project_id=None,
             )
 
         # second loop, jobB finishes, jobC must be scheduled, but not jobD
@@ -1063,21 +1157,23 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/3/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
 
         # third loop, jobC finishes, jobD is scheduled, but not jobE
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # fourth loop, jobD finishes, jobE is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandE"], tags=["TASK_ID=jobE"], units=None, project_id=None)
 
     def test_job_wait_for_another_that_must_wait_another_that_will_not_run_ii(self, mocked_get_jobs):
         """
@@ -1135,7 +1231,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandB", f"--parg={i}", "argB", "--optionB"], tags=None, units=None, project_id=None,
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=["TASK_ID=jobB"],
+                units=None,
+                project_id=None,
             )
 
         # second loop, jobB finishes, jobC must be scheduled, but not jobE
@@ -1143,21 +1242,23 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/3/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_called_with(["commandC", "argC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
 
         # third loop, jobC finishes, jobE is scheduled, but not jobD
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandE"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandE"], tags=["TASK_ID=jobE"], units=None, project_id=None)
 
         # fourth loop, jobE finishes, jobD is scheduled
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandD"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
     def test_many_jobs_waiting_for_not_running_job(self, mocked_get_jobs):
         """
@@ -1205,7 +1306,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(next(manager._run_loops()))
         for i in range(4):
             manager.schedule_script.assert_any_call(
-                ["commandA", f"--parg={i}", "argA", "--optionA"], tags=None, units=None, project_id=None,
+                ["commandA", f"--parg={i}", "argA", "--optionA"],
+                tags=["TASK_ID=jobA"],
+                units=None,
+                project_id=None,
             )
 
         # second loop, jobs still running, nothing scheduled
@@ -1217,7 +1321,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/2/1"]
         self.assertTrue(next(manager._run_loops()))
         manager.schedule_script.assert_called_with(
-            ["commandB", "argB", "--optionB"], tags=None, units=None, project_id=None
+            ["commandB", "argB", "--optionB"], tags=["TASK_ID=jobB"], units=None, project_id=None
         )
 
         # fourth loop, jobs still running, nothing scheduled
@@ -1229,7 +1333,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.side_effect = ["999/3/1"]
         self.assertTrue(next(manager._run_loops()))
         manager.schedule_script.assert_called_with(
-            ["commandC", "argC", "--optionC"], tags=None, units=None, project_id=None
+            ["commandC", "argC", "--optionC"], tags=["TASK_ID=jobC"], units=None, project_id=None
         )
 
     def test_job_cyclic_dependency(self, mocked_get_jobs):
@@ -1270,7 +1374,7 @@ class ManagerTest(BaseTestCase):
 
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandA"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandA"], tags=["TASK_ID=jobA"], units=None, project_id=None)
 
         manager.is_finished = lambda x: "finished"
         with self.assertRaisesRegex(
@@ -1321,7 +1425,7 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
-        manager.schedule_script.assert_called_with(["commandA"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(["commandA"], tags=["TASK_ID=jobA"], units=None, project_id=None)
 
         # If commandA is still running, commandB should not get started.
         manager.is_finished = lambda x: None
@@ -1336,7 +1440,7 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
-        manager.schedule_script.assert_called_with(["commandB"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(["commandB"], tags=["TASK_ID=jobB"], units=None, project_id=None)
 
     def test_job_required_alternative_resources(self, mocked_get_jobs):
         """Test alternative resources."""
@@ -1376,8 +1480,8 @@ class ManagerTest(BaseTestCase):
         # First loop: can run jobA and jobC
         result = next(manager._run_loops())
         self.assertTrue(result)
-        manager.schedule_script.assert_any_call(["commandA"], tags=None, units=None, project_id=None)
-        manager.schedule_script.assert_any_call(["commandC"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandA"], tags=["TASK_ID=jobA"], units=None, project_id=None)
+        manager.schedule_script.assert_any_call(["commandC"], tags=["TASK_ID=jobC"], units=None, project_id=None)
 
         # Second loop: if both commandA and command C are still running, nor commandB neither commandD can't start.
         manager.is_finished = lambda x: None
@@ -1393,7 +1497,7 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
-        manager.schedule_script.assert_called_with(["commandD"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # fourth loop: commandD finishes. commandB, can't still run
         manager.schedule_script.reset_mock()
@@ -1408,7 +1512,7 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
-        manager.schedule_script.assert_called_with(["commandB"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(["commandB"], tags=["TASK_ID=jobB"], units=None, project_id=None)
 
     def test_parallel_job_required_resource(self, mocked_get_jobs):
         """If a job with required resource is parallel, divide the resource among all parallel subjobs"""
@@ -1423,7 +1527,10 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
-                jobA = Task("jobA", command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",)
+                jobA = Task(
+                    "jobA",
+                    command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",
+                )
                 jobB = Task("jobB", command="commandB")
 
                 # set required resources
@@ -1447,7 +1554,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 4)
-        calls = [call(["commandA", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)]
+        calls = [
+            call(["commandA", f"--parg={i}"], tags=["TASK_ID=jobA"], units=None, project_id=None) for i in range(4)
+        ]
         manager.schedule_script.assert_has_calls(calls)
 
         # Second loop. If commandA is still running, commandB should not get started.
@@ -1463,7 +1572,7 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
-        manager.schedule_script.assert_called_with(["commandB"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(["commandB"], tags=["TASK_ID=jobB"], units=None, project_id=None)
 
     def test_parallel_job_required_double_resource(self, mocked_get_jobs):
         """Double resources with parallel jobs"""
@@ -1479,9 +1588,15 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
-                jobA = Task("jobA", command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",)
+                jobA = Task(
+                    "jobA",
+                    command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",
+                )
                 jobB = Task("jobB", command="commandB")
-                jobC = Task("jobC", command="{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}",)
+                jobC = Task(
+                    "jobC",
+                    command="{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}",
+                )
 
                 # set required resources
                 jobA.add_required_resources(ResourcesDict({self.fooR: 1}))
@@ -1503,9 +1618,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 5)
-        calls = [call(["commandA", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)] + [
-            call(["commandB"], tags=None, units=None, project_id=None)
-        ]
+        calls = [
+            call(["commandA", f"--parg={i}"], tags=["TASK_ID=jobA"], units=None, project_id=None) for i in range(4)
+        ] + [call(["commandB"], tags=["TASK_ID=jobB"], units=None, project_id=None)]
         manager.schedule_script.assert_has_calls(calls)
 
         # If only jobA is finished, jobC can't run
@@ -1522,7 +1637,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 4)
-        calls = [call(["commandC", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)]
+        calls = [
+            call(["commandC", f"--parg={i}"], tags=["TASK_ID=jobC"], units=None, project_id=None) for i in range(4)
+        ]
         manager.schedule_script.assert_has_calls(calls)
 
     def test_parallel_job_alternative_required_resource(self, mocked_get_jobs):
@@ -1539,9 +1656,15 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
-                jobA = Task("jobA", command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",)
+                jobA = Task(
+                    "jobA",
+                    command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",
+                )
                 jobB = Task("jobB", command="commandB")
-                jobC = Task("jobC", command="{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}",)
+                jobC = Task(
+                    "jobC",
+                    command="{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}",
+                )
 
                 # set required resources
                 jobA.add_required_resources(ResourcesDict({self.fooR: 1}))
@@ -1564,9 +1687,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 5)
-        calls = [call(["commandA", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)] + [
-            call(["commandB"], tags=None, units=None, project_id=None)
-        ]
+        calls = [
+            call(["commandA", f"--parg={i}"], tags=["TASK_ID=jobA"], units=None, project_id=None) for i in range(4)
+        ] + [call(["commandB"], tags=["TASK_ID=jobB"], units=None, project_id=None)]
         manager.schedule_script.assert_has_calls(calls)
 
         # If any job is finished, jobC can run
@@ -1577,12 +1700,14 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 4)
-        calls = [call(["commandC", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)]
+        calls = [
+            call(["commandC", f"--parg={i}"], tags=["TASK_ID=jobC"], units=None, project_id=None) for i in range(4)
+        ]
         manager.schedule_script.assert_has_calls(calls)
 
     def test_parallel_job_partial_resource(self, mocked_get_jobs):
         """When two parallel jobs share same resource, if one partially finishes,
-           the other can partially acquire the resource."""
+        the other can partially acquire the resource."""
 
         mocked_get_jobs.side_effect = [[]]
 
@@ -1594,8 +1719,14 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
-                jobA = Task("jobA", command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",)
-                jobC = Task("jobC", command="{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}",)
+                jobA = Task(
+                    "jobA",
+                    command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",
+                )
+                jobC = Task(
+                    "jobC",
+                    command="{% for i in range(4) %}commandC --parg={{ i }}\n{% endfor %}",
+                )
 
                 # set required resources
                 jobA.add_required_resources(ResourcesDict({self.fooR: 1}))
@@ -1614,7 +1745,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 3)
-        calls = [call(["commandA", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(3)]
+        calls = [
+            call(["commandA", f"--parg={i}"], tags=["TASK_ID=jobA"], units=None, project_id=None) for i in range(3)
+        ]
         manager.schedule_script.assert_has_calls(calls)
 
         # second loop: run remaining jobA and two jobC
@@ -1623,8 +1756,8 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 3)
-        calls = [call(["commandA", "--parg=3"], tags=None, units=None, project_id=None)] + [
-            call(["commandC", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(2)
+        calls = [call(["commandA", "--parg=3"], tags=["TASK_ID=jobA"], units=None, project_id=None)] + [
+            call(["commandC", f"--parg={i}"], tags=["TASK_ID=jobC"], units=None, project_id=None) for i in range(2)
         ]
         manager.schedule_script.assert_has_calls(calls)
 
@@ -1633,7 +1766,9 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
-        calls = [call(["commandC", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(2, 4)]
+        calls = [
+            call(["commandC", f"--parg={i}"], tags=["TASK_ID=jobC"], units=None, project_id=None) for i in range(2, 4)
+        ]
         manager.schedule_script.assert_has_calls(calls)
 
     def test_max_running_jobs(self, mocked_get_jobs):
@@ -1649,7 +1784,10 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self) -> Tuple[Task, ...]:
                 # define tasks
-                jobA = Task("jobA", command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",)
+                jobA = Task(
+                    "jobA",
+                    command="{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",
+                )
                 jobB = Task("jobB", command="commandB")
 
                 return jobA, jobB
@@ -1724,7 +1862,7 @@ class ManagerTest(BaseTestCase):
         for i in range(4):
             manager.schedule_script.assert_any_call(
                 ["commandB", f'--config={{"topic": {i}, "file": "ds_dump_{i}"}}', "argB", "--optionB"],
-                tags=None,
+                tags=["TASK_ID=jobB"],
                 units=None,
                 project_id=None,
             )
@@ -1765,7 +1903,7 @@ class ManagerTest(BaseTestCase):
         for i in range(4):
             manager.schedule_script.assert_any_call(
                 ["commandB", f'--config={{"topic": {i}, "file": "ds_dump_{i}"}}', "argB", "--optionB"],
-                tags=None,
+                tags=["TASK_ID=jobB"],
                 units=None,
                 project_id=1999,
             )
@@ -1780,7 +1918,11 @@ class ManagerTest(BaseTestCase):
             name = "test"
 
             def configure_workflow(self) -> Tuple[Task, ...]:
-                jobA = Task("jobA", "{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}", wait_time=3600,)
+                jobA = Task(
+                    "jobA",
+                    "{% for i in range(4) %}commandA --parg={{ i }}\n{% endfor %}",
+                    wait_time=3600,
+                )
                 jobB = Task("jobB", "commandB")
                 jobB.add_wait_for(jobA)
 
@@ -1803,7 +1945,9 @@ class ManagerTest(BaseTestCase):
 
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 4)
-        calls = [call(["commandA", f"--parg={i}"], tags=None, units=None, project_id=None) for i in range(4)]
+        calls = [
+            call(["commandA", f"--parg={i}"], tags=["TASK_ID=jobA"], units=None, project_id=None) for i in range(4)
+        ]
         manager.schedule_script.assert_has_calls(calls)
 
         # third loop: jobA finishes, can run jobB
@@ -1811,7 +1955,7 @@ class ManagerTest(BaseTestCase):
         manager.is_finished = lambda x: "finished"
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 5)
-        manager.schedule_script.assert_called_with(["commandB"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_called_with(["commandB"], tags=["TASK_ID=jobB"], units=None, project_id=None)
 
         # fourth loop: joB finishes, all finishes
         self.assertFalse(next(manager._run_loops()))
@@ -1826,7 +1970,14 @@ class ManagerTest(BaseTestCase):
 
             def configure_workflow(self) -> Tuple[BaseTask, ...]:
                 # define jobs
-                jobS = SpiderTask(task_id="jobS", spider="myspiderS", tags=["tag1"], units=1, argA="valA", argB="valB",)
+                jobS = SpiderTask(
+                    task_id="jobS",
+                    spider="myspiderS",
+                    tags=["tag1"],
+                    units=1,
+                    argA="valA",
+                    argB="valB",
+                )
                 jobA = Task(task_id="jobA", command="commandA --optionA=A")
                 jobT = SpiderTask(task_id="jobT", spider="myspiderT", argC="valC", argD="valD")
 
@@ -1848,7 +1999,12 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         self.assertEqual(manager.schedule_spider.call_count, 1)
         manager.schedule_spider.assert_any_call(
-            "myspiderS", tags=["tag1"], units=1, project_id=None, argA="valA", argB="valB",
+            "myspiderS",
+            tags=["tag1", "TASK_ID=jobS"],
+            units=1,
+            project_id=None,
+            argA="valA",
+            argB="valB",
         )
 
     def test_add_task_on_start(self, mocked_get_jobs):
@@ -1878,7 +2034,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_any_call(
-            ["commandA", "--optionA=A"], tags=None, units=None, project_id=None,
+            ["commandA", "--optionA=A"],
+            tags=["TASK_ID=jobA"],
+            units=None,
+            project_id=None,
         )
 
         # second loop
@@ -1887,7 +2046,9 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 2)
 
-        manager.schedule_script.assert_any_call(["commandB", "--optionB=B"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(
+            ["commandB", "--optionB=B"], tags=["TASK_ID=jobB"], units=None, project_id=None
+        )
 
     def test_start_callback(self, mocked_get_jobs):
         class _TestManager(GraphManager):
@@ -1923,7 +2084,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_any_call(
-            ["commandA", "--optionA=A"], tags=None, units=None, project_id=None,
+            ["commandA", "--optionA=A"],
+            tags=["TASK_ID=jobA"],
+            units=None,
+            project_id=None,
         )
         self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], [])
         self.assertEqual(manager.start_callback_count, 0)
@@ -1933,7 +2097,9 @@ class ManagerTest(BaseTestCase):
         manager.is_finished = lambda x: "finished"
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 2)
-        manager.schedule_script.assert_any_call(["commandB", "--optionB=B"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(
+            ["commandB", "--optionB=B"], tags=["TASK_ID=jobB"], units=None, project_id=None
+        )
         self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], ["jobC"])
         self.assertEqual(manager.start_callback_count, 1)
 
@@ -1942,7 +2108,9 @@ class ManagerTest(BaseTestCase):
         manager.is_finished = lambda x: "finished"
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 3)
-        manager.schedule_script.assert_any_call(["commandC", "--optionC=C"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(
+            ["commandC", "--optionC=C"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
         self.assertEqual(manager.start_callback_count, 1)
 
     def test_root_job_start_callback(self, mocked_get_jobs):
@@ -1974,7 +2142,10 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_any_call(
-            ["commandA", "--optionA=A"], tags=None, units=None, project_id=None,
+            ["commandA", "--optionA=A"],
+            tags=["TASK_ID=jobA"],
+            units=None,
+            project_id=None,
         )
         self.assertEqual(manager.jobs_graph["jobB"]["on_finish"]["default"], [])
 
@@ -1983,4 +2154,6 @@ class ManagerTest(BaseTestCase):
         manager.is_finished = lambda x: "finished"
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 2)
-        manager.schedule_script.assert_any_call(["commandB", "--optionB=B"], tags=None, units=None, project_id=None)
+        manager.schedule_script.assert_any_call(
+            ["commandB", "--optionB=B"], tags=["TASK_ID=jobB"], units=None, project_id=None
+        )

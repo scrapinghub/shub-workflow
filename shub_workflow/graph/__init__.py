@@ -401,7 +401,7 @@ class GraphManager(WorkFlowManager):
                 self._release_resources(task_id)
                 self.__running_jobs.pop(task_id)
                 if not will_retry:
-                    self.__completed_jobs.append(task_id)
+                    self.__completed_jobs.add(task_id)
             else:
                 logger.info("Job %s (%s) still running", task_id, jobid)
 
