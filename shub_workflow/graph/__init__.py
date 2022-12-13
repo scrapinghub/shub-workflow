@@ -62,11 +62,9 @@ class GraphManager(WorkFlowManager):
         # Ensure jobs are traversed in the same order as they went pending.
         self.__pending_jobs: Dict[TaskId, PendingJobDict] = OrderedDict()
         self.__running_jobs: Dict[TaskId, JobKey] = OrderedDict()
-        self.__completed_jobs: Set[TaskId] = set()
+        self.__completed_jobs: Dict[TaskId, Tuple[JobKey, str]] = dict()
         self._available_resources: Dict[Resource, ResourceAmmount] = {}  # map resource : ammount
-        self._acquired_resources: DefaultDict[Resource, List[Tuple[TaskId, ResourceAmmount]]] = defaultdict(
-            list
-        )  # map resource : list of (job, ammount)
+        self._acquired_resources: DefaultDict[Resource, List[Tuple[TaskId, ResourceAmmount]]] = defaultdict(list)
         self.__tasks: Dict[TaskId, BaseTask] = {}
         super(GraphManager, self).__init__()
         self.__start_time: DefaultDict[TaskId, float] = defaultdict(time)
@@ -101,22 +99,25 @@ class GraphManager(WorkFlowManager):
         if not self.__starting_jobs:
             self.argparser.error("You must provide either --starting-job or --root-jobs.")
         self._fill_available_resources()
-        self._setup_starting_jobs([])
+        self._setup_starting_jobs()
         self.workflow_loop_enabled = True
         logger.info("Starting '%s' workflow", self.name)
 
-    def _setup_starting_jobs(self, ran_tasks: List[TaskId], candidates: Optional[List[TaskId]] = None):
+    def _setup_starting_jobs(self, candidates: Optional[List[TaskId]] = None):
         candidates = candidates or self.__starting_jobs
         for taskid in candidates:
-            if taskid in ran_tasks:
+            if taskid in self.__completed_jobs:
+                jobid, close_reason = self.__completed_jobs[taskid]
                 logger.info(
-                    "Task %s already done %s.",
+                    "Task %s already done (%s).",
                     taskid,
-                    tuple(self.__tasks[taskid].get_scheduled_jobs()),
+                    jobid,
                 )
-                next_tasks = [t.task_id for t in self.__tasks[taskid].get_next_tasks()]
+                next_tasks = self._get_next_jobs(taskid, close_reason)
                 if next_tasks:
-                    self._setup_starting_jobs(ran_tasks, next_tasks)
+                    self._setup_starting_jobs(next_tasks)
+            elif taskid in self.__running_jobs:
+                logger.info("Task %s already running (%s).", taskid, self.__running_jobs[taskid])
             else:
                 self._add_initial_pending_job(taskid)
                 logger.info("Starting at task %s", taskid)
@@ -174,28 +175,28 @@ class GraphManager(WorkFlowManager):
             # Split parallelized task into N parallel jobs.
             basejobconf = self.get_jobdict(job, pop=True)
             for i in range(parallelization):
-                job_unit = TaskId("%s_%i" % (job, i))
-                job_unit_conf = deepcopy(basejobconf)
-                job_unit_conf["origin"] = job
-                job_unit_conf["index"] = i
+                subtask_id = TaskId("%s_%i" % (job, i))
+                subtask_conf = deepcopy(basejobconf)
+                subtask_conf["origin"] = job
+                subtask_conf["index"] = i
 
-                for _, nextjobs in job_unit_conf["on_finish"].items():
+                for _, nextjobs in subtask_conf["on_finish"].items():
                     if i != 0:  # only job 0 will conserve finish targets
                         for nextjob in copy(nextjobs):
                             if nextjob != "retry":
                                 if nextjob in self.jobs_graph:
-                                    self.get_jobdict(nextjob)["wait_for"].append(job_unit)
+                                    self.get_jobdict(nextjob)["wait_for"].append(subtask_id)
                                     if nextjob in self.__pending_jobs:
-                                        self.__pending_jobs[nextjob]["wait_for"].add(job_unit)
+                                        self.__pending_jobs[nextjob]["wait_for"].add(subtask_id)
                                 else:
                                     for i in range(parallelization):
                                         nextjobp = TaskId("%s_%i" % (job, i))
-                                        self.get_jobdict(nextjobp)["wait_for"].append(job_unit)
+                                        self.get_jobdict(nextjobp)["wait_for"].append(subtask_id)
                                         if nextjobp in self.__pending_jobs:
-                                            self.__pending_jobs[nextjobp]["wait_for"].add(job_unit)
+                                            self.__pending_jobs[nextjobp]["wait_for"].add(subtask_id)
                                 nextjobs.remove(nextjob)
-                self.jobs_graph[job_unit] = job_unit_conf
-                self.__pending_jobs[job_unit] = {
+                self.jobs_graph[subtask_id] = subtask_conf
+                self.__pending_jobs[subtask_id] = {
                     "wait_for": set(wait_for),
                     "is_retry": is_retry,
                     "origin": job,
@@ -207,10 +208,10 @@ class GraphManager(WorkFlowManager):
                     if other in self.__pending_jobs:
                         self.__pending_jobs[other]["wait_for"].discard(job)
                     for i in range(parallelization):
-                        job_unit = TaskId("%s_%i" % (job, i))
-                        oconf["wait_for"].append(job_unit)
+                        subtask_id = TaskId("%s_%i" % (job, i))
+                        oconf["wait_for"].append(subtask_id)
                         if other in self.__pending_jobs:
-                            self.__pending_jobs[other]["wait_for"].add(job_unit)
+                            self.__pending_jobs[other]["wait_for"].add(subtask_id)
 
     def add_argparser_options(self):
         super(GraphManager, self).add_argparser_options()
@@ -379,7 +380,7 @@ class GraphManager(WorkFlowManager):
         logger.warning("No more retries for failed job %s (outcome: %s)", job, outcome)
         return False
 
-    def check_running_jobs(self):
+    def check_running_jobs(self) -> None:
         for task_id, jobid in list(self.__running_jobs.items()):
             outcome = self.is_finished(jobid)
             will_retry = False
@@ -401,7 +402,7 @@ class GraphManager(WorkFlowManager):
                 self._release_resources(task_id)
                 self.__running_jobs.pop(task_id)
                 if not will_retry:
-                    self.__completed_jobs.add(task_id)
+                    self.__completed_jobs[task_id] = jobid, outcome
             else:
                 logger.info("Job %s (%s) still running", task_id, jobid)
 
@@ -458,7 +459,17 @@ class GraphManager(WorkFlowManager):
         return self.__pending_jobs
 
     def resume_running_job_hook(self, job: JobDict):
-        pass
+        task_id = self.get_keyvalue_job_tag("TASK_ID", job["tags"])
+        if task_id is not None:
+            self.__running_jobs[task_id] = job["key"]
+            jobconf = self.get_jobdict(task_id)
+            task_id = jobconf.get("origin", task_id)
+            self.__tasks[task_id].append_jobid(job["key"])
 
     def resume_finished_job_hook(self, job: JobDict):
-        pass
+        task_id = self.get_keyvalue_job_tag("TASK_ID", job["tags"])
+        if task_id is not None:
+            self.__completed_jobs[task_id] = job["key"], job["close_reason"]
+            jobconf = self.get_jobdict(task_id)
+            task_id = jobconf.get("origin", task_id)
+            self.__tasks[task_id].append_jobid(job["key"])

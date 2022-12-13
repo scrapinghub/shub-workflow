@@ -193,7 +193,7 @@ class WorkFlowManager(BaseLoopScript, WorkFlowManagerProtocol):
 
         fcount = 0
         logger.info("Searching finished children jobs...")
-        for job in self.get_finished_owned_jobs(meta=["spider_args", "job_cmd", "tags", "spider"]):
+        for job in self.get_finished_owned_jobs(meta=["spider_args", "job_cmd", "tags", "spider", "close_reason"]):
             self.resume_finished_job_hook(job)
             fcount += 1
         if fcount > 0:
