@@ -173,7 +173,6 @@ class BaseTask(abc.ABC):
         """
         Returns total number of parallel jobs that this task will consist on.
         """
-        ...
 
 
 class Task(BaseTask):
@@ -202,14 +201,14 @@ class Task(BaseTask):
         project_id - Int. Run task in given project. If not given, just run in the actual project.
         wait_time - Int. Don't run the task before the given number of seconds after job goes to pending status.
         """
-        super(Task, self).__init__(task_id, tags, units, retries, project_id, wait_time, on_finish)
+        super().__init__(task_id, tags, units, retries, project_id, wait_time, on_finish)
         self.command = command
         self.init_args = init_args or []
         self.retry_args = retry_args or []
         self.__template = Template(self.command)
 
     def as_jobgraph_dict(self) -> JobGraphDict:
-        jdict = super(Task, self).as_jobgraph_dict()
+        jdict = super().as_jobgraph_dict()
         jdict.update({"command": self.get_commands(), "init_args": self.init_args, "retry_args": self.retry_args})
         return jdict
 
@@ -242,7 +241,11 @@ class Task(BaseTask):
             cmd = command + retry_args
         else:
             cmd = command + self.init_args
-        jobid = manager.schedule_script(cmd, tags=self.tags, units=self.units, project_id=self.project_id)
+        tags = []
+        if self.tags is not None:
+            tags.extend(self.tags)
+        tags.append(f"TASK_ID={self.task_id}")
+        jobid = manager.schedule_script(cmd, tags=tags, units=self.units, project_id=self.project_id)
         if jobid is not None:
             logger.info('Scheduled task "%s" (%s)', jobname, jobid)
             self.append_jobid(jobid)
@@ -267,7 +270,7 @@ class SpiderTask(BaseTask):
         job_settings=None,
         **spider_args,
     ):
-        super(SpiderTask, self).__init__(task_id, tags, units, retries, None, wait_time, on_finish)
+        super().__init__(task_id, tags, units, retries, None, wait_time, on_finish)
         self.spider = spider
         self.__spider_args = spider_args
         self.__job_settings = job_settings
@@ -279,7 +282,7 @@ class SpiderTask(BaseTask):
         return spider_args
 
     def as_jobgraph_dict(self):
-        jdict = super(SpiderTask, self).as_jobgraph_dict()
+        jdict = super().as_jobgraph_dict()
         jdict.update({"spider": self.spider, "spider_args": self.get_spider_args()})
         return jdict
 
@@ -288,13 +291,17 @@ class SpiderTask(BaseTask):
 
     def run(self, manager: GraphManagerProtocol, is_retry=False, index: Optional[int] = None) -> Optional[JobKey]:
         assert index is None, "Spider Task don't support parallelization."
-        jobname = "{}/{}".format(manager.name, self.task_id)
+        jobname = f"{manager.name}/{self.task_id}"
         if is_retry:
             logger.info('Will retry spider "%s"', jobname)
         else:
             logger.info('Will start spider "%s"', jobname)
+        tags = []
+        if self.tags is not None:
+            tags.extend(self.tags)
+        tags.append(f"TASK_ID={self.task_id}")
         jobid = manager.schedule_spider(
-            self.spider, tags=self.tags, units=self.units, project_id=self.project_id, **self.get_spider_args()
+            self.spider, tags=tags, units=self.units, project_id=self.project_id, **self.get_spider_args()
         )
         if jobid is not None:
             logger.info('Scheduled spider "%s" (%s)', jobname, jobid)
