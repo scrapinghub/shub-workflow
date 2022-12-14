@@ -122,7 +122,7 @@ class ManagerTest(BaseTestCase):
 
         mocked_get_jobs.side_effect = [[]]
 
-        with script_args(["--starting-job=jobA", "--starting-job=jobB"]):
+        with script_args(["--root-jobs"]):
             manager = TestManager()
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/1/1", "999/1/2"]
@@ -267,7 +267,7 @@ class ManagerTest(BaseTestCase):
 
         mocked_get_jobs.side_effect = [[]]
 
-        with script_args(["--starting-job=jobA"]):
+        with script_args(["--root-jobs"]):
             manager = TestManager2()
         manager.is_finished = lambda x: None
         manager.schedule_script = Mock()
