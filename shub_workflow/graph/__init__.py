@@ -175,7 +175,7 @@ class GraphManager(WorkFlowManager):
             # Split parallelized task into N parallel jobs.
             basejobconf = self.get_jobdict(job, pop=True)
             for i in range(parallelization):
-                subtask_id = TaskId("%s_%i" % (job, i))
+                subtask_id = TaskId("%s.%i" % (job, i))
                 subtask_conf = deepcopy(basejobconf)
                 subtask_conf["origin"] = job
                 subtask_conf["index"] = i
@@ -190,7 +190,7 @@ class GraphManager(WorkFlowManager):
                                         self.__pending_jobs[nextjob]["wait_for"].add(subtask_id)
                                 else:
                                     for i in range(parallelization):
-                                        nextjobp = TaskId("%s_%i" % (job, i))
+                                        nextjobp = TaskId("%s.%i" % (job, i))
                                         self.get_jobdict(nextjobp)["wait_for"].append(subtask_id)
                                         if nextjobp in self.__pending_jobs:
                                             self.__pending_jobs[nextjobp]["wait_for"].add(subtask_id)
@@ -208,7 +208,7 @@ class GraphManager(WorkFlowManager):
                     if other in self.__pending_jobs:
                         self.__pending_jobs[other]["wait_for"].discard(job)
                     for i in range(parallelization):
-                        subtask_id = TaskId("%s_%i" % (job, i))
+                        subtask_id = TaskId("%s.%i" % (job, i))
                         oconf["wait_for"].append(subtask_id)
                         if other in self.__pending_jobs:
                             self.__pending_jobs[other]["wait_for"].add(subtask_id)

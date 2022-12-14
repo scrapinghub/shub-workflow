@@ -202,6 +202,7 @@ class Task(BaseTask):
         wait_time - Int. Don't run the task before the given number of seconds after job goes to pending status.
         """
         super().__init__(task_id, tags, units, retries, project_id, wait_time, on_finish)
+        assert "." not in self.task_id, ". is not allowed in task name."
         self.command = command
         self.init_args = init_args or []
         self.retry_args = retry_args or []
@@ -228,10 +229,15 @@ class Task(BaseTask):
         self, manager: GraphManagerProtocol, is_retry: bool = False, index: Optional[int] = None
     ) -> Optional[JobKey]:
         command = self.get_command(index or 0)
+        tags = []
+        if self.tags is not None:
+            tags.extend(self.tags)
         if index is None:
             jobname = f"{manager.name}/{self.task_id}"
+            tags.append(f"TASK_ID={self.task_id}")
         else:
-            jobname = f"{manager.name}/{self.task_id}_{index}"
+            jobname = f"{manager.name}/{self.task_id}.{index}"
+            tags.append(f"TASK_ID={self.task_id}.{index}")
         if is_retry:
             logger.info('Will retry task "%s"', jobname)
         else:
@@ -241,10 +247,7 @@ class Task(BaseTask):
             cmd = command + retry_args
         else:
             cmd = command + self.init_args
-        tags = []
-        if self.tags is not None:
-            tags.extend(self.tags)
-        tags.append(f"TASK_ID={self.task_id}")
+
         jobid = manager.schedule_script(cmd, tags=tags, units=self.units, project_id=self.project_id)
         if jobid is not None:
             logger.info('Scheduled task "%s" (%s)', jobname, jobid)
