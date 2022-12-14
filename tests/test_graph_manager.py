@@ -1768,7 +1768,8 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
         calls = [
-            call(["commandC", f"--parg={i}"], tags=[f"TASK_ID=jobC.{i}"], units=None, project_id=None) for i in range(2, 4)
+            call(["commandC", f"--parg={i}"], tags=[f"TASK_ID=jobC.{i}"], units=None, project_id=None)
+            for i in range(2, 4)
         ]
         manager.schedule_script.assert_has_calls(calls)
 
@@ -2163,7 +2164,14 @@ class ManagerTest(BaseTestCase):
         mocked_get_jobs.side_effect = [
             [{"tags": ["NAME=test", "FLOW_ID=34ab"]}],  # call to determine if there is resuming
             [],  # call to get running jobs
-            [{"tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"], "key": f"999/1/{i+1}", "close_reason": "finished"} for i in range(4)],  # call to get finished jobs
+            [
+                {
+                    "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"],
+                    "key": f"999/1/{i+1}",
+                    "close_reason": "finished",
+                }
+                for i in range(4)
+            ],  # call to get finished jobs
         ]
         with script_args(["--flow-id=34ab", "--root-jobs"]):
             manager = TestManager3()
