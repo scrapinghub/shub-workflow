@@ -8,7 +8,7 @@ from typing_extensions import TypedDict, NotRequired
 from jinja2 import Template
 
 from shub_workflow.script import JobKey
-from shub_workflow.base import WorkFlowManagerProtocol
+from shub_workflow.base import WorkFlowManagerProtocol, Outcome
 
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ Resource = NewType("Resource", str)
 ResourceAmmount = Union[int, Fraction]
 ResourcesDict = NewType("ResourcesDict", Dict[Resource, ResourceAmmount])
 TaskId = NewType("TaskId", str)
-OnFinishKey = Literal["default", "failed"]
+OnFinishKey = Union[Outcome, Literal["default", "failed"]]
 OnFinishTarget = List[Union[Literal["retry"], TaskId]]
 
 

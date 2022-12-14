@@ -31,6 +31,7 @@ logger.setLevel(logging.INFO)
 
 
 JobKey = NewType("JobKey", str)  # ScrapyCloud job key
+Outcome = NewType("Outcome", str)
 
 
 class JobDict(TypedDict):
@@ -138,7 +139,7 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, Protocol):
         ...
 
     @abc.abstractmethod
-    def is_finished(self, jobkey: JobKey) -> Optional[str]:
+    def is_finished(self, jobkey: JobKey) -> Optional[Outcome]:
         ...
 
     @abc.abstractmethod
@@ -401,7 +402,7 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
             return True
         return False
 
-    def is_finished(self, jobkey: JobKey) -> Optional[str]:
+    def is_finished(self, jobkey: JobKey) -> Optional[Outcome]:
         """
         Checks whether a job is finished. if so, return close_reason. Otherwise return None.
         """

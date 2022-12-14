@@ -26,7 +26,7 @@ except ImportError:
     OLD_YAML = False
 
 
-from shub_workflow.script import JobKey, JobDict
+from shub_workflow.script import JobKey, JobDict, Outcome
 from shub_workflow.base import WorkFlowManager
 from shub_workflow.graph.task import (
     JobGraphDict,
@@ -62,7 +62,7 @@ class GraphManager(WorkFlowManager):
         # Ensure jobs are traversed in the same order as they went pending.
         self.__pending_jobs: Dict[TaskId, PendingJobDict] = OrderedDict()
         self.__running_jobs: Dict[TaskId, JobKey] = OrderedDict()
-        self.__completed_jobs: Dict[TaskId, Tuple[JobKey, str]] = dict()
+        self.__completed_jobs: Dict[TaskId, Tuple[JobKey, Outcome]] = dict()
         self._available_resources: Dict[Resource, ResourceAmmount] = {}  # map resource : ammount
         self._acquired_resources: DefaultDict[Resource, List[Tuple[TaskId, ResourceAmmount]]] = defaultdict(list)
         self.__tasks: Dict[TaskId, BaseTask] = {}
@@ -113,7 +113,7 @@ class GraphManager(WorkFlowManager):
                     taskid,
                     jobid,
                 )
-                next_tasks = self._get_next_jobs(taskid, close_reason)
+                next_tasks = [n for n in self._get_next_jobs(taskid, close_reason) if n != "retry"]
                 if next_tasks:
                     self._setup_starting_jobs(next_tasks)
             elif taskid in self.__running_jobs:
@@ -441,7 +441,7 @@ class GraphManager(WorkFlowManager):
 
         return on_finish
 
-    def _get_next_jobs(self, job: TaskId, outcome: OnFinishKey) -> OnFinishTarget:
+    def _get_next_jobs(self, job: TaskId, outcome: Outcome) -> OnFinishTarget:
         if self.args.only_starting_jobs:
             return []
         on_finish = self.get_jobdict(job)["on_finish"]
@@ -458,8 +458,14 @@ class GraphManager(WorkFlowManager):
     def pending_jobs(self) -> Dict[TaskId, PendingJobDict]:
         return self.__pending_jobs
 
-    def resume_running_job_hook(self, job: JobDict):
+    def get_job_taskid(self, job: JobDict) -> Optional[TaskId]:
         task_id = self.get_keyvalue_job_tag("TASK_ID", job["tags"])
+        if task_id is not None:
+            return TaskId(task_id)
+        return None
+
+    def resume_running_job_hook(self, job: JobDict):
+        task_id = self.get_job_taskid(job)
         if task_id is not None:
             self.__running_jobs[task_id] = job["key"]
             jobconf = self.get_jobdict(task_id)
@@ -467,9 +473,9 @@ class GraphManager(WorkFlowManager):
             self.__tasks[task_id].append_jobid(job["key"])
 
     def resume_finished_job_hook(self, job: JobDict):
-        task_id = self.get_keyvalue_job_tag("TASK_ID", job["tags"])
+        task_id = self.get_job_taskid(job)
         if task_id is not None:
-            self.__completed_jobs[task_id] = job["key"], job["close_reason"]
+            self.__completed_jobs[task_id] = job["key"], Outcome(job["close_reason"])
             jobconf = self.get_jobdict(task_id)
             task_id = jobconf.get("origin", task_id)
             self.__tasks[task_id].append_jobid(job["key"])

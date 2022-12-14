@@ -7,9 +7,9 @@ import logging
 from uuid import uuid4
 from argparse import Namespace
 from collections import defaultdict
-from typing import Optional, Generator, Protocol, List, Union, Dict
+from typing import Optional, Generator, Protocol, List, Union, Dict, Tuple
 
-from .script import BaseLoopScript, JobKey, JobDict, BaseLoopScriptProtocol
+from .script import BaseLoopScript, JobKey, JobDict, Outcome, BaseLoopScriptProtocol
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class WorkFlowManagerProtocol(BaseLoopScriptProtocol, Protocol):
 class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
     def __init__(self):
         super().__init__()
-        self.__finished_cache: Dict[JobKey, str] = {}
+        self.__finished_cache: Dict[JobKey, Outcome] = {}
         self.__update_finished_cache_called: Dict[int, bool] = defaultdict(bool)
 
     def update_finished_cache(self, project_id: int):
@@ -38,7 +38,7 @@ class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
             for job in self.get_owned_jobs(project_id, state=["finished"], meta=["close_reason"]):
                 if job["key"] in self.__finished_cache:
                     break
-                self.__finished_cache[job["key"]] = job["close_reason"]
+                self.__finished_cache[job["key"]] = Outcome(job["close_reason"])
             logger.info(f"Finished jobs cache length: {len(self.__finished_cache)}")
         self.__update_finished_cache_called[project_id] = True
 
@@ -49,7 +49,7 @@ class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
         finished_cache = []
         for job in super().get_finished_owned_jobs(project_id, **kwargs):
             if update_finished_cache:
-                finished_cache.append((job["key"], job["close_reason"]))
+                finished_cache.append((job["key"], Outcome(job["close_reason"])))
             yield job
         logger.info(f"Preread {len(finished_cache)} finished jobs.")
         while finished_cache:
@@ -57,7 +57,7 @@ class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
             self.__finished_cache[key] = close_reason
         logger.info(f"Finished jobs cache length: {len(self.__finished_cache)}")
 
-    def is_finished(self, jobkey: JobKey) -> Optional[str]:
+    def is_finished(self, jobkey: JobKey) -> Optional[Outcome]:
         project_id = int(jobkey.split("/", 1)[0])
         self.update_finished_cache(project_id)
         return self.__finished_cache.get(jobkey)
@@ -75,7 +75,7 @@ class WorkFlowManager(BaseLoopScript, WorkFlowManagerProtocol):
 
     flow_id_required = True
 
-    base_failed_outcomes = (
+    base_failed_outcomes: Tuple[str, ...] = (
         "failed",
         "killed by oom",
         "cancelled",

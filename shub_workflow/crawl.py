@@ -15,6 +15,7 @@ from typing_extensions import TypedDict, NotRequired, Protocol
 from shub_workflow.script import (
     JobKey,
     JobDict,
+    Outcome,
     BaseLoopScriptAsyncMixin,
 )
 from shub_workflow.base import WorkFlowManager
@@ -122,7 +123,7 @@ class CrawlManager(WorkFlowManager):
             return jobkey
         return None
 
-    def check_running_jobs(self) -> Dict[JobKey, str]:
+    def check_running_jobs(self) -> Dict[JobKey, Outcome]:
         outcomes = {}
         running_job_keys = list(self._running_job_keys)
         while running_job_keys:
@@ -200,7 +201,7 @@ class GeneratorCrawlManagerProtocol(Protocol):
         ...
 
     @abc.abstractmethod
-    def check_running_jobs(self) -> Dict[JobKey, str]:
+    def check_running_jobs(self) -> Dict[JobKey, Outcome]:
         ...
 
     @abc.abstractmethod
