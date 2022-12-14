@@ -323,9 +323,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         pass
 
 
-class AsyncSchedulerCrawlManagerMixin(
-    BaseLoopScriptAsyncMixin, GeneratorCrawlManagerProtocol
-):
+class AsyncSchedulerCrawlManagerMixin(BaseLoopScriptAsyncMixin, GeneratorCrawlManagerProtocol):
     async def _async_workflow_step_gen(self, max_next_params: int) -> AsyncGenerator[Tuple[str, JobKey], None]:
         jobuids_cors = list(self._workflow_step_gen(max_next_params))
         if jobuids_cors:
