@@ -108,7 +108,12 @@ class GraphManager(WorkFlowManager):
         for taskid in candidates:
             wait_for: List[TaskId] = self.get_jobdict(taskid).get("wait_for", [])
             self._add_pending_job(taskid, wait_for=tuple(wait_for))
-            logger.info("Starting at task %s", taskid)
+
+        for taskid in list(self.__pending_jobs.keys()):
+            if taskid in self.__completed_jobs:
+                jobid, outcome = self.__completed_jobs[taskid]
+                self.__pending_jobs.pop(taskid)
+                self._check_completed_job(taskid, jobid, outcome)
 
     def _fill_available_resources(self):
         """
@@ -369,6 +374,7 @@ class GraphManager(WorkFlowManager):
             outcome = self.is_finished(jobid)
             if outcome is not None:
                 self._check_completed_job(task_id, jobid, outcome)
+                self.__running_jobs.pop(task_id)
             else:
                 logger.info("Job %s (%s) still running", task_id, jobid)
 
@@ -389,7 +395,6 @@ class GraphManager(WorkFlowManager):
                 wait_for = self.get_jobdict(nextjob).get("wait_for", [])
                 self._add_pending_job(nextjob, wait_for)
         self._release_resources(task_id)
-        self.__running_jobs.pop(task_id)
         if not will_retry:
             self.__completed_jobs[task_id] = jobid, outcome
 
@@ -457,7 +462,6 @@ class GraphManager(WorkFlowManager):
             self.__running_jobs[task_id] = job["key"]
             origin_task_id = TaskId(task_id.rsplit(".", 1)[0])
             self.__tasks[origin_task_id].append_jobid(job["key"])
-            logger.info(f"Acquired running task {task_id}")
 
     def resume_finished_job_hook(self, job: JobDict):
         task_id = self.get_job_taskid(job)
@@ -465,4 +469,3 @@ class GraphManager(WorkFlowManager):
             self.__completed_jobs[task_id] = job["key"], Outcome(job["close_reason"])
             origin_task_id = TaskId(task_id.rsplit(".", 1)[0])
             self.__tasks[origin_task_id].append_jobid(job["key"])
-            logger.info(f"Acquired finished task {task_id}")

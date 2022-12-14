@@ -2167,29 +2167,29 @@ class ManagerTest(BaseTestCase):
         ]
         with script_args(["--flow-id=34ab", "--root-jobs"]):
             manager = TestManager3()
-#         manager._on_start()
-#         self.assertTrue(manager.is_resumed)
-# 
-#         manager.schedule_script = Mock()
-# 
+        manager._on_start()
+        self.assertTrue(manager.is_resumed)
+
+        manager.schedule_script = Mock()
+
         # first loop. jobA already ran before resuming. Continue with jobB and jobC
-#         manager.is_finished = lambda x: "finished"
-#         manager.schedule_script.side_effect = [
-#             "999/2/1",
-#             "999/2/2",
-#             "999/2/3",
-#             "999/2/4",
-#             "999/3/1",
-#         ]
-#         result = next(manager._run_loops())
-#         self.assertTrue(result)
-#         for i in range(4):
-#             manager.schedule_script.assert_any_call(
-#                 ["commandB", f"--parg={i}", "argB", "--optionB"],
-#                 tags=[f"TASK_ID=jobB.{i}"],
-#                 units=None,
-#                 project_id=None,
-#             )
-#         manager.schedule_script.assert_any_call(
-#             ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
-#         )
+        manager.is_finished = lambda x: "finished"
+        manager.schedule_script.side_effect = [
+            "999/2/1",
+            "999/2/2",
+            "999/2/3",
+            "999/2/4",
+            "999/3/1",
+        ]
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=[f"TASK_ID=jobB.{i}"],
+                units=None,
+                project_id=None,
+            )
+        manager.schedule_script.assert_any_call(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
