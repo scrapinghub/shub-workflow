@@ -106,21 +106,9 @@ class GraphManager(WorkFlowManager):
     def _setup_starting_jobs(self, candidates: Optional[List[TaskId]] = None):
         candidates = candidates or self.__starting_jobs
         for taskid in candidates:
-            if taskid in self.__completed_jobs:
-                jobid, close_reason = self.__completed_jobs[taskid]
-                logger.info(
-                    "Task %s already done (%s).",
-                    taskid,
-                    jobid,
-                )
-                next_tasks = [n for n in self._get_next_jobs(taskid, close_reason) if n != "retry"]
-                if next_tasks:
-                    self._setup_starting_jobs(next_tasks)
-            elif taskid in self.__running_jobs:
-                logger.info("Task %s already running (%s).", taskid, self.__running_jobs[taskid])
-            else:
-                self._add_initial_pending_job(taskid)
-                logger.info("Starting at task %s", taskid)
+            wait_for: List[TaskId] = self.get_jobdict(taskid).get("wait_for", [])
+            self._add_pending_job(taskid, wait_for=tuple(wait_for))
+            logger.info("Starting at task %s", taskid)
 
     def _fill_available_resources(self):
         """
@@ -149,10 +137,6 @@ class GraphManager(WorkFlowManager):
         if pop:
             return self.jobs_graph.pop(job)
         return self.jobs_graph[job]
-
-    def _add_initial_pending_job(self, job: TaskId):
-        wait_for: List[TaskId] = self.get_jobdict(job).get("wait_for", [])
-        self._add_pending_job(job, wait_for=tuple(wait_for))
 
     def _add_pending_job(self, job: TaskId, wait_for=(), is_retry=False):
         self._maybe_add_on_finish_default(job, is_retry)
@@ -383,28 +367,31 @@ class GraphManager(WorkFlowManager):
     def check_running_jobs(self) -> None:
         for task_id, jobid in list(self.__running_jobs.items()):
             outcome = self.is_finished(jobid)
-            will_retry = False
             if outcome is not None:
-                logger.info('Job "%s/%s" (%s) finished', self.name, task_id, jobid)
-                for st in self.__pending_jobs.values():
-                    st["wait_for"].discard(task_id)
-                for conf in self.jobs_graph.values():
-                    if task_id in conf.get("wait_for", []):
-                        conf["wait_for"].remove(task_id)
-                for nextjob in self._get_next_jobs(task_id, outcome):
-                    if nextjob == "retry":
-                        will_retry = self.handle_retry(task_id, outcome)
-                    elif nextjob in self.__pending_jobs:
-                        logger.error("Job %s already pending", nextjob)
-                    else:
-                        wait_for = self.get_jobdict(nextjob).get("wait_for", [])
-                        self._add_pending_job(nextjob, wait_for)
-                self._release_resources(task_id)
-                self.__running_jobs.pop(task_id)
-                if not will_retry:
-                    self.__completed_jobs[task_id] = jobid, outcome
+                self._check_completed_job(task_id, jobid, outcome)
             else:
                 logger.info("Job %s (%s) still running", task_id, jobid)
+
+    def _check_completed_job(self, task_id: TaskId, jobid: JobKey, outcome: Outcome):
+        will_retry = False
+        logger.info('Job "%s/%s" (%s) finished', self.name, task_id, jobid)
+        for st in self.__pending_jobs.values():
+            st["wait_for"].discard(task_id)
+        for conf in self.jobs_graph.values():
+            if task_id in conf.get("wait_for", []):
+                conf["wait_for"].remove(task_id)
+        for nextjob in self._get_next_jobs(task_id, outcome):
+            if nextjob == "retry":
+                will_retry = self.handle_retry(task_id, outcome)
+            elif nextjob in self.__pending_jobs:
+                logger.error("Job %s already pending", nextjob)
+            else:
+                wait_for = self.get_jobdict(nextjob).get("wait_for", [])
+                self._add_pending_job(nextjob, wait_for)
+        self._release_resources(task_id)
+        self.__running_jobs.pop(task_id)
+        if not will_retry:
+            self.__completed_jobs[task_id] = jobid, outcome
 
     def _try_acquire_resources(self, job: TaskId) -> bool:
         result = True
@@ -468,14 +455,14 @@ class GraphManager(WorkFlowManager):
         task_id = self.get_job_taskid(job)
         if task_id is not None:
             self.__running_jobs[task_id] = job["key"]
-            jobconf = self.get_jobdict(task_id)
-            task_id = jobconf.get("origin", task_id)
-            self.__tasks[task_id].append_jobid(job["key"])
+            origin_task_id = TaskId(task_id.rsplit(".", 1)[0])
+            self.__tasks[origin_task_id].append_jobid(job["key"])
+            logger.info(f"Acquired running task {task_id}")
 
     def resume_finished_job_hook(self, job: JobDict):
         task_id = self.get_job_taskid(job)
         if task_id is not None:
             self.__completed_jobs[task_id] = job["key"], Outcome(job["close_reason"])
-            jobconf = self.get_jobdict(task_id)
-            task_id = jobconf.get("origin", task_id)
-            self.__tasks[task_id].append_jobid(job["key"])
+            origin_task_id = TaskId(task_id.rsplit(".", 1)[0])
+            self.__tasks[origin_task_id].append_jobid(job["key"])
+            logger.info(f"Acquired finished task {task_id}")
