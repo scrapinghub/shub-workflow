@@ -114,6 +114,8 @@ class GraphManager(WorkFlowManager):
                 jobid, outcome = self.__completed_jobs[taskid]
                 self.__pending_jobs.pop(taskid)
                 self._check_completed_job(taskid, jobid, outcome)
+            elif taskid in self.__running_jobs:
+                self.__pending_jobs.pop(taskid)
 
     def _fill_available_resources(self):
         """

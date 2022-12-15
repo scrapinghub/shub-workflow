@@ -2160,7 +2160,7 @@ class ManagerTest(BaseTestCase):
             ["commandB", "--optionB=B"], tags=["TASK_ID=jobB"], units=None, project_id=None
         )
 
-    def test_resume(self, mocked_get_jobs):
+    def test_resume_finished(self, mocked_get_jobs):
         mocked_get_jobs.side_effect = [
             [{"tags": ["NAME=test", "FLOW_ID=34ab"]}],  # call to determine if there is resuming
             [],  # call to get running jobs
@@ -2181,6 +2181,59 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script = Mock()
 
         # first loop. jobA already ran before resuming. Continue with jobB and jobC
+        manager.schedule_script.side_effect = [
+            "999/2/1",
+            "999/2/2",
+            "999/2/3",
+            "999/2/4",
+            "999/3/1",
+        ]
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=[f"TASK_ID=jobB.{i}"],
+                units=None,
+                project_id=None,
+            )
+        manager.schedule_script.assert_any_call(
+            ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
+
+    def test_resume_running(self, mocked_get_jobs):
+        mocked_get_jobs.side_effect = [
+            [{"tags": ["NAME=test", "FLOW_ID=34ab"]}],  # call to determine if there is resuming
+            [
+                {
+                    "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"],
+                    "key": f"999/1/{i+1}",
+                }
+                for i in (2, 3)
+            ],  # call to get running jobs
+            [
+                {
+                    "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"],
+                    "key": f"999/1/{i+1}",
+                    "close_reason": "finished",
+                }
+                for i in (0, 1)
+            ],  # call to get finished jobs
+        ]
+        with script_args(["--flow-id=34ab", "--root-jobs"]):
+            manager = TestManager3()
+        manager._on_start()
+        self.assertTrue(manager.is_resumed)
+
+        manager.is_finished = lambda x: None
+
+        manager.schedule_script = Mock()
+        # first loop. jobA partially finished. Need to wait for the remaining parallel jobs to finish
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 0)
+
+        # second loop. jobA remaining jobs completed. Continue with jobB and jobC
         manager.is_finished = lambda x: "finished"
         manager.schedule_script.side_effect = [
             "999/2/1",
