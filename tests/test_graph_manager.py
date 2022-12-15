@@ -632,7 +632,7 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_any_call(
             ["commandA", "--parg=1", "argA"],
-            tags=["tag1", "tag2", f"TASK_ID=jobA.1"],
+            tags=["tag1", "tag2", "TASK_ID=jobA.1"],
             units=None,
             project_id=None,
         )
