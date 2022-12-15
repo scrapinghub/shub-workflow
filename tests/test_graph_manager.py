@@ -2413,8 +2413,8 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
         manager.schedule_script.assert_any_call(
-            ["commandA", "--parg=3", "argA", "--optionA"],
-            tags=["TASK_ID=jobA.3"],
+            ["commandA", "--parg=3", "argA"],
+            tags=["tag1", "tag2", "TASK_ID=jobA.3"],
             units=None,
             project_id=None,
         )
