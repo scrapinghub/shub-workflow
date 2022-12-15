@@ -525,6 +525,136 @@ class ManagerTest(BaseTestCase):
         )
         manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
+    def test_parallel_job_subtask_finished(self, mocked_get_jobs):
+        """
+        Test that next job is not scheduled until all parallel subtasks finished
+        """
+
+        mocked_get_jobs.side_effect = [[]]
+
+        with script_args(["--starting-job=jobA"]):
+            manager = TestManager2()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = [
+            "999/1/1",
+            "999/1/2",
+            "999/1/3",
+            "999/1/4",
+        ]
+        manager._on_start()
+
+        # first loop
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 4)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(
+                ["commandA", f"--parg={i}", "argA", "--optionA"],
+                tags=["tag1", "tag2", f"TASK_ID=jobA.{i}"],
+                units=None,
+                project_id=None,
+            )
+
+        # second loop one of the subtasks finished
+        manager.is_finished = lambda x: "finished" if x == "999/1/2" else None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertTrue(manager.schedule_script.call_count, 0)
+
+        # third loop a second subtask finished
+        manager.is_finished = lambda x: "finished" if x == "999/1/1" else None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertTrue(manager.schedule_script.call_count, 0)
+
+        # fourth loop a third subtask finished
+        manager.is_finished = lambda x: "finished" if x == "999/1/4" else None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertTrue(manager.schedule_script.call_count, 0)
+
+        # fifth loop, all job A finishes, will start now parallel job B
+        manager.is_finished = lambda x: "finished" if x == "999/1/3" else None
+        manager.schedule_script.side_effect = [
+            "999/2/1",
+            "999/2/2",
+            "999/2/3",
+            "999/2/4",
+        ]
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=[f"TASK_ID=jobB.{i}"],
+                units=None,
+                project_id=None,
+            )
+
+    def test_parallel_job_subtask_finished_one_retry(self, mocked_get_jobs):
+        """
+        Test that next job is not scheduled until all parallel subtasks finished (including one need
+        to be retried)
+        """
+
+        mocked_get_jobs.side_effect = [[]]
+
+        with script_args(["--starting-job=jobA"]):
+            manager = TestManager2()
+        manager.is_finished = lambda x: None
+        manager.schedule_script = Mock()
+        manager.schedule_script.side_effect = [
+            "999/1/1",
+            "999/1/2",
+            "999/1/3",
+            "999/1/4",
+        ]
+        manager._on_start()
+
+        # first loop
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 4)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(
+                ["commandA", f"--parg={i}", "argA", "--optionA"],
+                tags=["tag1", "tag2", f"TASK_ID=jobA.{i}"],
+                units=None,
+                project_id=None,
+            )
+
+        # second loop all subtasks finished, one with retry
+        manager.is_finished = lambda x: "failed" if x == "999/1/2" else "finished"
+        manager.schedule_script.side_effect = ["999/1/5"]
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertTrue(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_any_call(
+            ["commandA", "--parg=1", "argA"],
+            tags=["tag1", "tag2", f"TASK_ID=jobA.1"],
+            units=None,
+            project_id=None,
+        )
+
+        # third loop, all job A finishes, will start now parallel job B
+        manager.is_finished = lambda x: "finished" if x == "999/1/3" else None
+        manager.schedule_script.side_effect = [
+            "999/2/1",
+            "999/2/2",
+            "999/2/3",
+            "999/2/4",
+        ]
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        for i in range(4):
+            manager.schedule_script.assert_any_call(
+                ["commandB", f"--parg={i}", "argB", "--optionB"],
+                tags=[f"TASK_ID=jobB.{i}"],
+                units=None,
+                project_id=None,
+            )
+
     def test_tags(self, mocked_get_jobs):
 
         mocked_get_jobs.side_effect = [[]]
@@ -2253,4 +2383,38 @@ class ManagerTest(BaseTestCase):
             )
         manager.schedule_script.assert_any_call(
             ["commandC", "argC"], tags=["TASK_ID=jobC"], units=None, project_id=None
+        )
+
+    def test_resume_finished_with_retry(self, mocked_get_jobs):
+        mocked_get_jobs.side_effect = [
+            [{"tags": ["NAME=test", "FLOW_ID=34ab"]}],  # call to determine if there is resuming
+            [],  # call to get running jobs
+            [
+                {
+                    "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"],
+                    "key": f"999/1/{i+1}",
+                    "close_reason": "failed" if i == 3 else "finished",
+                }
+                for i in range(4)
+            ],  # call to get finished jobs
+        ]
+        with script_args(["--flow-id=34ab", "--root-jobs"]):
+            manager = TestManager3()
+        manager._on_start()
+        self.assertTrue(manager.is_resumed)
+
+        manager.schedule_script = Mock()
+
+        # first loop. jobA already ran before resuming. but jobA.3 had failed, so retry before continue
+        manager.schedule_script.side_effect = [
+            "999/1/5",
+        ]
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 1)
+        manager.schedule_script.assert_any_call(
+            ["commandA", "--parg=3", "argA", "--optionA"],
+            tags=["TASK_ID=jobA.3"],
+            units=None,
+            project_id=None,
         )

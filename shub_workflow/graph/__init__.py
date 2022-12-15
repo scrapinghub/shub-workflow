@@ -103,9 +103,8 @@ class GraphManager(WorkFlowManager):
         self.workflow_loop_enabled = True
         logger.info("Starting '%s' workflow", self.name)
 
-    def _setup_starting_jobs(self, candidates: Optional[List[TaskId]] = None):
-        candidates = candidates or self.__starting_jobs
-        for taskid in candidates:
+    def _setup_starting_jobs(self) -> None:
+        for taskid in self.__starting_jobs:
             wait_for: List[TaskId] = self.get_jobdict(taskid).get("wait_for", [])
             self._add_pending_job(taskid, wait_for=tuple(wait_for))
 
