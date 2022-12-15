@@ -382,11 +382,6 @@ class GraphManager(WorkFlowManager):
     def _check_completed_job(self, task_id: TaskId, jobid: JobKey, outcome: Outcome):
         will_retry = False
         logger.info('Job "%s/%s" (%s) finished', self.name, task_id, jobid)
-        for st in self.__pending_jobs.values():
-            st["wait_for"].discard(task_id)
-        for conf in self.jobs_graph.values():
-            if task_id in conf.get("wait_for", []):
-                conf["wait_for"].remove(task_id)
         for nextjob in self._get_next_jobs(task_id, outcome):
             if nextjob == "retry":
                 will_retry = self.handle_retry(task_id, outcome)
@@ -398,6 +393,11 @@ class GraphManager(WorkFlowManager):
         self._release_resources(task_id)
         if not will_retry:
             self.__completed_jobs[task_id] = jobid, outcome
+            for st in self.__pending_jobs.values():
+                st["wait_for"].discard(task_id)
+            for conf in self.jobs_graph.values():
+                if task_id in conf.get("wait_for", []):
+                    conf["wait_for"].remove(task_id)
 
     def _try_acquire_resources(self, job: TaskId) -> bool:
         result = True

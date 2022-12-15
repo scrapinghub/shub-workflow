@@ -638,7 +638,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # third loop, all job A finishes, will start now parallel job B
-        manager.is_finished = lambda x: "finished" if x == "999/1/3" else None
+        manager.is_finished = lambda x: "finished" if x == "999/1/5" else None
         manager.schedule_script.side_effect = [
             "999/2/1",
             "999/2/2",
