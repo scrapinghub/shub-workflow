@@ -385,6 +385,8 @@ class GraphManager(WorkFlowManager):
         for nextjob in self._get_next_jobs(task_id, outcome):
             if nextjob == "retry":
                 will_retry = self.handle_retry(task_id, outcome)
+                if not will_retry:
+                    self.bad_outcome_hook(task_id, jobid, outcome)
             elif nextjob in self.__pending_jobs:
                 logger.error("Job %s already pending", nextjob)
             else:
@@ -398,6 +400,9 @@ class GraphManager(WorkFlowManager):
             for conf in self.jobs_graph.values():
                 if task_id in conf.get("wait_for", []):
                     conf["wait_for"].remove(task_id)
+
+    def bad_outcome_hook(self, task_id: TaskId, jobid: JobKey, outcome: Outcome):
+        pass
 
     def _try_acquire_resources(self, job: TaskId) -> bool:
         result = True
