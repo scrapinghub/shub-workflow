@@ -510,7 +510,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     def base_loop_tasks(self):
         pass
 
-    def is_max_time_ran_out(self):
+    def is_max_time_ran_out(self) -> bool:
         return self.args.max_running_time > 0 and time.time() - self.__start_time > self.args.max_running_time
 
     def __base_loop_tasks(self):
