@@ -14,6 +14,7 @@ from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any, 
 from typing_extensions import TypedDict, NotRequired, Protocol
 
 from scrapy.utils.misc import load_object
+from scrapy.spiderloader import SpiderLoader
 from scrapy.statscollectors import StatsCollector
 from scrapinghub import ScrapinghubClient, DuplicateJobError
 from scrapinghub.client.jobs import Job, JobMeta
@@ -164,6 +165,7 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
         self.close_reason: Optional[str] = None
         self.__flow_tags: List[str] = []
         self.project_settings = get_project_settings()
+        self.loader = SpiderLoader(self.project_settings)
         super().__init__()
         self.set_flow_id_name(self.args)
 
