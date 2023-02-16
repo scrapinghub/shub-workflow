@@ -119,13 +119,15 @@ class CrawlManagerTest(TestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
 
-        # third loop: spider is finished. Stop.
+        # third loop: spider is cancelled. Stop. Manager must be closed with cancelled close reason
         manager.is_finished = lambda x: "cancelled" if x == "999/1/1" else None
         mocked_super_schedule_spider.reset_mock()
         result = next(manager._run_loops())
 
         self.assertFalse(result)
         self.assertFalse(mocked_super_schedule_spider.called)
+
+        self.assertEqual(manager.get_close_reason(), "cancelled")
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_schedule_spider_with_resume(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
@@ -145,7 +147,7 @@ class CrawlManagerTest(TestCase):
         self.assertTrue(manager.is_resumed)
         self.assertEqual(len(manager._running_job_keys), 1)
         self.assertEqual(manager.get_jobs.call_count, len(mocked_get_jobs_side_effect))
-        mocked_add_job_tags.assert_any_call(tags=['FLOW_ID=3a20', 'NAME=test', 'OTHER=other'])
+        mocked_add_job_tags.assert_any_call(tags=["FLOW_ID=3a20", "NAME=test", "OTHER=other"])
 
         # first loop: spider still running in workflow. Continue.
         manager.is_finished = lambda x: None
