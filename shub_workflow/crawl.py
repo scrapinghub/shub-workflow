@@ -228,6 +228,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
     """
 
     MAX_TOTAL_JOBS = 1000000
+    MAX_RETRIES = 0
 
     def __init__(self):
         super().__init__()
@@ -237,7 +238,20 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         self._jobuids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
 
     def bad_outcome_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
-        pass
+        if outcome == "cancelled":
+            return
+        spider_args = job_args_override.setdefault("spider_args", {})
+        tags = job_args_override["tags"]
+        retries = get_jobseq(tags)[1]
+        if retries < self.MAX_RETRIES:
+            for t in list(tags):
+                if t.startswith("RETRIED_FROM="):
+                    tags.remove(t)
+                    break
+            tags.append(f"RETRIED_FROM={jobkey}")
+            spider_args["retry_num"] = str(retries + 1)
+            self.add_job(spider, job_args_override)
+            _LOG.info(f"Job {jobkey} failed with reason '{outcome}'. Retrying ({retries + 1} of {self.MAX_RETRIES}).")
 
     def add_job(self, spider: str, job_args_override: JobParams):
         params = cast(FullJobParams, (job_args_override or {}).copy())
@@ -283,6 +297,8 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
             if jobuid not in self._jobuids:
                 self.__add_jobseq_tag(next_params)
                 yield jobuid, self.schedule_spider_with_jobargs(next_params, spider)
+            else:
+                _LOG.warning(f"Job with spider {spider} and parameters {next_params} was already scheduled. Skipped.")
 
     def workflow_loop(self) -> bool:
         self.check_running_jobs()

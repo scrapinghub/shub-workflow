@@ -1,6 +1,6 @@
 import os
 from unittest import TestCase
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
 from shub_workflow.crawl import CrawlManager, PeriodicCrawlManager, GeneratorCrawlManager
 from shub_workflow.utils.contexts import script_args
@@ -476,8 +476,7 @@ class CrawlManagerTest(TestCase):
         with script_args(["--flow-id=3a20"]):
             manager = _ListTestManager()
 
-        manager.get_jobs = Mock()
-        manager.get_jobs.side_effect = [
+        mocked_get_jobs.side_effect = [
             # the resumed job
             [{"tags": ["FLOW_ID=3a20", "NAME=test"], "key": "999/10/1"}],
             # running spiders
@@ -518,3 +517,108 @@ class CrawlManagerTest(TestCase):
             argR="valR",
             job_settings={},
         )
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_default_bad_outcome_no_retry(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
+        class _ListTestManager(GeneratorCrawlManager):
+
+            name = "test"
+            default_max_jobs = 1
+            spider = "myspider"
+
+            def set_parameters_gen(self):
+                parameters_list = [
+                    {"argA": "valA"},
+                ]
+                for args in parameters_list:
+                    yield args
+
+        with script_args([]):
+            manager = _ListTestManager()
+
+        mocked_super_schedule_spider.side_effect = ["999/1/1"]
+        manager._on_start()
+
+        # first loop: schedule spider
+        result = next(manager._run_loops())
+
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 1)
+        mocked_super_schedule_spider.assert_any_call(
+            "myspider", units=None, argA="valA", tags=["JOBSEQ=0000000001"], job_settings={}
+        )
+
+        # second loop: finish job with bad outcome, but there is no retry. Stop.
+        manager.is_finished = lambda x: "cancelled (stalled)" if x == "999/1/1" else None
+        result = next(manager._run_loops())
+        self.assertFalse(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 1)
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_default_bad_outcome_with_retries(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
+        class _ListTestManager(GeneratorCrawlManager):
+
+            name = "test"
+            default_max_jobs = 2
+            spider = "myspider"
+
+            MAX_RETRIES = 2
+
+            def set_parameters_gen(self):
+                parameters_list = [
+                    {"argA": "valA"},
+                    {"argB": "valB"},
+                ]
+                for args in parameters_list:
+                    yield args
+
+        with script_args([]):
+            manager = _ListTestManager()
+
+        mocked_super_schedule_spider.side_effect = ["999/1/1", "999/2/1"]
+        manager._on_start()
+
+        # first loop: schedule spiders
+        result = next(manager._run_loops())
+
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 2)
+        mocked_super_schedule_spider.assert_any_call(
+            "myspider", units=None, argA="valA", tags=["JOBSEQ=0000000001"], job_settings={}
+        )
+
+        mocked_super_schedule_spider.assert_any_call(
+            "myspider", units=None, argB="valB", tags=["JOBSEQ=0000000002"], job_settings={}
+        )
+
+        # second loop: finish first job with bad outcome, retry 1.
+        manager.is_finished = lambda x: "cancelled (stalled)" if x == "999/1/1" else None
+        mocked_super_schedule_spider.side_effect = ["999/1/2"]
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 3)
+        mocked_super_schedule_spider.assert_any_call(
+            "myspider", units=None, argA="valA", tags=["RETRIED_FROM=999/1/1", "JOBSEQ=0000000001.r1"], job_settings={}
+        )
+
+        # second loop: second job finishes with "cancelled", don't retry it.
+        manager.is_finished = lambda x: "cancelled" if x == "999/2/1" else None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 3)
+
+        # third loop: first job finishes again with abnormal reason, retry it.
+        manager.is_finished = lambda x: "cancelled (stalled)" if x == "999/1/2" else None
+        mocked_super_schedule_spider.side_effect = ["999/1/3"]
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 4)
+        mocked_super_schedule_spider.assert_any_call(
+            "myspider", units=None, argA="valA", tags=["RETRIED_FROM=999/1/2", "JOBSEQ=0000000001.r2"], job_settings={}
+        )
+
+        # fourth loop: first job finishes again with abnormal reason, but max retries reached. Stop.
+        manager.is_finished = lambda x: "cancelled (stalled)" if x == "999/1/3" else None
+        result = next(manager._run_loops())
+        self.assertFalse(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 4)
