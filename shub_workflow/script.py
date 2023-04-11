@@ -152,7 +152,17 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, Protocol):
         ...
 
 
-class BaseScript(ArgumentParserScript, BaseScriptProtocol):
+class SCProjectClass:
+    def __init__(self):
+        self.project_id: Optional[int] = None
+        self.client = ScrapinghubClient(max_retries=100)
+        super().__init__()
+
+    def get_project(self, project_id: Optional[Union[int, str]] = None) -> Project:
+        return self.client.get_project(project_id or self.project_id)
+
+
+class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
 
     name = ""  # optional, may be needed for some applications
     flow_id_required = False  # if True, script can only run in the context of a flow_id
@@ -160,8 +170,6 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
     default_project_id: Optional[int] = None  # If None, autodetect (see shub_workflow.utils.resolve_project_id)
 
     def __init__(self):
-        self.project_id: Optional[int] = None
-        self.client = ScrapinghubClient(max_retries=100)
         self.close_reason: Optional[str] = None
         self.__flow_tags: List[str] = []
         self.project_settings = get_project_settings()
@@ -218,9 +226,6 @@ class BaseScript(ArgumentParserScript, BaseScriptProtocol):
             self.argparser.error("Project id not provided.")
 
         return args
-
-    def get_project(self, project_id: Optional[Union[int, str]] = None) -> Project:
-        return self.client.get_project(project_id or self.project_id)
 
     def get_own_jobkey_from_env(self) -> Optional[JobKey]:
         envjobkey = os.getenv("SHUB_JOBKEY")
