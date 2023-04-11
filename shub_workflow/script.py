@@ -154,7 +154,7 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, Protocol):
 
 class SCProjectClass:
     def __init__(self):
-        self.project_id: Optional[int] = None
+        self.project_id: Optional[int] = resolve_project_id()
         self.client = ScrapinghubClient(max_retries=100)
         super().__init__()
 

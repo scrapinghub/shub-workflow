@@ -37,6 +37,8 @@ class WorkFlowManagerTest(TestCase):
         with script_args(["my_fantasy_name"]):
             manager = TestManager()
         self.assertEqual(manager.name, "my_fantasy_name")
+        self.assertEqual(manager.project_id, 999)
+        self.assertEqual(manager.get_project().key, '999')
 
     @patch("shub_workflow.base.WorkFlowManager._check_resume_workflow")
     def test_check_resume_workflow_not_called(
@@ -71,3 +73,15 @@ class WorkFlowManagerTest(TestCase):
 
         manager._on_start()
         self.assertTrue(manager._check_resume_workflow.called)
+
+    def test_project_id_override(self, mocked_update_metadata, mocked_get_job_tags):
+        class TestManager(WorkFlowManager):
+            def workflow_loop(self):
+                return True
+
+        mocked_get_job_tags.side_effect = [[], []]
+
+        with script_args(["my_fantasy_name", "--project-id=888"]):
+            manager = TestManager()
+        self.assertEqual(manager.project_id, 888)
+        self.assertEqual(manager.get_project().key, '888')
