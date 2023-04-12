@@ -173,7 +173,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         self.close_reason: Optional[str] = None
         self.__flow_tags: List[str] = []
         self.project_settings = get_project_settings()
-        self.loader = SpiderLoader(self.project_settings)
+        self.spider_loader = SpiderLoader(self.project_settings)
         super().__init__()
         self.set_flow_id_name(self.args)
 
