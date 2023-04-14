@@ -15,6 +15,7 @@ from typing_extensions import TypedDict, NotRequired, Protocol
 from shub_workflow.script import (
     JobKey,
     JobDict,
+    SpiderName,
     Outcome,
     BaseLoopScriptAsyncMixin,
 )
@@ -38,7 +39,7 @@ class JobParams(TypedDict):
 
 
 class FullJobParams(JobParams):
-    spider: NotRequired[str]
+    spider: NotRequired[SpiderName]
 
 
 def get_spider_args_from_params(params: JobParams) -> SpiderArgs:
@@ -66,14 +67,14 @@ class CrawlManager(WorkFlowManager):
     finished. Close reason of the manager will be inherited from spider one.
     """
 
-    spider: Optional[str] = None
+    spider: Optional[SpiderName] = None
 
     def __init__(self):
         super().__init__()
 
         # running jobs represents the state of a crawl manager.
         # a dict job key : (spider, job_args_override)
-        self._running_job_keys: Dict[JobKey, Tuple[str, JobParams]] = {}
+        self._running_job_keys: Dict[JobKey, Tuple[SpiderName, JobParams]] = {}
 
     @property
     def description(self):
@@ -102,7 +103,7 @@ class CrawlManager(WorkFlowManager):
     def schedule_spider_with_jobargs(
         self,
         job_args_override: Optional[JobParams] = None,
-        spider: Optional[str] = None,
+        spider: Optional[SpiderName] = None,
     ) -> Optional[JobKey]:
         job_args_override = job_args_override or {}
         spider = spider or self.spider
@@ -142,11 +143,11 @@ class CrawlManager(WorkFlowManager):
 
         return outcomes
 
-    def bad_outcome_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
+    def bad_outcome_hook(self, spider: SpiderName, outcome: str, job_args_override: JobParams, jobkey: JobKey):
         if self.get_close_reason() is None:
             self.set_close_reason(outcome)
 
-    def finished_ok_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
+    def finished_ok_hook(self, spider: SpiderName, outcome: str, job_args_override: JobParams, jobkey: JobKey):
         pass
 
     def workflow_loop(self) -> bool:
@@ -192,9 +193,9 @@ class PeriodicCrawlManager(CrawlManager):
 
 class GeneratorCrawlManagerProtocol(Protocol):
 
-    _running_job_keys: Dict[JobKey, Tuple[str, JobParams]]
+    _running_job_keys: Dict[JobKey, Tuple[SpiderName, JobParams]]
     _jobuids: BloomFilter
-    spider: Optional[str]
+    spider: Optional[SpiderName]
 
     @property
     @abc.abstractmethod
@@ -213,7 +214,7 @@ class GeneratorCrawlManagerProtocol(Protocol):
     def schedule_spider_with_jobargs(
         self,
         job_args_override: Optional[JobParams] = None,
-        spider: Optional[str] = None,
+        spider: Optional[SpiderName] = None,
     ) -> Optional[JobKey]:
         ...
 
@@ -242,8 +243,10 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         self.__next_job_seq = 1
         self._jobuids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
 
-    def bad_outcome_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
+    def bad_outcome_hook(self, spider: SpiderName, outcome: str, job_args_override: JobParams, jobkey: JobKey):
         if outcome == "cancelled":
+            return
+        if self.MAX_RETRIES == 0:
             return
         spider_args = job_args_override.setdefault("spider_args", {})
         tags = job_args_override["tags"]
@@ -258,7 +261,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
             self.add_job(spider, job_args_override)
             _LOG.info(f"Job {jobkey} failed with reason '{outcome}'. Retrying ({retries + 1} of {self.MAX_RETRIES}).")
 
-    def add_job(self, spider: str, job_args_override: JobParams):
+    def add_job(self, spider: SpiderName, job_args_override: JobParams):
         params = cast(FullJobParams, (job_args_override or {}).copy())
         params["spider"] = spider
         self.__additional_jobs.append(params)
@@ -366,7 +369,7 @@ class AsyncSchedulerCrawlManagerMixin(BaseLoopScriptAsyncMixin, GeneratorCrawlMa
     async def schedule_spider_with_jobargs(  # type: ignore
         self,
         job_args_override: Optional[JobParams] = None,
-        spider: Optional[str] = None,
+        spider: Optional[SpiderName] = None,
     ) -> Optional[JobKey]:
         job_args_override = job_args_override or {}
         spider = spider or self.spider

@@ -33,11 +33,12 @@ logger.setLevel(logging.INFO)
 
 JobKey = NewType("JobKey", str)  # ScrapyCloud job key
 Outcome = NewType("Outcome", str)
+SpiderName = NewType("SpiderName", str)
 
 
 class JobDict(TypedDict):
 
-    spider: str
+    spider: SpiderName
     key: NotRequired[JobKey]
     tags: NotRequired[List[str]]
     close_reason: NotRequired[str]
