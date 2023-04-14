@@ -297,7 +297,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
 
     def _workflow_step_gen(self, max_next_params: int) -> Generator[Tuple[str, Optional[JobKey]], None, None]:
         new_params = []
-        for i in range(max_next_params):
+        for _ in range(max_next_params):
             try:
                 if self.__delayed_jobs:
                     next_params = self.__delayed_jobs.pop(0)
@@ -308,13 +308,21 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                 new_params.append(next_params)
             except StopIteration:
                 break
+
+        running_counts: Dict[SpiderName, int] = {}
         for next_params in new_params:
-            spider = next_params.pop("spider", self.spider)
-            assert spider, "No spider set."
-            if self.spider_running_count(spider) >= self.max_jobs_per_spider:
-                next_params["spider"] = spider
+            spider = next_params.get("spider", self.spider)
+            assert spider, f"No spider set for parameters {next_params}"
+            next_params["spider"] = spider
+            if spider not in running_counts:
+                running_counts[spider] = self.spider_running_count(spider)
+
+        for next_params in new_params:
+            if running_counts.setdefault(next_params["spider"], 0) >= self.max_jobs_per_spider:
                 self.__delayed_jobs.append(next_params)
                 continue
+            spider = next_params.pop("spider")
+            running_counts[spider] += 1
             spider_args = get_spider_args_from_params(next_params)
             jobuid = self.get_job_unique_id({"spider": spider, "spider_args": spider_args})
             if jobuid not in self._jobuids:
