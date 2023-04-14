@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from shub_workflow.crawl import CrawlManager, PeriodicCrawlManager, GeneratorCrawlManager
 from shub_workflow.utils.contexts import script_args
+from shub_workflow.script import SpiderName
 
 
 class TestManager(CrawlManager):
@@ -43,7 +44,7 @@ class ListTestManager(GeneratorCrawlManager):
 class TestManagerWithSpider(CrawlManager):
 
     name = "test"
-    spider = "myimplicitspider"
+    spider = SpiderName("myimplicitspider")
 
 
 @patch("shub_workflow.script.BaseScript.get_jobs")

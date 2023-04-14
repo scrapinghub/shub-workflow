@@ -235,13 +235,22 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
 
     MAX_TOTAL_JOBS = 1000000
     MAX_RETRIES = 0
+    max_jobs_per_spider = 1000
 
     def __init__(self):
         super().__init__()
         self.__parameters_gen = self.set_parameters_gen()
         self.__additional_jobs: List[FullJobParams] = []
+        self.__delayed_jobs: List[FullJobParams] = []
         self.__next_job_seq = 1
         self._jobuids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
+
+    def spider_running_count(self, spider: SpiderName) -> int:
+        count = 0
+        for spidername, _ in self._running_job_keys.values():
+            if spidername == spider:
+                count += 1
+        return count
 
     def bad_outcome_hook(self, spider: SpiderName, outcome: Outcome, job_args_override: JobParams, jobkey: JobKey):
         if outcome == "cancelled":
@@ -290,7 +299,9 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         new_params = []
         for i in range(max_next_params):
             try:
-                if self.__additional_jobs:
+                if self.__delayed_jobs:
+                    next_params = self.__delayed_jobs.pop(0)
+                elif self.__additional_jobs:
                     next_params = self.__additional_jobs.pop(0)
                 else:
                     next_params = next(self.__parameters_gen)
@@ -300,6 +311,10 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         for next_params in new_params:
             spider = next_params.pop("spider", self.spider)
             assert spider, "No spider set."
+            if self.spider_running_count(spider) >= self.max_jobs_per_spider:
+                next_params["spider"] = spider
+                self.__delayed_jobs.append(next_params)
+                continue
             spider_args = get_spider_args_from_params(next_params)
             jobuid = self.get_job_unique_id({"spider": spider, "spider_args": spider_args})
             if jobuid not in self._jobuids:
