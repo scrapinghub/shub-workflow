@@ -143,11 +143,11 @@ class CrawlManager(WorkFlowManager):
 
         return outcomes
 
-    def bad_outcome_hook(self, spider: SpiderName, outcome: str, job_args_override: JobParams, jobkey: JobKey):
+    def bad_outcome_hook(self, spider: SpiderName, outcome: Outcome, job_args_override: JobParams, jobkey: JobKey):
         if self.get_close_reason() is None:
             self.set_close_reason(outcome)
 
-    def finished_ok_hook(self, spider: SpiderName, outcome: str, job_args_override: JobParams, jobkey: JobKey):
+    def finished_ok_hook(self, spider: SpiderName, outcome: Outcome, job_args_override: JobParams, jobkey: JobKey):
         pass
 
     def workflow_loop(self) -> bool:
@@ -178,7 +178,7 @@ class PeriodicCrawlManager(CrawlManager):
     parameters. Don't forget to set loop mode.
     """
 
-    def bad_outcome_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
+    def bad_outcome_hook(self, spider: str, outcome: Outcome, job_args_override: JobParams, jobkey: JobKey):
         pass
 
     def workflow_loop(self) -> bool:
@@ -243,7 +243,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         self.__next_job_seq = 1
         self._jobuids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
 
-    def bad_outcome_hook(self, spider: SpiderName, outcome: str, job_args_override: JobParams, jobkey: JobKey):
+    def bad_outcome_hook(self, spider: SpiderName, outcome: Outcome, job_args_override: JobParams, jobkey: JobKey):
         if outcome == "cancelled":
             return
         if self.MAX_RETRIES == 0:
