@@ -135,6 +135,8 @@ class CrawlManager(WorkFlowManager):
                     if job_args_override is not None:
                         job_args_override = job_args_override.copy()
                     self.bad_outcome_hook(spider, outcome, job_args_override, jobkey)
+                else:
+                    self.finished_ok_hook(spider, outcome, job_args_override, jobkey)
                 outcomes[jobkey] = outcome
         _LOG.info(f"There are {len(self._running_job_keys)} jobs still running.")
 
@@ -143,6 +145,9 @@ class CrawlManager(WorkFlowManager):
     def bad_outcome_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
         if self.get_close_reason() is None:
             self.set_close_reason(outcome)
+
+    def finished_ok_hook(self, spider: str, outcome: str, job_args_override: JobParams, jobkey: JobKey):
+        pass
 
     def workflow_loop(self) -> bool:
         outcomes = self.check_running_jobs()
@@ -291,7 +296,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                 break
         for next_params in new_params:
             spider = next_params.pop("spider", self.spider)
-            assert spider is not None, "No spider set."
+            assert spider, "No spider set."
             spider_args = get_spider_args_from_params(next_params)
             jobuid = self.get_job_unique_id({"spider": spider, "spider_args": spider_args})
             if jobuid not in self._jobuids:
