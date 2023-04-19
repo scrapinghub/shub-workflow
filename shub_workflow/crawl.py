@@ -9,7 +9,6 @@ from copy import deepcopy
 from argparse import Namespace
 from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, AsyncGenerator
 
-from bloom_filter import BloomFilter
 from typing_extensions import TypedDict, NotRequired, Protocol
 
 from shub_workflow.script import (
@@ -21,6 +20,7 @@ from shub_workflow.script import (
 )
 from shub_workflow.base import WorkFlowManager
 from shub_workflow.utils import hashstr
+from shub_workflow.utils.dupefilter import DupesFilterProtocol, BloomFilter
 
 
 _LOG = logging.getLogger(__name__)
@@ -194,7 +194,7 @@ class PeriodicCrawlManager(CrawlManager):
 class GeneratorCrawlManagerProtocol(Protocol):
 
     _running_job_keys: Dict[JobKey, Tuple[SpiderName, JobParams]]
-    _jobuids: BloomFilter
+    _jobuids: DupesFilterProtocol
     spider: Optional[SpiderName]
 
     @property
@@ -243,7 +243,11 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         self.__additional_jobs: List[FullJobParams] = []
         self.__delayed_jobs: List[FullJobParams] = []
         self.__next_job_seq = 1
-        self._jobuids = BloomFilter(max_elements=self.MAX_TOTAL_JOBS, error_rate=0.001)
+        self._jobuids = self.create_dupe_filter()
+
+    @classmethod
+    def create_dupe_filter(cls) -> DupesFilterProtocol:
+        return BloomFilter(max_elements=cls.MAX_TOTAL_JOBS, error_rate=0.001)
 
     def spider_running_count(self, spider: SpiderName) -> int:
         count = 0
@@ -367,7 +371,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         _LOG.info(f"Next job sequence number: {self.__next_job_seq}")
 
     def on_close(self):
-        pass
+        self._jobuids.close()
 
 
 class AsyncSchedulerCrawlManagerMixin(BaseLoopScriptAsyncMixin, GeneratorCrawlManagerProtocol):

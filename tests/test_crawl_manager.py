@@ -623,3 +623,5 @@ class CrawlManagerTest(TestCase):
         result = next(manager._run_loops())
         self.assertFalse(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 4)
+
+        manager._close()
