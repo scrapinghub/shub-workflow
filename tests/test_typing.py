@@ -25,7 +25,7 @@ class MyMixin(BaseScriptProtocol):
         self.target = 1
 
     def parse_args(self) -> Namespace:
-        args = super().parse_args()
+        args = super().parse_args()  # type: ignore
         if hasattr(args, "exec_id"):
             self.append_flow_tag(f"EXEC_ID={args.exec_id}")
         return args
@@ -47,12 +47,12 @@ class MyScript(MyMixin, BaseScript):
 
 class MyWorkFlowManager(MyMixin, WorkFlowManager):
     def workflow_loop(self) -> bool:
-        pass
+        return False
 
 
 class MyWorkFlowManagerTwo(MyWFMixin, WorkFlowManager):
     def workflow_loop(self) -> bool:
-        pass
+        return False
 
 
 class MyGraphManager(MyMixin, GraphManager):
