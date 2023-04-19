@@ -10,7 +10,7 @@ from scrapinghub.client.jobs import Job
 from scrapy import Item
 
 from shub_workflow.script import BaseLoopScript, JobKey
-from shub_workflow.deliver.dupefilter import SqliteDictDupesFilter, DupesFilterProtocol
+from shub_workflow.utils.dupefilter import SqliteDictDupesFilter, DupesFilterProtocol
 
 _LOG = logging.getLogger(__name__)
 _LOG.setLevel(logging.INFO)
