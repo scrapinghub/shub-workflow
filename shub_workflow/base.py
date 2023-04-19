@@ -47,7 +47,7 @@ class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
         # only use for updating finished cache if no filter/limit imposed.
         update_finished_cache = not set(kwargs.keys()).intersection(["count", "has_tag", "lacks_tag"])
         finished_cache = []
-        for job in super().get_finished_owned_jobs(project_id, **kwargs):
+        for job in super().get_finished_owned_jobs(project_id, **kwargs):  # type: ignore
             if update_finished_cache:
                 finished_cache.append((job["key"], Outcome(job["close_reason"])))
             yield job

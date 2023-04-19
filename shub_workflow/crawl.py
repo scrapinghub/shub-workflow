@@ -9,6 +9,7 @@ from copy import deepcopy
 from argparse import Namespace
 from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, AsyncGenerator
 
+from bloom_filter2 import BloomFilter
 from typing_extensions import TypedDict, NotRequired, Protocol
 
 from shub_workflow.script import (
@@ -20,7 +21,7 @@ from shub_workflow.script import (
 )
 from shub_workflow.base import WorkFlowManager
 from shub_workflow.utils import hashstr
-from shub_workflow.utils.dupefilter import DupesFilterProtocol, BloomFilter
+from shub_workflow.utils.dupefilter import DupesFilterProtocol
 
 
 _LOG = logging.getLogger(__name__)
@@ -233,7 +234,6 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
     - Don't forget to set loop mode and max jobs (which defaults to infinite).
     """
 
-    MAX_TOTAL_JOBS = 1000000
     MAX_RETRIES = 0
     max_jobs_per_spider = 1000
 
@@ -247,7 +247,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
 
     @classmethod
     def create_dupe_filter(cls) -> DupesFilterProtocol:
-        return BloomFilter(max_elements=cls.MAX_TOTAL_JOBS, error_rate=0.001)
+        return BloomFilter(max_elements=1e6, error_rate=1e-6)
 
     def spider_running_count(self, spider: SpiderName) -> int:
         count = 0

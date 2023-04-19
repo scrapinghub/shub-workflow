@@ -6,7 +6,6 @@ from typing import Union
 from typing_extensions import Protocol
 from typing import Container
 
-import bloom_filter
 from sqlitedict import SqliteDict
 
 
@@ -54,8 +53,3 @@ class SqliteDictDupesFilter:
                 os.remove(self.dupes_db_file)
             except Exception:
                 pass
-
-
-class BloomFilter(bloom_filter.BloomFilter):
-    def close(self):
-        pass
