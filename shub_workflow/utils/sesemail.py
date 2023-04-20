@@ -1,7 +1,5 @@
 import os
 import logging
-import boto3
-from botocore.client import Config
 from email.message import Message
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -9,6 +7,9 @@ from email.mime.application import MIMEApplication
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from typing import List, Optional, Dict
+
+import boto3
+from botocore.client import Config
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
