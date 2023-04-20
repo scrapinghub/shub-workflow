@@ -1,7 +1,7 @@
 import re
 import logging
 import uuid
-from typing import List, Generator
+from typing import List, Generator, Callable
 from operator import itemgetter
 from glob import iglob
 from os import listdir, remove, environ, makedirs
@@ -332,6 +332,24 @@ class S3SessionFactory:
 
 
 class S3Helper:
+
+    cp_file: Callable
+    download_file: Callable
+    empty_folder: Callable
+    exists: Callable
+    get_file: Callable
+    get_glob: Callable
+    list_folder: Callable
+    list_folder_files_recursive: Callable
+    list_folder_in_ts_order: Callable
+    list_path: Callable
+    mv_file: Callable
+    rm_file: Callable
+    s3_folder_size: Callable
+    touch: Callable
+    upload_file: Callable
+    upload_file_obj: Callable
+
     def __init__(self, aws_key, aws_secret, aws_role=None, aws_external_id=None, expiration_margin_minutes=10):
         self.s3_session_factory = None
         self.credentials = {"aws_key": aws_key, "aws_secret": aws_secret}
@@ -340,25 +358,10 @@ class S3Helper:
                 aws_key, aws_secret, aws_role, aws_external_id, expiration_margin_minutes
             )
 
-        for method in (
-            get_file,
-            upload_file_obj,
-            upload_file,
-            download_file,
-            list_folder,
-            mv_file,
-            rm_file,
-            get_glob,
-            empty_folder,
-            exists,
-            touch,
-            cp_file,
-            list_path,
-            list_folder_in_ts_order,
-            list_folder_files_recursive,
-            s3_folder_size,
-        ):
-            self._wrap_method(method)
+        for method_name, _type in S3Helper.__annotations__.items():
+            if not hasattr(self, method_name) and _type is Callable:
+                method = globals()[method_name]
+                self._wrap_method(method)
 
     def _wrap_method(self, method):
         def _method(*args, **kwargs):
