@@ -1,9 +1,9 @@
 #!/bin/sh
 result=0
-# flake8 shub_workflow/
-# result=$(($result | $?))
-flake8 shub_workflow/ --select I100 --application-import-names=shub_workflow --import-order-style=pep8
+flake8 shub_workflow/ tests/ --application-import-names=shub_workflow --import-order-style=pep8
 result=$(($result | $?))
 mypy --ignore-missing-imports shub_workflow/
+result=$(($result | $?))
+mypy --ignore-missing-imports --disable-error-code=method-assign tests/
 result=$(($result | $?))
 exit $result
