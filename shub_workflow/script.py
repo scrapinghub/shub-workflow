@@ -300,6 +300,21 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
                 if metadata:
                     self._update_metadata(metadata, {"tags": job_tags})
 
+    def remove_job_tags(self, tags: List[str], jobkey: JobKey):
+        update = False
+        job_tags = self.get_job_tags(jobkey)
+        for tag in tags:
+            if tag in job_tags:
+                if any([tag.startswith(s) for s in ("FLOW_ID=", "NAME=", "PARENT_NAME=")]):
+                    logger.info(f"Cannot remove tag {tag}: not allowed.")
+                else:
+                    job_tags.remove(tag)
+                    update = True
+        if update:
+            metadata = self.get_job_metadata(jobkey)
+            if metadata:
+                self._update_metadata(metadata, {"tags": job_tags})
+
     async def async_add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, partial(self.add_job_tags, jobkey, tags))
