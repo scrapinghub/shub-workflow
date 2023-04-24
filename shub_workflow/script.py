@@ -478,6 +478,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     # --loop-mode command line option overrides it
     loop_mode = 0
     max_running_time = 0
+    stats_interval = 120
 
     def __init__(self):
         self.workflow_loop_enabled = False
@@ -492,6 +493,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
         logger.debug(f"Stats collection class: {stats_collector_class}")
         self.stats = load_object(stats_collector_class)(PseudoCrawler(self))
         self.__close_reason = None
+        self.__last_stats_upload = None
 
     def set_close_reason(self, reason):
         self.__close_reason = reason
@@ -552,11 +554,14 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
             except KeyboardInterrupt:
                 logger.info("Bye")
                 break
+            now = time.time()
+            if self.__last_stats_upload is None or now - self.__last_stats_upload >= self.stats_interval:
+                self.stats._upload_stats()
+                self.__last_stats_upload = now
 
     def _on_start(self):
         self.on_start()
         self.workflow_loop_enabled = True
-        self.stats.open_spider(self)
 
     def on_close(self):
         pass
