@@ -12,7 +12,6 @@ from shub_workflow.base import WorkFlowManagerProtocol, Outcome
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 Resource = NewType("Resource", str)
 ResourceAmmount = Union[int, Fraction]

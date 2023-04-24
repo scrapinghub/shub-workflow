@@ -25,7 +25,6 @@ from shub_workflow.utils.dupefilter import DupesFilterProtocol
 
 
 _LOG = logging.getLogger(__name__)
-_LOG.setLevel(logging.INFO)
 
 
 SpiderArgs = NewType("SpiderArgs", Dict[str, str])

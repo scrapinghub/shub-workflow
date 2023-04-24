@@ -12,7 +12,6 @@ import boto3
 from botocore.client import Config
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class SESHelper:

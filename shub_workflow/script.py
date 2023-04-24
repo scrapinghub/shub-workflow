@@ -28,7 +28,6 @@ from shub_workflow.utils import (
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 JobKey = NewType("JobKey", str)  # ScrapyCloud job key

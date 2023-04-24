@@ -40,7 +40,6 @@ from shub_workflow.graph.task import (
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 _STARTING_JOB_RE = re.compile("--starting-job(?:=(.+))?")

@@ -9,7 +9,6 @@ from google.cloud import storage
 _GS_FOLDER_RE = re.compile(r"gs://([-\w]+)/(.*)$")
 
 _LOGGER = logging.getLogger(__name__)
-_LOGGER.setLevel(logging.INFO)
 
 
 def get_credfile_path(module, resource, check_exists=True):

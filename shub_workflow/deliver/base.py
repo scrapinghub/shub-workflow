@@ -13,7 +13,6 @@ from shub_workflow.script import BaseLoopScript, JobKey
 from shub_workflow.utils.dupefilter import SqliteDictDupesFilter, DupesFilterProtocol
 
 _LOG = logging.getLogger(__name__)
-_LOG.setLevel(logging.INFO)
 
 
 class DeliverScriptProtocol(Protocol):

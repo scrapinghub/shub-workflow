@@ -10,7 +10,6 @@ from shub_workflow.utils import dash_retry_decorator
 
 
 _LOG = logging.getLogger(__name__)
-_LOG.setLevel(logging.INFO)
 
 
 def _transform_cmd(job_cmd):

@@ -21,7 +21,6 @@ BUFFER = 1024 * 1024
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 def just_log_exception(exception):

@@ -10,7 +10,6 @@ from requests.exceptions import ReadTimeout, ConnectionError, HTTPError
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 def hashstr(text: str) -> str:
@@ -94,3 +93,8 @@ def get_project_settings():
     except ImportError:
         pass
     return settings
+
+
+def get_kumo_loglevel(default="INFO"):
+    loglevel = kumo_settings().get("LOG_LEVEL", default)
+    return getattr(logging, loglevel)
