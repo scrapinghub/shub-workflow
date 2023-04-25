@@ -568,7 +568,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     def _close(self):
         self.on_close()
         self.__close_reason = self.__close_reason or "finished"
-        self.stats.close_spider(self, self.__close_reason)
+        self.stats._upload_stats()
 
 
 class BaseLoopScriptAsyncMixin(BaseLoopScriptProtocol):
