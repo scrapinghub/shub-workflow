@@ -555,8 +555,17 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
                 break
             now = time.time()
             if self.__last_stats_upload is None or now - self.__last_stats_upload >= self.stats_interval:
-                self.stats._upload_stats()
+                self.maybe_upload_stats()
                 self.__last_stats_upload = now
+
+    def maybe_upload_stats(self):
+        """
+        this is a bit dirty, but it is needed for HubStorageStatsCollector and
+        there is not a base upload method in base stats class. Will improve
+        in future.
+        """
+        if hasattr(self.stats, "_upload_stats"):
+            self.stats._upload_stats()
 
     def _on_start(self):
         self.on_start()
@@ -568,7 +577,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     def _close(self):
         self.on_close()
         self.__close_reason = self.__close_reason or "finished"
-        self.stats._upload_stats()
+        self.maybe_upload_stats()
 
 
 class BaseLoopScriptAsyncMixin(BaseLoopScriptProtocol):
