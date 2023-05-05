@@ -350,6 +350,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         except DuplicateJobError as e:
             logger.error(str(e))
         except Exception:
+            logger.error(f"Failed to schedule job with arguments {schedule_kwargs}")
             raise
         else:
             logger.info(f"Scheduled job {job.key}")
