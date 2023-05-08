@@ -1,6 +1,8 @@
 import os
 import re
 import logging
+from typing import Generator
+
 from pkg_resources import resource_filename
 
 from google.cloud import storage
@@ -34,3 +36,15 @@ def upload_file(src_path, dest_path):
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(src_path)
     _LOGGER.info(f"File {src_path} uploaded to {dest_path}.")
+
+
+def list_folder(path: str) -> Generator[str, None, None]:
+    storage_client = storage.Client()
+    m = _GS_FOLDER_RE.match(path)
+    if m:
+        bucket_name, blob_prefix = m.groups()
+    else:
+        raise ValueError(f"Invalid path {path} for GCS.")
+    bucket = storage_client.bucket(bucket_name)
+    for blob in bucket.list_blobs(prefix=blob_prefix):
+        yield f"gs://{bucket_name}/{blob.name}"

@@ -99,22 +99,27 @@ def download_file(path, dest=None, aws_key=None, aws_secret=None, aws_token=None
 
 
 def upload_file_obj(robj, dest, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
-    assert dest.startswith(_S3_ATTRIBUTE), f"Not a s3 source: {dest}"
-    with get_file(dest, "wb", aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token, **kwargs) as w:
-        total = 0
-        while True:
-            size = w.write(robj.read(UPLOAD_CHUNK_SIZE))
-            total += size
-            logger.info(f"Uploaded {total} bytes to {dest}")
-            if size < UPLOAD_CHUNK_SIZE:
-                break
+    if dest.startswith(_S3_ATTRIBUTE):
+        with get_file(dest, "wb", aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token, **kwargs) as w:
+            total = 0
+            while True:
+                size = w.write(robj.read(UPLOAD_CHUNK_SIZE))
+                total += size
+                logger.info(f"Uploaded {total} bytes to {dest}")
+                if size < UPLOAD_CHUNK_SIZE:
+                    break
+    else:
+        raise ValueError("Not a supported cloud.")
 
 
 def upload_file(path, dest, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     if dest.endswith("/"):
         dest = dest + basename(path)
     with open(path, "rb") as r:
-        upload_file_obj(r, dest, aws_key, aws_secret, aws_token, **kwargs)
+        if dest.startswith(_S3_ATTRIBUTE):
+            upload_file_obj(r, dest, aws_key, aws_secret, aws_token, **kwargs)
+        elif dest.startswith(_GS_ATTRIBUTE):
+            gcstorage.upload_file(path, dest)
 
 
 def get_glob(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
@@ -169,7 +174,7 @@ def rm_file(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
         remove(path)
 
 
-def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
+def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> Generator[str, None, None]:
     """
     More efficient boto3 based path listing, that accepts prefix
     """
@@ -183,17 +188,23 @@ def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     )
     if path.startswith(_S3_ATTRIBUTE):
         s3 = session.resource("s3")
-        bucket_name, path = S3_PATH_RE.match(path).groups()
-        bucket = s3.Bucket(bucket_name)
-        for result in bucket.objects.filter(Prefix=path):
-            yield f"s3://{bucket_name}/{result.key}"
+        m = S3_PATH_RE.match(path)
+        if m:
+            bucket_name, path = m.groups()
+            bucket = s3.Bucket(bucket_name)
+            for result in bucket.objects.filter(Prefix=path):
+                yield f"s3://{bucket_name}/{result.key}"
+        else:
+            raise ValueError(f"Bad s3 path specification: {path}")
+    elif path.startswith(_GS_ATTRIBUTE):
+        yield from list_folder(path)
     else:
         raise NotImplementedError("Only implemented for s3.")
 
 
 def list_folder(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> List[str]:
-    region = kwargs.pop("region", None)
     if path.startswith(_S3_ATTRIBUTE):
+        region = kwargs.pop("region", None)
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
 
         try:
@@ -201,7 +212,8 @@ def list_folder(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -
             listing = [f"s3://{name}" for name in fs.ls(path) if name != path]
         except FileNotFoundError:
             listing = []
-
+    elif path.startswith(_GS_ATTRIBUTE):
+        listing = list(gcstorage.list_folder(path))
     else:
         if path.strip().endswith("/"):
             path = path[:-1]
