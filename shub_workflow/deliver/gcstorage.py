@@ -48,3 +48,17 @@ def list_folder(path: str) -> Generator[str, None, None]:
     bucket = storage_client.bucket(bucket_name)
     for blob in bucket.list_blobs(prefix=blob_prefix):
         yield f"gs://{bucket_name}/{blob.name}"
+
+
+def download_file(path: str, dest: str):
+    storage_client = storage.Client()
+    m = _GS_FOLDER_RE.match(path)
+    if m:
+        bucket_name, blob_name = m.groups()
+    else:
+        raise ValueError(f"Invalid path {path} for GCS.")
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    with open(dest, "wb") as w:
+        blob.download_to_file(w)
+    _LOGGER.info(f"File {path} downloaded to {dest}.")

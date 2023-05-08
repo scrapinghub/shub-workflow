@@ -83,19 +83,23 @@ UPLOAD_CHUNK_SIZE = 100 * 1024 * 1024
 
 
 def download_file(path, dest=None, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
-    assert path.startswith(_S3_ATTRIBUTE), f"Not a s3 source: {path}"
     if dest is None:
         dest = basename(path)
-    with get_file(path, "rb", aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token, **kwargs) as r, open(
-        dest, "wb"
-    ) as w:
-        total = 0
-        while True:
-            size = w.write(r.read(DOWNLOAD_CHUNK_SIZE))
-            total += size
-            logger.info(f"Downloaded {total} bytes from {path}")
-            if size < DOWNLOAD_CHUNK_SIZE:
-                break
+    if path.startswith(_S3_ATTRIBUTE):
+        with get_file(path, "rb", aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token, **kwargs) as r, open(
+            dest, "wb"
+        ) as w:
+            total = 0
+            while True:
+                size = w.write(r.read(DOWNLOAD_CHUNK_SIZE))
+                total += size
+                logger.info(f"Downloaded {total} bytes from {path}")
+                if size < DOWNLOAD_CHUNK_SIZE:
+                    break
+    elif path.startswith(_GS_ATTRIBUTE):
+        gcstorage.download_file(path, dest)
+    else:
+        raise ValueError(f"Not supported file system fpr path {path}")
 
 
 def upload_file_obj(robj, dest, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
