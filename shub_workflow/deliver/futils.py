@@ -174,6 +174,8 @@ def rm_file(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
         op_kwargs = kwargs.pop("op_kwargs", {})
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         fs.rm(s3_path(path), **op_kwargs)
+    elif path.startswith(_GS_ATTRIBUTE):
+        gcstorage.rm_file(path)
     else:
         remove(path)
 

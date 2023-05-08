@@ -62,3 +62,16 @@ def download_file(path: str, dest: str):
     with open(dest, "wb") as w:
         blob.download_to_file(w)
     _LOGGER.info(f"File {path} downloaded to {dest}.")
+
+
+def rm_file(path: str):
+    storage_client = storage.Client()
+    m = _GS_FOLDER_RE.match(path)
+    if m:
+        bucket_name, blob_name = m.groups()
+    else:
+        raise ValueError(f"Invalid path {path} for GCS.")
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    blob.delete()
+    _LOGGER.info(f"Deleted {path}.")
