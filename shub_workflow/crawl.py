@@ -211,6 +211,10 @@ class GeneratorCrawlManagerProtocol(Protocol):
         ...
 
     @abc.abstractmethod
+    def get_max_next_params(self) -> int:
+        ...
+
+    @abc.abstractmethod
     def schedule_spider_with_jobargs(
         self,
         job_args_override: Optional[JobParams] = None,
@@ -339,9 +343,12 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
     def get_max_jobs_per_spider(self, spider: SpiderName) -> int:
         return self.max_jobs_per_spider
 
+    def get_max_next_params(self) -> int:
+        return self.max_running_jobs - len(self._running_job_keys)
+
     def workflow_loop(self) -> bool:
         self.check_running_jobs()
-        max_next_params = self.max_running_jobs - len(self._running_job_keys)
+        max_next_params = self.get_max_next_params()
         retval = False
         for jobuid, jobid in self._workflow_step_gen(max_next_params):
             retval = True
@@ -389,7 +396,7 @@ class AsyncSchedulerCrawlManagerMixin(BaseLoopScriptAsyncMixin, GeneratorCrawlMa
 
     async def workflow_loop(self) -> bool:  # type: ignore
         self.check_running_jobs()
-        max_next_params = self.max_running_jobs - len(self._running_job_keys)
+        max_next_params = self.get_max_next_params()
         retval = False
         async for jobuid, jobid in self._async_workflow_step_gen(max_next_params):
             retval = True
