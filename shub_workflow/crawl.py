@@ -321,6 +321,11 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                 running_counts[spider] = self.spider_running_count(spider)
 
         for next_params in new_params:
+            spider_args = get_spider_args_from_params(next_params)
+            jobuid = self.get_job_unique_id({"spider": next_params["spider"], "spider_args": spider_args})
+            if jobuid in self._jobuids:
+                _LOG.warning(f"Job with spider {spider} and parameters {next_params} was already scheduled. Skipped.")
+                continue
             if running_counts.setdefault(next_params["spider"], 0) >= self.get_max_jobs_per_spider(
                 next_params["spider"]
             ):
@@ -328,13 +333,8 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                 continue
             spider = next_params.pop("spider")
             running_counts[spider] += 1
-            spider_args = get_spider_args_from_params(next_params)
-            jobuid = self.get_job_unique_id({"spider": spider, "spider_args": spider_args})
-            if jobuid not in self._jobuids:
-                self.__add_jobseq_tag(next_params)
-                yield jobuid, self.schedule_spider_with_jobargs(next_params, spider)
-            else:
-                _LOG.warning(f"Job with spider {spider} and parameters {next_params} was already scheduled. Skipped.")
+            self.__add_jobseq_tag(next_params)
+            yield jobuid, self.schedule_spider_with_jobargs(next_params, spider)
 
     def get_max_jobs_per_spider(self, spider: SpiderName) -> int:
         return self.max_jobs_per_spider

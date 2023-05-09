@@ -442,7 +442,7 @@ class CrawlManagerTest(TestCase):
         self.assertTrue(manager.is_resumed)
         self.assertEqual(len(manager._running_job_keys), 0)
 
-        # first loop: only second task was scheduled. First one already completed before resuming.
+        # first loop: only second task will be scheduled. First one already completed before resuming.
         manager.is_finished = lambda x: None
         result = next(manager._run_loops())
         self.assertTrue(result)
