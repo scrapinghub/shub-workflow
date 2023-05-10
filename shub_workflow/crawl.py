@@ -303,40 +303,62 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         tags.append(jobseq_tag)
 
     def _workflow_step_gen(self, max_next_params: int) -> Generator[Tuple[str, Optional[JobKey]], None, None]:
-        new_params = []
-        for _ in range(max_next_params):
-            try:
-                if self.__delayed_jobs:
-                    next_params = self.__delayed_jobs.pop(0)
-                elif self.__additional_jobs:
-                    next_params = self.__additional_jobs.pop(0)
+        new_params: List[FullJobParams] = []
+
+        max_new_jobs_per_spider: Dict[str, int] = {}
+
+        while len(new_params) < max_next_params:
+            next_params = None
+            for idx, np in enumerate(self.__delayed_jobs):
+                if np["spider"] not in max_new_jobs_per_spider:
+                    max_new_jobs_per_spider[np["spider"]] = self.get_max_jobs_per_spider(
+                        np["spider"]
+                    ) - self.spider_running_count(np["spider"])
+                if max_new_jobs_per_spider[np["spider"]] > 0:
+                    next_params = np
+                    self.__delayed_jobs = self.__delayed_jobs[:idx] + self.__delayed_jobs[idx + 1:]
+                    break
+            else:
+                for idx, np in enumerate(self.__additional_jobs):
+                    if np["spider"] not in max_new_jobs_per_spider:
+                        max_new_jobs_per_spider[np["spider"]] = self.get_max_jobs_per_spider(
+                            np["spider"]
+                        ) - self.spider_running_count(np["spider"])
+                    if max_new_jobs_per_spider[np["spider"]] > 0:
+                        next_params = np
+                        self.__additional_jobs = self.__additional_jobs[:idx] + self.__additional_jobs[idx + 1:]
+                        break
                 else:
-                    next_params = next(self.__parameters_gen)
-                new_params.append(next_params)
-            except StopIteration:
+                    try:
+                        np = next(self.__parameters_gen)
+                    except StopIteration:
+                        break
+                    else:
+                        spider = np.get("spider", self.spider)
+                        assert spider, f"No spider set for parameters {np}"
+                        np["spider"] = spider
+                        if np["spider"] not in max_new_jobs_per_spider:
+                            max_new_jobs_per_spider[np["spider"]] = self.get_max_jobs_per_spider(
+                                np["spider"]
+                            ) - self.spider_running_count(np["spider"])
+                        if max_new_jobs_per_spider[np["spider"]] > 0:
+                            next_params = np
+                        else:
+                            self.__delayed_jobs.append(np)
+                            continue
+
+            if next_params is None:
                 break
-
-        running_counts: Dict[SpiderName, int] = {}
-        for next_params in new_params:
-            spider = next_params.get("spider", self.spider)
-            assert spider, f"No spider set for parameters {next_params}"
-            next_params["spider"] = spider
-            if spider not in running_counts:
-                running_counts[spider] = self.spider_running_count(spider)
-
-        for next_params in new_params:
             spider_args = get_spider_args_from_params(next_params)
             jobuid = self.get_job_unique_id({"spider": next_params["spider"], "spider_args": spider_args})
             if jobuid in self._jobuids:
                 _LOG.warning(f"Job with parameters {next_params} was already scheduled. Skipped.")
                 continue
-            if running_counts.setdefault(next_params["spider"], 0) >= self.get_max_jobs_per_spider(
-                next_params["spider"]
-            ):
-                self.__delayed_jobs.append(next_params)
-                continue
+            new_params.append(next_params)
+            max_new_jobs_per_spider[next_params["spider"]] += 1
+
+        for next_params in new_params:
             spider = next_params.pop("spider")
-            running_counts[spider] += 1
             self.__add_jobseq_tag(next_params)
             yield jobuid, self.schedule_spider_with_jobargs(next_params, spider)
 
