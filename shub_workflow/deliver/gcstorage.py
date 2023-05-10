@@ -34,7 +34,7 @@ def upload_file(src_path, dest_path):
         raise ValueError(f"Invalid destination {dest_path}")
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
-    blob.upload_from_filename(src_path)
+    blob.upload_from_filename(src_path, retry=storage.retry.DEFAULT_RETRY)
     _LOGGER.info(f"File {src_path} uploaded to {dest_path}.")
 
 
@@ -46,7 +46,7 @@ def list_folder(path: str) -> Generator[str, None, None]:
     else:
         raise ValueError(f"Invalid path {path} for GCS.")
     bucket = storage_client.bucket(bucket_name)
-    for blob in bucket.list_blobs(prefix=blob_prefix):
+    for blob in bucket.list_blobs(prefix=blob_prefix, retry=storage.retry.DEFAULT_RETRY):
         yield f"gs://{bucket_name}/{blob.name}"
 
 
@@ -60,7 +60,7 @@ def download_file(path: str, dest: str):
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
     with open(dest, "wb") as w:
-        blob.download_to_file(w)
+        blob.download_to_file(w, retry=storage.retry.DEFAULT_RETRY)
     _LOGGER.info(f"File {path} downloaded to {dest}.")
 
 
@@ -73,5 +73,5 @@ def rm_file(path: str):
         raise ValueError(f"Invalid path {path} for GCS.")
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
-    blob.delete()
+    blob.delete(retry=storage.retry.DEFAULT_RETRY)
     _LOGGER.info(f"Deleted {path}.")
