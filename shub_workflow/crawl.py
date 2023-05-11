@@ -355,7 +355,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                 _LOG.warning(f"Job with parameters {next_params} was already scheduled. Skipped.")
                 continue
             new_params.append(next_params)
-            max_new_jobs_per_spider[next_params["spider"]] += 1
+            max_new_jobs_per_spider[next_params["spider"]] -= 1
 
         for next_params in new_params:
             spider = next_params.pop("spider")

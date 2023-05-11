@@ -625,3 +625,150 @@ class CrawlManagerTest(TestCase):
         self.assertEqual(mocked_super_schedule_spider.call_count, 4)
 
         manager._close()
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_max_jobs_per_spider(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
+
+        spider_list = ("spiderA", "spiderB", "spiderC")
+
+        class _ListTestManager(GeneratorCrawlManager):
+
+            name = "test"
+            max_jobs_per_spider = 1
+            spider = SpiderName("")
+
+            def set_parameters_gen(self):
+                for i in range(100):
+                    for spider in spider_list:
+                        yield {"spider": spider, "argA": i}
+
+        with script_args([]):
+            manager = _ListTestManager()
+
+        manager._on_start()
+
+        # first loop
+        mocked_super_schedule_spider.side_effect = ["999/1/1", "999/2/1", "999/3/1"]
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 3)
+
+        for seq, spider in enumerate(spider_list, start=1):
+            mocked_super_schedule_spider.assert_any_call(
+                spider, units=None, argA=0, tags=[f"JOBSEQ={seq:010d}"], job_settings={}
+            )
+        self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 297)
+
+        # second loop. No job finished.
+        manager.is_finished = lambda x: None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 3)
+
+        # third loop. spiderB job finished. Can schedule new spiderB job.
+        mocked_super_schedule_spider.side_effect = ["999/2/2"]
+        manager.is_finished = lambda x: "finished" if x == "999/2/1" else None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 4)
+        mocked_super_schedule_spider.assert_any_call(
+            "spiderB", units=None, argA=1, tags=["JOBSEQ=0000000004"], job_settings={}
+        )
+        self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 296)
+
+        # fourth loop. spiderB job finished. Can schedule new spiderB job.
+        mocked_super_schedule_spider.side_effect = ["999/2/3"]
+        manager.is_finished = lambda x: "finished" if x == "999/2/2" else None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 5)
+        mocked_super_schedule_spider.assert_any_call(
+            "spiderB", units=None, argA=2, tags=["JOBSEQ=0000000005"], job_settings={}
+        )
+        self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 295)
+
+        # fifth loop. spiderC job finished. Can schedule new spiderC job.
+        mocked_super_schedule_spider.side_effect = ["999/3/2"]
+        manager.is_finished = lambda x: "finished" if x == "999/3/1" else None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 6)
+        mocked_super_schedule_spider.assert_any_call(
+            "spiderC", units=None, argA=1, tags=["JOBSEQ=0000000006"], job_settings={}
+        )
+        self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 294)
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_max_jobs_per_spider_with_max_next_params_limit(
+        self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs
+    ):
+
+        spider_list = ("spiderA", "spiderB", "spiderC")
+
+        class _ListTestManager(GeneratorCrawlManager):
+
+            name = "test"
+            max_jobs_per_spider = 1
+            spider = SpiderName("")
+
+            def set_parameters_gen(self):
+                for i in range(100):
+                    for spider in spider_list:
+                        yield {"spider": spider, "argA": i}
+
+            def get_max_next_params(self) -> int:
+                return min(1, super().get_max_next_params())
+
+        with script_args([]):
+            manager = _ListTestManager()
+
+        manager._on_start()
+
+        # 1st loop
+        mocked_super_schedule_spider.side_effect = ["999/1/1", "999/2/1", "999/3/1"]
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 1)
+        mocked_super_schedule_spider.assert_any_call(
+            "spiderA", units=None, argA=0, tags=["JOBSEQ=0000000001"], job_settings={}
+        )
+        self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 0)
+
+        # 2nd loop.
+        manager.is_finished = lambda x: None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 2)
+        mocked_super_schedule_spider.assert_any_call(
+            "spiderB", units=None, argA=0, tags=["JOBSEQ=0000000002"], job_settings={}
+        )
+        self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 0)
+
+        # 3rd loop.
+        manager.is_finished = lambda x: "finished" if x == "999/1/1" else None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 3)
+        mocked_super_schedule_spider.assert_any_call(
+            "spiderC", units=None, argA=0, tags=["JOBSEQ=0000000003"], job_settings={}
+        )
+        self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 0)
+
+        # 4th loop.
+        mocked_super_schedule_spider.side_effect = ["999/1/2"]
+        manager.is_finished = lambda x: None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 4)
+        mocked_super_schedule_spider.assert_any_call(
+            "spiderA", units=None, argA=1, tags=["JOBSEQ=0000000004"], job_settings={}
+        )
+        self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 0)
+
+        # 5th loop.
+        mocked_super_schedule_spider.side_effect = ["999/1/2"]
+        manager.is_finished = lambda x: None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 4)
+        self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 296)
