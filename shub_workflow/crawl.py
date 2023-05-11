@@ -7,7 +7,7 @@ import asyncio
 import logging
 from copy import deepcopy
 from argparse import Namespace
-from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, AsyncGenerator
+from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, AsyncGenerator, Set
 
 from bloom_filter2 import BloomFilter
 from typing_extensions import TypedDict, NotRequired, Protocol
@@ -301,6 +301,9 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
             jobseq, repn = get_jobseq([jobseq_tag])
             jobseq_tag = f"JOBSEQ={jobseq:010d}.r{repn + 1}"
         tags.append(jobseq_tag)
+
+    def get_running_spiders(self) -> Set[SpiderName]:
+        return set(sp for sp, _ in self._running_job_keys.values())
 
     def _workflow_step_gen(self, max_next_params: int) -> Generator[Tuple[str, Optional[JobKey]], None, None]:
         new_params: List[FullJobParams] = []
