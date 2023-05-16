@@ -786,7 +786,7 @@ class CrawlManagerTest(TestCase):
     def test_max_jobs_per_spider_with_known_spiders(
         self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs
     ):
-        """If we limit max next params but also we know which spiders cab be scheduled, we can avoid the delayed
+        """If we limit max next params but also we know which spiders can be scheduled, we can avoid the delayed
         queue fill effect while every spider has slots available. But once one spider run out of params and
         there no running ones (loop 8th in the test), we get again the fill effect. Again, this is unavoidable if we
         don't have information about wether there are spiderA next params available."""
@@ -873,9 +873,7 @@ class CrawlManagerTest(TestCase):
             "spiderA", units=None, argA=2, tags=["JOBSEQ=0000000005"], job_settings={}
         )
         self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 2)
-        self.assertEqual(
-            set(np["spider"] for np in manager._GeneratorCrawlManager__delayed_jobs), {"spiderB", "spiderC"}
-        )
+        self.assertEqual(manager.get_delayed_spiders(), {"spiderB", "spiderC"})
 
         # 7th loop. SpiderA finishes, reschedule one more. Two more spiderB and spiderC next params added to
         # delayed jobs
@@ -888,9 +886,7 @@ class CrawlManagerTest(TestCase):
             "spiderA", units=None, argA=3, tags=["JOBSEQ=0000000006"], job_settings={}
         )
         self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 4)
-        self.assertEqual(
-            set(np["spider"] for np in manager._GeneratorCrawlManager__delayed_jobs), {"spiderB", "spiderC"}
-        )
+        self.assertEqual(manager.get_delayed_spiders(), {"spiderB", "spiderC"})
 
         # 8th loop. SpiderA finishes, but there are no more next params for spiderA. Delayed job become filled
         # with all next params
@@ -899,6 +895,4 @@ class CrawlManagerTest(TestCase):
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 6)
         self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 198)
-        self.assertEqual(
-            set(np["spider"] for np in manager._GeneratorCrawlManager__delayed_jobs), {"spiderB", "spiderC"}
-        )
+        self.assertEqual(manager.get_delayed_spiders(), {"spiderB", "spiderC"})

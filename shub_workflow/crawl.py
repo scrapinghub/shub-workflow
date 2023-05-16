@@ -305,6 +305,16 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
     def get_running_spiders(self) -> Set[SpiderName]:
         return set(sp for sp, _ in self._running_job_keys.values())
 
+    def get_delayed_spiders(self) -> Set[SpiderName]:
+        return set(np["spider"] for np in self.__delayed_jobs)
+
+    def spider_delayed_count(self, spider: SpiderName) -> int:
+        count = 0
+        for np in self.__delayed_jobs:
+            if np["spider"] == spider:
+                count += 1
+        return count
+
     def _workflow_step_gen(self, max_next_params: int) -> Generator[Tuple[str, Optional[JobKey]], None, None]:
         new_params: List[FullJobParams] = []
 
