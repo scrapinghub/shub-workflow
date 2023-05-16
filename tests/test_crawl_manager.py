@@ -629,6 +629,11 @@ class CrawlManagerTest(TestCase):
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_max_jobs_per_spider(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
 
+        """Notice delayed jobs queue got filled in first loop with all next jobs params.
+        This is unavoidable if we don't have information about the spiders that
+        will come in new next params. If crawl manager stops prematurely, all the delayed
+        params will be lost. But effect can be limited. See next test."""
+
         spider_list = ("spiderA", "spiderB", "spiderC")
 
         class _ListTestManager(GeneratorCrawlManager):
@@ -647,7 +652,8 @@ class CrawlManagerTest(TestCase):
 
         manager._on_start()
 
-        # first loop
+        # first loop.
+
         mocked_super_schedule_spider.side_effect = ["999/1/1", "999/2/1", "999/3/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -702,6 +708,10 @@ class CrawlManagerTest(TestCase):
     def test_max_jobs_per_spider_with_max_next_params_limit(
         self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs
     ):
+        """Delayed jobs queue got filled in 5th loop with all next jobs params, when no new
+        param is yielded. This is unavoidable if we don't have information about the spiders
+        that will come in new next params. If crawl manager stops prematurely, all the delayed
+        params will be lost. But effect can be limited further. See next test."""
 
         spider_list = ("spiderA", "spiderB", "spiderC")
 
@@ -765,7 +775,7 @@ class CrawlManagerTest(TestCase):
         )
         self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 0)
 
-        # 5th loop. Nothing scheduled. But delayed jobs got filled with all next jobs params
+        # 5th loop. Nothing scheduled. But delayed jobs queue got filled with all next jobs params
         manager.is_finished = lambda x: None
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -773,9 +783,13 @@ class CrawlManagerTest(TestCase):
         self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 296)
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
-    def test_max_jobs_per_spider_with_dynamic_max_next_params(
+    def test_max_jobs_per_spider_with_known_spiders(
         self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs
     ):
+        """If we limit max next params but also we know which spiders cab be scheduled, we can avoid the delayed
+        queue fill effect while every spider has slots available. But once one spider run out of params and
+        there no running ones (loop 8th in the test), we get again the fill effect. Again, this is unavoidable if we
+        don't have information about wether there are spiderA next params available."""
 
         spider_list = ("spiderA", "spiderB", "spiderC")
 
@@ -788,7 +802,8 @@ class CrawlManagerTest(TestCase):
             def set_parameters_gen(self):
                 for i in range(100):
                     for spider in spider_list:
-                        yield {"spider": spider, "argA": i}
+                        if spider != "spiderA" or i < 4:
+                            yield {"spider": spider, "argA": i}
 
             def get_max_next_params(self) -> int:
                 if self.get_running_spiders() == set(spider_list):
@@ -858,6 +873,32 @@ class CrawlManagerTest(TestCase):
             "spiderA", units=None, argA=2, tags=["JOBSEQ=0000000005"], job_settings={}
         )
         self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 2)
+        self.assertEqual(
+            set(np["spider"] for np in manager._GeneratorCrawlManager__delayed_jobs), {"spiderB", "spiderC"}
+        )
+
+        # 7th loop. SpiderA finishes, reschedule one more. Two more spiderB and spiderC next params added to
+        # delayed jobs
+        mocked_super_schedule_spider.side_effect = ["999/1/4"]
+        manager.is_finished = lambda x: "finished" if x == "999/1/3" else None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 6)
+        mocked_super_schedule_spider.assert_any_call(
+            "spiderA", units=None, argA=3, tags=["JOBSEQ=0000000006"], job_settings={}
+        )
+        self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 4)
+        self.assertEqual(
+            set(np["spider"] for np in manager._GeneratorCrawlManager__delayed_jobs), {"spiderB", "spiderC"}
+        )
+
+        # 8th loop. SpiderA finishes, but there are no more next params for spiderA. Delayed job become filled
+        # with all next params
+        manager.is_finished = lambda x: "finished" if x == "999/1/4" else None
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(mocked_super_schedule_spider.call_count, 6)
+        self.assertEqual(len(manager._GeneratorCrawlManager__delayed_jobs), 198)
         self.assertEqual(
             set(np["spider"] for np in manager._GeneratorCrawlManager__delayed_jobs), {"spiderB", "spiderC"}
         )
