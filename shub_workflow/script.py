@@ -590,7 +590,7 @@ class BaseLoopScriptAsyncMixin(BaseLoopScriptProtocol):
         schedule_kwargs = dict(
             spider=spider,
             add_tag=self._make_children_tags(tags),
-            debugunits=units,
+            units=units,
             **kwargs,
         )
         logger.debug("Scheduling a job with jobargs:\n%s", schedule_kwargs)
