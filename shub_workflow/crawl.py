@@ -7,10 +7,10 @@ import asyncio
 import logging
 from copy import deepcopy
 from argparse import Namespace
-from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, AsyncGenerator, Set
+from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, AsyncGenerator, Set, Protocol
 
 from bloom_filter2 import BloomFilter
-from typing_extensions import TypedDict, NotRequired, Protocol
+from typing_extensions import TypedDict, NotRequired
 
 from shub_workflow.script import (
     JobKey,

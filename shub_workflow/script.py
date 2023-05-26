@@ -10,8 +10,8 @@ import time
 from functools import partial
 import subprocess
 from argparse import ArgumentParser, Namespace
-from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any, AsyncGenerator, Awaitable, cast
-from typing_extensions import TypedDict, NotRequired, Protocol
+from typing import List, NewType, Optional, Tuple, Generator, Dict, Union, Any, AsyncGenerator, Awaitable, cast, Protocol
+from typing_extensions import TypedDict, NotRequired
 
 from scrapy.utils.misc import load_object
 from scrapy.spiderloader import SpiderLoader
