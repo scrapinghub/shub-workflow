@@ -5,7 +5,7 @@ import hashlib
 from typing import Optional
 
 from tenacity import retry, retry_if_exception_type, before_sleep_log, stop_after_attempt, wait_fixed
-from scrapinghub.client.exceptions import ScrapinghubAPIError, ServerError
+from scrapinghub.client.exceptions import ServerError
 from requests.exceptions import ReadTimeout, ConnectionError, HTTPError
 
 
@@ -61,7 +61,8 @@ ONE_MIN_IN_S = 60
 
 
 dash_retry_decorator = retry(
-    retry=retry_if_exception_type((ScrapinghubAPIError, ServerError, ReadTimeout, ConnectionError, HTTPError)),
+    # ServerError is the only ScrapinghubAPIError that should be retried. Don't capture ScrapinghubAPIError here
+    retry=retry_if_exception_type((ServerError, ReadTimeout, ConnectionError, HTTPError)),
     before_sleep=before_sleep_log(logger, logging.ERROR),
     reraise=True,
     stop=stop_after_attempt(MINS_IN_A_DAY),
