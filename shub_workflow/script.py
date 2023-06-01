@@ -514,6 +514,9 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     def get_close_reason(self):
         return self.__close_reason
 
+    def is_closed(self):
+        return self.__close_reason is not None
+
     def add_argparser_options(self):
         super().add_argparser_options()
         self.argparser.add_argument(
