@@ -96,6 +96,7 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
 class BaseScriptProtocol(ArgumentParserScriptProtocol, Protocol):
 
     name: str
+    stats: StatsCollector
 
     @abc.abstractmethod
     def append_flow_tag(self, tag: str):
@@ -189,6 +190,14 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         self.spider_loader = SpiderLoader(self.project_settings)
         super().__init__()
         self.set_flow_id_name(self.args)
+
+        class PseudoCrawler:
+            def __init__(self, script):
+                self.settings = script.project_settings
+
+        stats_collector_class = self.project_settings["STATS_CLASS"]
+        logger.debug(f"Stats collection class: {stats_collector_class}")
+        self.stats = load_object(stats_collector_class)(PseudoCrawler(self))
 
     def append_flow_tag(self, tag: str):
         """
@@ -463,10 +472,18 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         else:
             logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
+    @dash_retry_decorator
+    def upload_stats(self):
+        """
+        this is a bit dirty, but it is needed for HubStorageStatsCollector and
+        there is not a base upload method in base stats class. Will improve
+        in future.
+        """
+        if hasattr(self.stats, "_upload_stats"):
+            self.stats._upload_stats()
+
 
 class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
-
-    stats: StatsCollector
 
     @abc.abstractmethod
     def workflow_loop(self) -> bool:
@@ -498,13 +515,6 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
         super().__init__()
         self.__start_time = time.time()
 
-        class PseudoCrawler:
-            def __init__(self, script):
-                self.settings = script.project_settings
-
-        stats_collector_class = self.project_settings["STATS_CLASS"]
-        logger.debug(f"Stats collection class: {stats_collector_class}")
-        self.stats = load_object(stats_collector_class)(PseudoCrawler(self))
         self.__close_reason = None
         self.__last_stats_upload = None
 
@@ -570,19 +580,13 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
             except KeyboardInterrupt:
                 logger.info("Bye")
                 break
-            now = time.time()
-            if self.__last_stats_upload is None or now - self.__last_stats_upload >= self.stats_interval:
-                self.maybe_upload_stats()
-                self.__last_stats_upload = now
+            self.maybe_upload_stats()
 
     def maybe_upload_stats(self):
-        """
-        this is a bit dirty, but it is needed for HubStorageStatsCollector and
-        there is not a base upload method in base stats class. Will improve
-        in future.
-        """
-        if hasattr(self.stats, "_upload_stats"):
-            self.stats._upload_stats()
+        now = time.time()
+        if self.__last_stats_upload is None or now - self.__last_stats_upload >= self.stats_interval:
+            self.upload_stats()
+            self.__last_stats_upload = now
 
     def _on_start(self):
         self.on_start()
@@ -594,7 +598,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     def _close(self):
         self.on_close()
         self.__close_reason = self.__close_reason or "finished"
-        self.maybe_upload_stats()
+        self.upload_stats()
 
 
 class BaseLoopScriptAsyncMixin(BaseLoopScriptProtocol):
