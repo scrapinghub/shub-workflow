@@ -50,7 +50,7 @@ SpiderName = NewType("SpiderName", str)
 
 class JobDict(TypedDict):
 
-    spider: SpiderName
+    spider: NotRequired[SpiderName]
     key: NotRequired[JobKey]
     tags: NotRequired[List[str]]
     close_reason: NotRequired[str]
@@ -59,6 +59,7 @@ class JobDict(TypedDict):
     pending_time: NotRequired[int]
     running_time: NotRequired[int]
     finished_time: NotRequired[int]
+    scrapystats: NotRequired[Dict[str, Any]]
 
 
 class ArgumentParserScriptProtocol(Protocol):
