@@ -9,10 +9,22 @@ from os.path import exists as os_exists, dirname, getctime, basename
 from shutil import copyfile
 from datetime import datetime, timedelta, timezone
 
-from s3fs import S3FileSystem as OriginalS3FileSystem
-import boto3
+try:
+    from s3fs import S3FileSystem as OriginalS3FileSystem
+    import boto3
 
-from shub_workflow.deliver import gcstorage
+    s3_enabled = True
+except ImportError:
+    s3_enabled = False
+
+
+try:
+    from shub_workflow.deliver import gcstorage
+
+    gcs_enabled = True
+except ImportError:
+    gcs_enabled = False
+
 
 S3_PATH_RE = re.compile("s3://(.+?)/(.+)")
 _S3_ATTRIBUTE = "s3://"
@@ -31,9 +43,11 @@ def just_log_exception(exception):
     return True  # retries any other exception
 
 
-class S3FileSystem(OriginalS3FileSystem):
-    read_timeout = 120
-    connect_timeout = 60
+if s3_enabled:
+
+    class S3FileSystem(OriginalS3FileSystem):
+        read_timeout = 120
+        connect_timeout = 60
 
 
 def s3_path(path, is_folder=False):
@@ -60,10 +74,30 @@ def s3_credentials(key, secret, token, region=None):
     return result
 
 
+def check_s3_path(path):
+    if path.startswith(_S3_ATTRIBUTE):
+        if s3_enabled:
+            return True
+        raise ModuleNotFoundError(
+            "S3 dependencies are not installed. Install shubw-workflow as shub-workflow[with-s3-tools]"
+        )
+    return False
+
+
+def check_gcs_path(path):
+    if path.startswith(_GS_ATTRIBUTE):
+        if gcs_enabled:
+            return True
+        raise ModuleNotFoundError(
+            "GCS dependencies are not installed. Install shubw-workflow as shub-workflow[with-gcs-tools]"
+        )
+    return False
+
+
 def get_file(path, *args, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     op_kwargs = kwargs.pop("op_kwargs", {})
     region = kwargs.pop("region", None)
-    if path.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(path):
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         if "ACL" in op_kwargs:
             op_kwargs["acl"] = op_kwargs.pop("ACL")
@@ -85,7 +119,7 @@ UPLOAD_CHUNK_SIZE = 100 * 1024 * 1024
 def download_file(path, dest=None, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     if dest is None:
         dest = basename(path)
-    if path.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(path):
         with get_file(path, "rb", aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token, **kwargs) as r, open(
             dest, "wb"
         ) as w:
@@ -96,14 +130,14 @@ def download_file(path, dest=None, aws_key=None, aws_secret=None, aws_token=None
                 logger.info(f"Downloaded {total} bytes from {path}")
                 if size < DOWNLOAD_CHUNK_SIZE:
                     break
-    elif path.startswith(_GS_ATTRIBUTE):
+    elif check_gcs_path(path):
         gcstorage.download_file(path, dest)
     else:
         raise ValueError(f"Not supported file system fpr path {path}")
 
 
 def upload_file_obj(robj, dest, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
-    if dest.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(dest):
         with get_file(dest, "wb", aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token, **kwargs) as w:
             total = 0
             while True:
@@ -120,15 +154,15 @@ def upload_file(path, dest, aws_key=None, aws_secret=None, aws_token=None, **kwa
     if dest.endswith("/"):
         dest = dest + basename(path)
     with open(path, "rb") as r:
-        if dest.startswith(_S3_ATTRIBUTE):
+        if check_s3_path(dest):
             upload_file_obj(r, dest, aws_key, aws_secret, aws_token, **kwargs)
-        elif dest.startswith(_GS_ATTRIBUTE):
+        elif check_gcs_path(dest):
             gcstorage.upload_file(path, dest)
 
 
 def get_glob(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     region = kwargs.pop("region", None)
-    if path.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(path):
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         fp = [_S3_ATTRIBUTE + p for p in fs.glob(s3_path(path))]
     else:
@@ -139,7 +173,7 @@ def get_glob(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
 
 def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     region = kwargs.pop("region", None)
-    if src_path.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(src_path):
         op_kwargs = kwargs.pop("op_kwargs", {})
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         fs.copy(s3_path(src_path), s3_path(dest_path), **op_kwargs)
@@ -148,16 +182,16 @@ def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, 
 
 
 def mv_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
-    if src_path.startswith(_S3_ATTRIBUTE) and dest_path.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(src_path) and check_s3_path(dest_path):
         cp_file(src_path, dest_path, aws_key, aws_secret, aws_token, **kwargs)
         rm_file(src_path, aws_key, aws_secret, aws_token, **kwargs)
-    elif src_path.startswith(_S3_ATTRIBUTE):
+    elif check_s3_path(src_path):
         download_file(src_path, dest_path, aws_key, aws_secret, aws_token, **kwargs)
         rm_file(src_path, aws_key, aws_secret, aws_token, **kwargs)
-    elif dest_path.startswith(_S3_ATTRIBUTE):
+    elif check_s3_path(dest_path):
         upload_file(src_path, dest_path, aws_key, aws_secret, aws_token, **kwargs)
         rm_file(src_path)
-    elif dest_path.startswith(_GS_ATTRIBUTE):
+    elif check_gcs_path(dest_path):
         gcstorage.upload_file(src_path, dest_path)
         rm_file(src_path)
     else:
@@ -170,11 +204,11 @@ def mv_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, 
 
 def rm_file(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     region = kwargs.pop("region", None)
-    if path.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(path):
         op_kwargs = kwargs.pop("op_kwargs", {})
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         fs.rm(s3_path(path), **op_kwargs)
-    elif path.startswith(_GS_ATTRIBUTE):
+    elif check_gcs_path(path):
         gcstorage.rm_file(path)
     else:
         remove(path)
@@ -184,15 +218,15 @@ def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> 
     """
     More efficient boto3 based path listing, that accepts prefix
     """
-    region = kwargs.pop("region", None)
-    session = boto3.Session(
-        aws_access_key_id=aws_key,
-        aws_secret_access_key=aws_secret,
-        aws_session_token=aws_token,
-        region_name=region,
-        **kwargs,
-    )
-    if path.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(path):
+        region = kwargs.pop("region", None)
+        session = boto3.Session(
+            aws_access_key_id=aws_key,
+            aws_secret_access_key=aws_secret,
+            aws_session_token=aws_token,
+            region_name=region,
+            **kwargs,
+        )
         s3 = session.resource("s3")
         m = S3_PATH_RE.match(path)
         if m:
@@ -202,14 +236,14 @@ def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> 
                 yield f"s3://{bucket_name}/{result.key}"
         else:
             raise ValueError(f"Bad s3 path specification: {path}")
-    elif path.startswith(_GS_ATTRIBUTE):
+    elif check_gcs_path(path):
         yield from list_folder(path)
     else:
         raise NotImplementedError("Only implemented for s3.")
 
 
 def list_folder(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> List[str]:
-    if path.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(path):
         region = kwargs.pop("region", None)
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
 
@@ -218,7 +252,7 @@ def list_folder(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -
             listing = [f"s3://{name}" for name in fs.ls(path) if name != path]
         except FileNotFoundError:
             listing = []
-    elif path.startswith(_GS_ATTRIBUTE):
+    elif check_gcs_path(path):
         listing = list(gcstorage.list_folder(path))
     else:
         if path.strip().endswith("/"):
@@ -236,7 +270,7 @@ def list_folder_in_ts_order(
 ) -> Generator[str, None, None]:
     results = []
     for input_file in list_folder(input_folder, aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token, **kwargs):
-        if input_folder.startswith(_S3_ATTRIBUTE):
+        if check_s3_path(input_folder):
             with get_file(input_file, "rb", aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token, **kwargs) as f:
                 results.append((input_file, f.info()["LastModified"]))
         else:
@@ -259,14 +293,14 @@ def list_folder_files_recursive(
 
 def s3_folder_size(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     region = kwargs.pop("region", None)
-    if path.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(path):
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         return sum(fs.du(s3_path(path, is_folder=True), deep=True).values())
 
 
 def exists(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     region = kwargs.pop("region", None)
-    if path.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(path):
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         return fs.exists(path)
     return os_exists(path)
@@ -275,7 +309,7 @@ def exists(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
 def empty_folder(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> List[str]:
     region = kwargs.pop("region", None)
     removed_files = []
-    if path.startswith(_S3_ATTRIBUTE):
+    if check_s3_path(path):
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         for s3file in list_folder(path, aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token):
             try:
@@ -295,7 +329,7 @@ def empty_folder(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) 
 
 def touch(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     if not exists(path):
-        if not path.startswith(_S3_ATTRIBUTE):
+        if not check_s3_path(path):
             dname = dirname(path)
             makedirs(dname, exist_ok=True)
         with get_file(path, "w", aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token, **kwargs) as f:
