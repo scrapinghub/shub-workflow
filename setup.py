@@ -24,7 +24,7 @@ setup(
         "typing-extensions",
         "scrapy",
     ),
-    extras = {
+    extras_require = {
         "with-s3-tools": ["s3fs>=0.4.0"],
         "with-gcs-tools": ["google-cloud-storage>=1.38.0"],
     },
