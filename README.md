@@ -2,7 +2,21 @@ A set of tools for controlling processing workflow with spiders and script runni
 
 # Installation
 
+```
 pip install shub-workflow
+```
+
+If you want to support s3 tools:
+
+```
+pip install shub-workflow[with-s3-tools]
+```
+
+For google cloud storage tools support:
+
+```
+pip install shub-workflow[with-gcs-tools]
+```
 
 # Usage
 
