@@ -24,6 +24,11 @@ class WorkFlowManagerProtocol(BaseLoopScriptProtocol, Protocol):
     def get_finished_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         ...
 
+    @property
+    @abc.abstractmethod
+    def max_running_jobs(self) -> int:
+        ...
+
 
 class CachedFinishedJobsMixin(WorkFlowManagerProtocol):
     def __init__(self):

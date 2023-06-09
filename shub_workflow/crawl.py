@@ -197,11 +197,6 @@ class GeneratorCrawlManagerProtocol(Protocol):
     _jobuids: DupesFilterProtocol
     spider: Optional[SpiderName]
 
-    @property
-    @abc.abstractmethod
-    def max_running_jobs(self) -> int:
-        ...
-
     @abc.abstractmethod
     def _workflow_step_gen(self, max_next_params: int) -> Generator[Tuple[str, Optional[JobKey]], None, None]:
         ...
