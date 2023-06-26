@@ -29,6 +29,7 @@ from typing_extensions import TypedDict, NotRequired
 from scrapy.utils.misc import load_object
 from scrapy.spiderloader import SpiderLoader
 from scrapy.statscollectors import StatsCollector
+from scrapy.settings import BaseSettings
 from scrapinghub import ScrapinghubClient, DuplicateJobError
 from scrapinghub.client.jobs import Job, JobMeta
 from scrapinghub.client.projects import Project
@@ -65,6 +66,7 @@ class JobDict(TypedDict):
 class ArgumentParserScriptProtocol(Protocol):
 
     args: Namespace
+    argparser: ArgumentParser
 
     @abc.abstractmethod
     def add_argparser_options(self):
@@ -94,10 +96,26 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
         return args
 
 
-class BaseScriptProtocol(ArgumentParserScriptProtocol, Protocol):
+class SCProjectClassProtocol(Protocol):
+
+    project_id: Optional[int]
+
+
+class SCProjectClass(SCProjectClassProtocol):
+    def __init__(self):
+        self.project_id = resolve_project_id()
+        self.client = ScrapinghubClient(max_retries=100)
+        super().__init__()
+
+    def get_project(self, project_id: Optional[Union[int, str]] = None) -> Project:
+        return self.client.get_project(project_id or self.project_id)
+
+
+class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, Protocol):
 
     name: str
     stats: StatsCollector
+    project_settings: BaseSettings
 
     @abc.abstractmethod
     def append_flow_tag(self, tag: str):
@@ -165,16 +183,6 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, Protocol):
     @abc.abstractmethod
     def _make_children_tags(self, tags: Optional[List[str]]) -> Optional[List[str]]:
         ...
-
-
-class SCProjectClass:
-    def __init__(self):
-        self.project_id: Optional[int] = resolve_project_id()
-        self.client = ScrapinghubClient(max_retries=100)
-        super().__init__()
-
-    def get_project(self, project_id: Optional[Union[int, str]] = None) -> Project:
-        return self.client.get_project(project_id or self.project_id)
 
 
 class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):

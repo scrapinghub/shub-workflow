@@ -4,6 +4,7 @@ import os
 import hashlib
 from typing import Optional
 
+from scrapy.settings import BaseSettings
 from tenacity import retry, retry_if_exception_type, before_sleep_log, stop_after_attempt, wait_fixed
 from scrapinghub.client.exceptions import ServerError
 from requests.exceptions import ReadTimeout, ConnectionError, HTTPError
@@ -81,7 +82,7 @@ def kumo_settings():
     return settings
 
 
-def get_project_settings():
+def get_project_settings() -> BaseSettings:
     from scrapy.utils.project import get_project_settings as scrapy_get_project_settings  # pylint: disable=import-error
 
     settings = scrapy_get_project_settings()
