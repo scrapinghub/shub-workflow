@@ -10,7 +10,7 @@ from argparse import Namespace
 from typing import Optional, List, Tuple, Dict, NewType, cast, Generator, Any, AsyncGenerator, Set, Protocol
 
 from bloom_filter2 import BloomFilter
-from typing_extensions import TypedDict, NotRequired
+from typing_extensions import TypedDict
 
 from shub_workflow.script import (
     JobKey,
@@ -30,16 +30,16 @@ _LOG = logging.getLogger(__name__)
 SpiderArgs = NewType("SpiderArgs", Dict[str, str])
 
 
-class JobParams(TypedDict):
-    units: NotRequired[int]
-    tags: NotRequired[List[str]]
-    job_settings: NotRequired[Dict[str, str]]
-    project_id: NotRequired[int]
-    spider_args: NotRequired[Dict[str, str]]
+class JobParams(TypedDict, total=False):
+    units: int
+    tags: List[str]
+    job_settings: Dict[str, str]
+    project_id: int
+    spider_args: Dict[str, str]
 
 
-class FullJobParams(JobParams):
-    spider: NotRequired[SpiderName]
+class FullJobParams(JobParams, total=False):
+    spider: SpiderName
 
 
 def get_spider_args_from_params(params: JobParams) -> SpiderArgs:
