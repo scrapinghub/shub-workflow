@@ -310,6 +310,9 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         return count
 
     def can_schedule_job_with_params(self, params: FullJobParams, max_new_jobs_for_spider: int) -> bool:
+        """
+        If returns False, delay the scheduling of the params.
+        """
         return max_new_jobs_for_spider > 0
 
     def _can_schedule_job_with_params(self, params: FullJobParams, max_new_jobs_per_spider: Dict[str, int]) -> bool:
