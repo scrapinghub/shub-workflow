@@ -277,7 +277,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         self.__additional_jobs.append(params)
 
     @abc.abstractmethod
-    def set_parameters_gen(self) -> Generator[Dict[str, Any], None, None]:
+    def set_parameters_gen(self) -> Generator[FullJobParams, None, None]:
         ...
 
     def __add_jobseq_tag(self, params: FullJobParams):

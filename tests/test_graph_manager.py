@@ -144,7 +144,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # second loop, something went wrong with jobA, retry with retry_args instead
-        manager.is_finished = lambda x: "failed" if x == "999/1/1" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/1" else None
         manager.schedule_script.reset_mock()
         manager.schedule_script.side_effect = ["999/1/3"]
         result = next(manager._run_loops())
@@ -299,7 +299,7 @@ class ManagerTest(BaseTestCase):
         self.assertFalse(manager.schedule_script.called)
 
         # third loop, job A.0 fails, must be retried
-        manager.is_finished = lambda x: "failed" if x == "999/1/1" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/1" else None
         manager.schedule_script.side_effect = ["999/1/5"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -312,7 +312,7 @@ class ManagerTest(BaseTestCase):
 
         # fourth loop, job A.0 fails again, must be retried
         manager.schedule_script.reset_mock()
-        manager.is_finished = lambda x: "failed" if x == "999/1/5" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/5" else None
         manager.schedule_script.side_effect = ["999/1/6"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -325,14 +325,14 @@ class ManagerTest(BaseTestCase):
 
         # fifth loop, job A.0 fails again, cannot be retried (retries=2)
         manager.schedule_script.reset_mock()
-        manager.is_finished = lambda x: "failed" if x == "999/1/6" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/6" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # sixth loop, job A.1 fails, must be retried
         manager.schedule_script.reset_mock()
-        manager.is_finished = lambda x: "failed" if x == "999/1/2" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/2" else None
         manager.schedule_script.side_effect = ["999/1/7"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -345,7 +345,7 @@ class ManagerTest(BaseTestCase):
 
         # 7th loop, job A.1 fails again, must be retried
         manager.schedule_script.reset_mock()
-        manager.is_finished = lambda x: "failed" if x == "999/1/7" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/7" else None
         manager.schedule_script.side_effect = ["999/1/8"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -358,7 +358,7 @@ class ManagerTest(BaseTestCase):
 
         # 8th loop, job A.1 fails again, cannot be retried (retries=2)
         manager.schedule_script.reset_mock()
-        manager.is_finished = lambda x: "failed" if x == "999/1/8" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/8" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
@@ -387,7 +387,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # second loop, job C fails, must be retried.
-        manager.is_finished = lambda x: "failed" if x == "999/3/1" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/3/1" else None
         manager.schedule_script.side_effect = ["999/3/2"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -417,7 +417,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 1)
 
         # second loop, job C fails, must be retried.
-        manager.is_finished = lambda x: "failed" if x == "999/3/1" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/3/1" else None
         manager.schedule_script.side_effect = ["999/3/2"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -427,7 +427,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # third loop, job C fails again, must be retried (last retry).
-        manager.is_finished = lambda x: "failed" if x == "999/3/2" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/3/2" else None
         manager.schedule_script.side_effect = ["999/3/3"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -437,7 +437,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # fourth loop, job C fails again, give up.
-        manager.is_finished = lambda x: "failed" if x == "999/3/3" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/3/3" else None
         result = next(manager._run_loops())
         self.assertFalse(result)
         self.assertEqual(manager.schedule_script.call_count, 3)
@@ -480,7 +480,7 @@ class ManagerTest(BaseTestCase):
         self.assertFalse(manager.schedule_script.called)
 
         # third loop, job A.0 fails, must be resumed
-        manager.is_finished = lambda x: "failed" if x == "999/1/1" else None
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/1" else None
         manager.schedule_script.side_effect = ["999/1/5"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -626,7 +626,7 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop all subtasks finished, one with retry
-        manager.is_finished = lambda x: "failed" if x == "999/1/2" else "finished"
+        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/2" else Outcome("finished")
         manager.schedule_script.side_effect = ["999/1/5"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -656,15 +656,15 @@ class ManagerTest(BaseTestCase):
                 project_id=None,
             )
 
-    def test_tags(self, mocked_get_jobs):
+    @patch("shub_workflow.script.BaseScript.get_project")
+    def test_tags(self, mocked_get_project, mocked_get_jobs):
 
         mocked_get_jobs.side_effect = [[]]
 
         with script_args(["--root-jobs", "--children-tag=tag3", "--children-tag=tag4"]):
             manager = TestManager3()
         self.assertEqual(manager.flow_id, "mygeneratedflowid")
-        project = Mock()
-        manager.get_project = lambda _: project
+        project = mocked_get_project()
         manager.is_finished = lambda x: None
         project.jobs.run.side_effect = [
             Job("999/1/1"),
@@ -695,15 +695,15 @@ class ManagerTest(BaseTestCase):
                 meta=None,
             )
 
-    def test_flow_id_from_command_line(self, mocked_get_jobs):
+    @patch("shub_workflow.script.BaseScript.get_project")
+    def test_flow_id_from_command_line(self, mocked_get_project, mocked_get_jobs):
 
         mocked_get_jobs.side_effect = [[]]
 
         with script_args(["--starting-job=jobA", "--flow-id=myclflowid"]):
             manager = TestManager3()
         self.assertEqual(manager.flow_id, "myclflowid")
-        project = Mock()
-        manager.get_project = lambda _: project
+        project = mocked_get_project()
         manager.is_finished = lambda x: None
         project.jobs.run.side_effect = [
             Job("999/1/1"),
@@ -727,7 +727,8 @@ class ManagerTest(BaseTestCase):
                 meta=None,
             )
 
-    def test_flow_id_from_job_tags(self, mocked_get_jobs):
+    @patch("shub_workflow.script.BaseScript.get_project")
+    def test_flow_id_from_job_tags(self, mocked_get_project, mocked_get_jobs):
 
         mocked_get_jobs.side_effect = [[]]
 
@@ -739,8 +740,7 @@ class ManagerTest(BaseTestCase):
         with script_args(["--starting-job=jobA"]):
             manager = _TestManager()
         self.assertEqual(manager.flow_id, "myflowidfromtag")
-        project = Mock()
-        manager.get_project = lambda _: project
+        project = mocked_get_project()
         manager.is_finished = lambda x: None
         project.jobs.run.side_effect = [
             Job("999/1/1"),
@@ -763,7 +763,8 @@ class ManagerTest(BaseTestCase):
                 meta=None,
             )
 
-    def test_additional_workflow_tags(self, mocked_get_jobs):
+    @patch("shub_workflow.script.BaseScript.get_project")
+    def test_additional_workflow_tags(self, mocked_get_project, mocked_get_jobs):
 
         mocked_get_jobs.side_effect = [[]]
 
@@ -774,8 +775,7 @@ class ManagerTest(BaseTestCase):
             manager = _TestManager()
             manager.append_flow_tag("EXEC_ID=myexecid")
         self.assertEqual(manager.flow_id, "mygeneratedflowid")
-        project = Mock()
-        manager.get_project = lambda _: project
+        project = mocked_get_project()
         manager.is_finished = lambda x: None
         project.jobs.run.side_effect = [
             Job("999/1/1"),
