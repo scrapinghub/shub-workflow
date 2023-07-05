@@ -317,7 +317,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
             max_new_jobs_per_spider[params["spider"]] = self.get_max_jobs_per_spider(
                 params["spider"]
             ) - self.spider_running_count(params["spider"])
-        return self.can_schedule_job_with_params(params, max_new_jobs_per_spider[params["spider"]]) > 0
+        return self.can_schedule_job_with_params(deepcopy(params), max_new_jobs_per_spider[params["spider"]]) > 0
 
     def _workflow_step_gen(self, max_next_params: int) -> Generator[Tuple[str, Optional[JobKey]], None, None]:
         new_params: List[FullJobParams] = []
