@@ -165,7 +165,9 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
         ...
 
     @abc.abstractmethod
-    def get_jobs_with_tags(self, spider, tags, project_id=None, **kwargs) -> Generator[Job, None, None]:
+    def get_jobs_with_tags(
+        self, spider: str, tags: List[str], project_id: Optional[int] = None, **kwargs
+    ) -> Generator[Job, None, None]:
         ...
 
     @abc.abstractmethod
@@ -493,7 +495,6 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
 
 
 class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
-
     @abc.abstractmethod
     def workflow_loop(self) -> bool:
         """Implement here your loop code. Return True if want to continue looping,
