@@ -27,6 +27,7 @@ _LOG = logging.getLogger(__name__)
 
 
 SpiderArgs = NewType("SpiderArgs", Dict[str, str])
+ScheduleArgs = NewType("ScheduleArgs", Dict[str, Any])
 
 
 class JobParams(TypedDict, total=False):
@@ -107,7 +108,7 @@ class CrawlManager(WorkFlowManager):
         job_args_override = job_args_override or {}
         spider = spider or self.spider
         if spider is not None:
-            schedule_args: Dict[str, Any] = json.loads(self.args.spider_args)
+            schedule_args: ScheduleArgs = json.loads(self.args.spider_args)
             spider_args = get_spider_args_from_params(job_args_override)
             schedule_args.update(job_args_override)
             schedule_args.pop("spider_args", None)
@@ -277,7 +278,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         self.__additional_jobs.append(params)
 
     @abc.abstractmethod
-    def set_parameters_gen(self) -> Generator[FullJobParams, None, None]:
+    def set_parameters_gen(self) -> Generator[ScheduleArgs, None, None]:
         ...
 
     def __add_jobseq_tag(self, params: FullJobParams):
@@ -442,7 +443,7 @@ class AsyncSchedulerCrawlManagerMixin(BaseLoopScriptAsyncMixin, GeneratorCrawlMa
         job_args_override = job_args_override or {}
         spider = spider or self.spider
         assert spider is not None
-        schedule_args: Dict[str, Any] = json.loads(self.args.spider_args)
+        schedule_args: ScheduleArgs = json.loads(self.args.spider_args)
         spider_args = get_spider_args_from_params(job_args_override)
         schedule_args.update(job_args_override)
         schedule_args.pop("spider_args", None)
