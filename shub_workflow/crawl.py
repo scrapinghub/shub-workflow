@@ -42,15 +42,6 @@ class FullJobParams(JobParams, total=False):
     spider: SpiderName
 
 
-def get_spider_args_from_params(params: JobParams) -> SpiderArgs:
-    spider_args = params.get("spider_args", None) or {}
-    result = cast(SpiderArgs, deepcopy(params))
-    for key in tuple(JobParams.__annotations__):
-        result.pop(key, None)
-    result.update(spider_args)
-    return result
-
-
 def get_jobseq(tags: List[str]) -> Tuple[int, int]:
     for tag in tags:
         if tag.startswith("JOBSEQ="):
@@ -109,7 +100,7 @@ class CrawlManager(WorkFlowManager):
         spider = spider or self.spider
         if spider is not None:
             schedule_args: ScheduleArgs = json.loads(self.args.spider_args)
-            spider_args = get_spider_args_from_params(job_args_override)
+            spider_args = job_args_override.get("spider_args") or {}
             schedule_args.update(job_args_override)
             schedule_args.pop("spider_args", None)
             schedule_args.update(spider_args)
@@ -237,7 +228,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
 
     def __init__(self):
         super().__init__()
-        self.__parameters_gen = self.set_parameters_gen()
+        self.__parameters_gen: Generator[ScheduleArgs, None, None] = self.set_parameters_gen()
         self.__additional_jobs: List[FullJobParams] = []
         self.__delayed_jobs: List[FullJobParams] = []
         self.__next_job_seq = 1
@@ -323,8 +314,28 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
             ) - self.spider_running_count(params["spider"])
         return self.can_schedule_job_with_params(deepcopy(params), max_new_jobs_per_spider[params["spider"]]) > 0
 
+    def _fulljobparams_from_spiderargs(self, schedule_args: ScheduleArgs) -> FullJobParams:
+        spider = schedule_args.get("spider", self.spider)
+        spider_args = deepcopy(schedule_args)
+        for key in tuple(FullJobParams.__annotations__):
+            spider_args.pop(key, None)
+        result = FullJobParams({
+            "spider": spider,
+            "spider_args": spider_args,
+        })
+        if "units" in schedule_args:
+            result["units"] = schedule_args["units"]
+        if "tags" in schedule_args:
+            result["tags"] = schedule_args["tags"]
+        if "job_settings" in schedule_args:
+            result["job_settings"] = schedule_args["job_settings"]
+        if "project_id" in schedule_args:
+            result["project_id"] = schedule_args["project_id"]
+        return result
+
     def _workflow_step_gen(self, max_next_params: int) -> Generator[Tuple[str, Optional[JobKey]], None, None]:
         new_params: List[FullJobParams] = []
+        next_params: FullJobParams | None
 
         max_new_jobs_per_spider: Dict[str, int] = {}
 
@@ -343,7 +354,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                         break
                 else:
                     try:
-                        np = next(self.__parameters_gen)
+                        np = self._fulljobparams_from_spiderargs(next(self.__parameters_gen))
                     except StopIteration:
                         break
                     else:
@@ -358,7 +369,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
 
             if next_params is None:
                 break
-            spider_args = get_spider_args_from_params(next_params)
+            spider_args = next_params.get("spider_args") or {}
             jobuid = self.get_job_unique_id({"spider": next_params["spider"], "spider_args": spider_args})
             if jobuid in self._jobuids:
                 _LOG.warning(f"Job with parameters {next_params} was already scheduled. Skipped.")
@@ -444,7 +455,7 @@ class AsyncSchedulerCrawlManagerMixin(BaseLoopScriptAsyncMixin, GeneratorCrawlMa
         spider = spider or self.spider
         assert spider is not None
         schedule_args: ScheduleArgs = json.loads(self.args.spider_args)
-        spider_args = get_spider_args_from_params(job_args_override)
+        spider_args = job_args_override.get("spider_args") or {}
         schedule_args.update(job_args_override)
         schedule_args.pop("spider_args", None)
         schedule_args.update(spider_args)
