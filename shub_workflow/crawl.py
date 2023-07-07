@@ -335,7 +335,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
 
     def _workflow_step_gen(self, max_next_params: int) -> Generator[Tuple[str, Optional[JobKey]], None, None]:
         new_params: List[FullJobParams] = []
-        next_params: FullJobParams | None
+        next_params: Optional[FullJobParams]
 
         max_new_jobs_per_spider: Dict[str, int] = {}
 
