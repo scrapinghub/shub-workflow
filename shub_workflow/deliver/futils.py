@@ -162,14 +162,9 @@ def download_file(path, dest=None, aws_key=None, aws_secret=None, aws_token=None
 
 def upload_file_obj(robj, dest, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     if check_s3_path(dest):
-        with get_file(dest, "wb", aws_key=aws_key, aws_secret=aws_secret, aws_token=aws_token, **kwargs) as w:
-            total = 0
-            while True:
-                size = w.write(robj.read(UPLOAD_CHUNK_SIZE))
-                total += size
-                logger.info(f"Uploaded {total} bytes to {dest}")
-                if size < UPLOAD_CHUNK_SIZE:
-                    break
+        bucket, keyname, op_kwargs = get_s3_bucket_keyname(dest, aws_key, aws_secret, aws_token, **kwargs)
+        bucket.upload_fileobj(robj, keyname, ExtraArgs=op_kwargs)
+        logger.info(f"Uploaded file obj to {dest}.")
     else:
         raise ValueError("Not a supported cloud.")
 
@@ -180,6 +175,7 @@ def upload_file(path, dest, aws_key=None, aws_secret=None, aws_token=None, **kwa
     if check_s3_path(dest):
         bucket, keyname, op_kwargs = get_s3_bucket_keyname(dest, aws_key, aws_secret, aws_token, **kwargs)
         bucket.upload_file(path, keyname, ExtraArgs=op_kwargs)
+        logger.info(f"Uploaded {path} to {dest}.")
     elif check_gcs_path(dest):
         gcstorage.upload_file(path, dest)
 
