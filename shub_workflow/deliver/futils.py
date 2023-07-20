@@ -94,6 +94,30 @@ def check_gcs_path(path):
     return False
 
 
+def get_s3_bucket_keyname(s3path, aws_key, aws_secret, aws_token, **kwargs):
+    region = kwargs.pop("region", None)
+    region_name = kwargs.pop("region_name", region)
+    botocore_session = kwargs.pop("botocore_session", None)
+    profile_name = kwargs.pop("profile_name", None)
+
+    session = boto3.Session(
+        aws_access_key_id=aws_key,
+        aws_secret_access_key=aws_secret,
+        aws_session_token=aws_token,
+        region_name=region_name,
+        botocore_session=botocore_session,
+        profile_name=profile_name
+    )
+    s3 = session.resource("s3")
+    m = S3_PATH_RE.match(s3path)
+    if m:
+        bucket_name, path = m.groups()
+        bucket = s3.Bucket(bucket_name)
+    else:
+        raise ValueError(f"Bad s3 path specification: {s3path}")
+    return bucket, path, kwargs.pop("op_kwargs", {})
+
+
 def get_file(path, *args, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     op_kwargs = kwargs.pop("op_kwargs", {})
     region = kwargs.pop("region", None)
@@ -153,11 +177,11 @@ def upload_file_obj(robj, dest, aws_key=None, aws_secret=None, aws_token=None, *
 def upload_file(path, dest, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     if dest.endswith("/"):
         dest = dest + basename(path)
-    with open(path, "rb") as r:
-        if check_s3_path(dest):
-            upload_file_obj(r, dest, aws_key, aws_secret, aws_token, **kwargs)
-        elif check_gcs_path(dest):
-            gcstorage.upload_file(path, dest)
+    if check_s3_path(dest):
+        bucket, keyname, op_kwargs = get_s3_bucket_keyname(dest, aws_key, aws_secret, aws_token, **kwargs)
+        bucket.upload_file(path, keyname, ExtraArgs=op_kwargs)
+    elif check_gcs_path(dest):
+        gcstorage.upload_file(path, dest)
 
 
 def get_glob(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
@@ -219,27 +243,20 @@ def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> 
     More efficient boto3 based path listing, that accepts prefix
     """
     if check_s3_path(path):
-        region = kwargs.pop("region", None)
-        session = boto3.Session(
-            aws_access_key_id=aws_key,
-            aws_secret_access_key=aws_secret,
-            aws_session_token=aws_token,
-            region_name=region,
-            **kwargs,
-        )
-        s3 = session.resource("s3")
-        m = S3_PATH_RE.match(path)
-        if m:
-            bucket_name, path = m.groups()
-            bucket = s3.Bucket(bucket_name)
-            for result in bucket.objects.filter(Prefix=path):
-                yield f"s3://{bucket_name}/{result.key}"
-        else:
-            raise ValueError(f"Bad s3 path specification: {path}")
+        bucket, path, op_kwargs = get_s3_bucket_keyname(path, aws_key, aws_secret, aws_token, **kwargs)
+        for result in bucket.objects.filter(Prefix=path):
+            yield f"s3://{bucket.name}/{result.key}"
     elif check_gcs_path(path):
-        yield from list_folder(path)
+        yield from gcstorage.list_folder(path)
     else:
-        raise NotImplementedError("Only implemented for s3.")
+        listing = []
+        if path.strip().endswith("/"):
+            path = path[:-1]
+        try:
+            listing = [f"{path}/{name}" for name in listdir(path)]
+        except FileNotFoundError:
+            pass
+        yield from listing
 
 
 def list_folder(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> List[str]:
