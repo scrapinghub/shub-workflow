@@ -106,6 +106,8 @@ class SESMailSenderMixin:
 
     def __init__(self):
         self.notification_emails = []
+        self.cc_emails: Optional[List[str]] = None
+        self.bcc_emails: Optional[List[str]] = None
         super().__init__()
         self.seshelper = None
         try:
@@ -115,7 +117,13 @@ class SESMailSenderMixin:
         except AssertionError:
             logger.warning("No SES credentials set. No mails will be sent.")
 
-    def send_ses_email(self, body, subject, text_attachments=None, image_attachments=None):
+    def send_ses_email(
+        self,
+        body,
+        subject,
+        text_attachments=None,
+        image_attachments=None,
+    ):
         if self.notification_emails and self.seshelper is not None:
             msg = self.seshelper.build_email_message(
                 body,
@@ -123,4 +131,6 @@ class SESMailSenderMixin:
                 image_attachments=image_attachments,
                 subject=subject,
             )
-            self.seshelper.send_ses_email("noreply@zyte.com", self.notification_emails, msg)
+            self.seshelper.send_ses_email(
+                "noreply@zyte.com", self.notification_emails, msg, cc_addrs=self.cc_emails, bcc_addrs=self.bcc_emails
+            )
