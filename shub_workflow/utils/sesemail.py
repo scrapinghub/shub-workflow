@@ -48,17 +48,16 @@ class SESHelper:
         msg["To"] = ",".join(to_addrs)
         if cc_addrs:
             msg["cc"] = ",".join(cc_addrs)
+            logger.info(f"CC to {cc_addrs}")
         if bcc_addrs:
-            msg["bcc"] = ",".join(bcc_addrs)
+            logger.info(f"BCC to {bcc_addrs}")
         if reply_to:
             msg["Reply-To"] = reply_to
-        destinations = {"Destination": {"ToAddresses": to_addrs}}
-        if cc_addrs:
-            destinations["Destination"]["CcAddresses"] = cc_addrs
-        if bcc_addrs:
-            destinations["Destination"]["CcAddresses"] = bcc_addrs
 
-        response = client.send_raw_email(Source=from_addr, Destinations=to_addrs, RawMessage={"Data": msg.as_string()})
+        destinations = to_addrs + (cc_addrs or []) + (bcc_addrs or [])
+        response = client.send_raw_email(
+            Source=from_addr, Destinations=destinations, RawMessage={"Data": msg.as_string()}
+        )
         return response
 
     def build_email_message(
@@ -105,9 +104,9 @@ class SESMailSenderMixin:
     """Use this mixin for enabling ses email sending capabilities on your script class"""
 
     def __init__(self):
-        self.notification_emails = []
-        self.cc_emails: Optional[List[str]] = None
-        self.bcc_emails: Optional[List[str]] = None
+        self.notification_emails: List[str] = []
+        self.cc_emails: List[str] = []
+        self.bcc_emails: List[str] = []
         super().__init__()
         self.seshelper = None
         try:

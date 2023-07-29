@@ -96,6 +96,9 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
         yield from self.get_jobs_with_tags(scrapername, target_tags, state=state, lacks_tag=[self.DELIVERED_TAG])
 
     def has_delivery_running_spider_jobs(self, scrapername: str, target_tags: List[str]) -> bool:
+        """
+        While this method returns True, the delivery script continue looping (provided loop_mode is set)
+        """
         if self.flow_id:
             flow_id_tag = [f"FLOW_ID={self.flow_id}"]
             target_tags = flow_id_tag + target_tags
