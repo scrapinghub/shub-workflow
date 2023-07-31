@@ -118,8 +118,8 @@ class SESMailSenderMixin:
 
     def send_ses_email(
         self,
-        body,
-        subject,
+        body: str,
+        subject: str,
         text_attachments=None,
         image_attachments=None,
     ):

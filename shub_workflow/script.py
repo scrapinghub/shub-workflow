@@ -416,6 +416,11 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
 
     @dash_retry_decorator
     def get_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
+        meta = kwargs.get("meta", [])
+        if "has_tag" or "lacks_tag" in kwargs and "tags" not in meta:
+            meta.append("tags")
+        if meta:
+            kwargs["meta"] = meta
         kwargs = kwargs.copy()
         max_count = kwargs.get("count") or float("inf")
         kwargs["count"] = min(1000, max_count)
