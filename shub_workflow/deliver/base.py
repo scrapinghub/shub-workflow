@@ -140,18 +140,23 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
             self.seen_items.add(key)
 
     def process_job_items(self, scrapername: str, spider_job: Job):
-        for item in spider_job.items.iter():
-            if self.is_seen_item(item):
-                self.total_dupe_filtered_items_count += 1
-            else:
-                self.on_item(item, scrapername)
-                self.add_seen_item(item)
-                for key, value in item.items():
-                    if value:
-                        self.seen_fields[key] += 1
-            self.total_items_count += 1
-            if self.total_items_count % self.LOG_EVERY == 0:
-                _LOG.info(f"Processed {self.total_items_count} items.")
+        idx = -1
+        try:
+            for item in spider_job.items.iter():
+                if self.is_seen_item(item):
+                    self.total_dupe_filtered_items_count += 1
+                else:
+                    self.on_item(item, scrapername)
+                    self.add_seen_item(item)
+                    for key, value in item.items():
+                        if value:
+                            self.seen_fields[key] += 1
+                self.total_items_count += 1
+                if self.total_items_count % self.LOG_EVERY == 0:
+                    _LOG.info(f"Processed {self.total_items_count} items.")
+                idx += 1
+        except UnicodeDecodeError as e:
+            _LOG.error(f"Exception while decoding item {spider_job.key}/{idx + 1}: {e}")
 
     def on_item(self, item: Item, scrapername: str):
         print(json.dumps(item))
