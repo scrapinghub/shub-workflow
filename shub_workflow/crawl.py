@@ -174,8 +174,11 @@ class CrawlManager(WorkFlowManager, CrawlManagerProtocol):
 
     def resume_running_job_hook(self, job: JobDict):
         key = job["key"]
-        job_args_override = cast(JobParams, job.get("spider_args", {}).copy())
-        job_args_override["tags"] = job["tags"]
+        spider_args = job.get("spider_args", {}).copy()
+        job_args_override = JobParams({
+            "tags": job["tags"],
+            "spider_args": spider_args,
+        })
         self._running_job_keys[key] = job["spider"], job_args_override
         _LOG.info(f"added running job {key}")
 

@@ -147,6 +147,10 @@ class CrawlManagerTest(TestCase):
         manager._on_start()
         self.assertTrue(manager.is_resumed)
         self.assertEqual(len(manager._running_job_keys), 1)
+
+        for v in manager._running_job_keys.values():
+            self.assertEqual(set(v[1].keys()), {"spider_args", "tags"})
+
         self.assertEqual(mocked_get_jobs.call_count, len(mocked_get_jobs_side_effect))
         mocked_add_job_tags.assert_any_call(tags=["FLOW_ID=3a20", "NAME=test", "OTHER=other"])
 
@@ -498,6 +502,9 @@ class CrawlManagerTest(TestCase):
         manager._on_start()
         self.assertTrue(manager.is_resumed)
         self.assertEqual(len(manager._running_job_keys), 1)
+
+        for v in manager._running_job_keys.values():
+            self.assertEqual(set(v[1].keys()), {"spider_args", "tags"})
 
         # first loop: acquire running job.
         manager.is_finished = lambda x: None
