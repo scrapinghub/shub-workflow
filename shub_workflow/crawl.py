@@ -43,6 +43,9 @@ class FullJobParams(JobParams, total=False):
 
 
 def get_jobseq(tags: List[str]) -> Tuple[int, int]:
+    """
+    returns tuple (job sequence, retry index)
+    """
     for tag in tags:
         if tag.startswith("JOBSEQ="):
             tag = tag.replace("JOBSEQ=", "")
@@ -52,7 +55,27 @@ def get_jobseq(tags: List[str]) -> Tuple[int, int]:
     return 0, 0
 
 
-class CrawlManager(WorkFlowManager):
+class CrawlManagerProtocol(Protocol):
+    _running_job_keys: Dict[JobKey, Tuple[SpiderName, JobParams]]
+
+    @abc.abstractmethod
+    def check_running_jobs(self) -> Dict[JobKey, Outcome]:
+        ...
+
+    @abc.abstractmethod
+    def schedule_spider_with_jobargs(
+        self,
+        job_args_override: Optional[JobParams] = None,
+        spider: Optional[SpiderName] = None,
+    ) -> Optional[JobKey]:
+        ...
+
+    @abc.abstractmethod
+    def get_job_settings(self, override: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        ...
+
+
+class CrawlManager(WorkFlowManager, CrawlManagerProtocol):
     """
     Schedules a single spider job. If loop mode is enabled, it will shutdown only after the scheduled spider
     finished. Close reason of the manager will be inherited from spider one.
@@ -182,9 +205,8 @@ class PeriodicCrawlManager(CrawlManager):
         pass
 
 
-class GeneratorCrawlManagerProtocol(Protocol):
+class GeneratorCrawlManagerProtocol(CrawlManagerProtocol, Protocol):
 
-    _running_job_keys: Dict[JobKey, Tuple[SpiderName, JobParams]]
     _jobuids: DupesFilterProtocol
     spider: Optional[SpiderName]
 
@@ -193,23 +215,7 @@ class GeneratorCrawlManagerProtocol(Protocol):
         ...
 
     @abc.abstractmethod
-    def check_running_jobs(self) -> Dict[JobKey, Outcome]:
-        ...
-
-    @abc.abstractmethod
     def get_max_next_params(self) -> int:
-        ...
-
-    @abc.abstractmethod
-    def schedule_spider_with_jobargs(
-        self,
-        job_args_override: Optional[JobParams] = None,
-        spider: Optional[SpiderName] = None,
-    ) -> Optional[JobKey]:
-        ...
-
-    @abc.abstractmethod
-    def get_job_settings(self, override: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         ...
 
 
@@ -319,10 +325,12 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         spider_args = deepcopy(schedule_args)
         for key in tuple(FullJobParams.__annotations__):
             spider_args.pop(key, None)
-        result = FullJobParams({
-            "spider": spider,
-            "spider_args": spider_args,
-        })
+        result = FullJobParams(
+            {
+                "spider": spider,
+                "spider_args": spider_args,
+            }
+        )
         if "units" in schedule_args:
             result["units"] = schedule_args["units"]
         if "tags" in schedule_args:

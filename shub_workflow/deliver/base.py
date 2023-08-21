@@ -87,6 +87,9 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
     def get_delivery_spider_jobs(
         self, scrapername: str, target_tags: List[str], only_finished: bool = True
     ) -> Generator[Job, None, None]:
+        """
+        Select which jobs will be processed by the current deliver script instance.
+        """
         if self.flow_id:
             flow_id_tag = [f"FLOW_ID={self.flow_id}"]
             target_tags = flow_id_tag + target_tags
