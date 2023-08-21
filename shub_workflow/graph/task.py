@@ -43,6 +43,9 @@ class JobGraphDict(TypedDict):
     origin: NotRequired[TaskId]
     index: NotRequired[int]
 
+    spider: NotRequired[str]
+    spider_args: NotRequired[Dict[str, str]]
+
 
 class BaseTask(abc.ABC):
     def __init__(
@@ -283,7 +286,7 @@ class SpiderTask(BaseTask):
             spider_args.update({"job_settings": self.__job_settings})
         return spider_args
 
-    def as_jobgraph_dict(self):
+    def as_jobgraph_dict(self) -> JobGraphDict:
         jdict = super().as_jobgraph_dict()
         jdict.update({"spider": self.spider, "spider_args": self.get_spider_args()})
         return jdict

@@ -26,12 +26,12 @@ def set_credential_file_environ(module, resource, check_exists=True):
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credfile
 
 
-def upload_file(src_path, dest_path):
+def upload_file(src_path: str, dest_path: str):
     storage_client = storage.Client()
-    try:
-        bucket_name, destination_blob_name = _GS_FOLDER_RE.match(dest_path).groups()
-    except AttributeError:
+    m = _GS_FOLDER_RE.match(dest_path)
+    if m is None:
         raise ValueError(f"Invalid destination {dest_path}")
+    bucket_name, destination_blob_name = m.groups()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(src_path, retry=storage.retry.DEFAULT_RETRY)

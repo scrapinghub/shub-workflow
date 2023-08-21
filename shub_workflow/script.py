@@ -516,6 +516,14 @@ class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
     def base_loop_tasks(self):
         ...
 
+    @abc.abstractmethod
+    def _on_start(self):
+        ...
+
+    @abc.abstractmethod
+    def _close(self):
+        ...
+
 
 class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
 

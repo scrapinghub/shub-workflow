@@ -264,7 +264,7 @@ class GraphManager(WorkFlowManager):
         if task is not None:
             idx = jobconf["index"]
             return task.run(self, is_retry, index=idx)
-        return None
+        raise RuntimeError(f"Failed to run task {job}")
 
     def _must_wait_time(self, job: TaskId) -> bool:
         status = self.__pending_jobs[job]
@@ -300,6 +300,7 @@ class GraphManager(WorkFlowManager):
             if job_can_run:
                 try:
                     jobid = self.run_job(task_id, status["is_retry"])
+                    assert jobid is not None, f"Failed to run task {task_id}"
                 except Exception:
                     self._release_resources(task_id)
                     raise
@@ -330,6 +331,7 @@ class GraphManager(WorkFlowManager):
             if job_can_run:
                 try:
                     jobid = self.run_job(task_id, status["is_retry"])
+                    assert jobid is not None, f"Failed to run task {task_id}"
                 except Exception:
                     self._release_resources(task_id)
                     raise

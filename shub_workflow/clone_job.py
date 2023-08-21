@@ -128,7 +128,7 @@ class CloneJobScript(BaseClonner):
 
     def run(self):
         if self.args.key:
-            keys = filter(lambda x: not self.is_cloned_by_jobkey(x), self.args.key)
+            keys = list(filter(lambda x: not self.is_cloned_by_jobkey(x), self.args.key))
         elif self.args.tag_spider:
             keys = []
             project_id, tag, spider = self.args.tag_spider.split("/")

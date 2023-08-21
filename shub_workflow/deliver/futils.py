@@ -180,13 +180,13 @@ def upload_file(path, dest, aws_key=None, aws_secret=None, aws_token=None, **kwa
         gcstorage.upload_file(path, dest)
 
 
-def get_glob(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
+def get_glob(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> List[str]:
     region = kwargs.pop("region", None)
     if check_s3_path(path):
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         fp = [_S3_ATTRIBUTE + p for p in fs.glob(s3_path(path))]
     else:
-        fp = iglob(path)
+        fp = list(iglob(path))
 
     return fp
 

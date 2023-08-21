@@ -11,6 +11,8 @@ from typing import List, Optional, Dict
 import boto3
 from botocore.client import Config
 
+from shub_workflow.script import BaseScriptProtocol
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,7 +102,7 @@ class SESHelper:
         return msg
 
 
-class SESMailSenderMixin:
+class SESMailSenderMixin(BaseScriptProtocol):
     """Use this mixin for enabling ses email sending capabilities on your script class"""
 
     def __init__(self):

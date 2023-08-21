@@ -240,6 +240,9 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         self.__next_job_seq = 1
         self._jobuids = self.create_dupe_filter()
 
+    def get_delayed_jobs(self) -> List[FullJobParams]:
+        return deepcopy(self.__delayed_jobs)
+
     @classmethod
     def create_dupe_filter(cls) -> DupesFilterProtocol:
         return BloomFilter(max_elements=1e6, error_rate=1e-6)
