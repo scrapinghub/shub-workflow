@@ -2479,3 +2479,92 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         manager.schedule_script.assert_called_with(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
         self.assertEqual(manager.schedule_script.call_count, 1)
+
+    def test_resume_running_second_level_with_previous_retry(self, mocked_get_jobs):
+        """Ensure that a running job that is a retry, is not retried after resuming workflow"""
+        mocked_get_jobs.side_effect = [
+            [{"tags": ["NAME=test", "FLOW_ID=34ab"]}],  # call to determine if there is resuming
+            [
+                {
+                    "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobB.{i}"],
+                    "key": f"999/2/{i+1}",
+                }
+                for i in (1, 3)
+            ]
+            + [
+                {"tags": ["PARENT_NAME=test", "FLOW_ID=34ab", "TASK_ID=jobC"], "key": "999/3/2"}
+            ],  # call to get running jobs
+            [
+                {
+                    "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"],
+                    "key": f"999/1/{i+1}",
+                    "close_reason": "finished",
+                }
+                for i in (0, 1, 2, 3)
+            ]
+            + [
+                {
+                    "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobB.{i}"],
+                    "key": f"999/2/{i+1}",
+                    "close_reason": "finished",
+                }
+                for i in (0, 2)
+            ]
+            + [
+                {
+                    "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", "TASK_ID=jobC"],
+                    "key": "999/3/1",
+                    "close_reason": "failed",
+                }
+            ],  # call to get finished jobs
+        ]
+        with script_args(["--flow-id=34ab", "--root-jobs"]):
+            manager = TestManager3()
+        manager._on_start()
+        self.assertTrue(manager.is_resumed)
+
+        manager.is_finished = lambda x: None
+
+        manager.schedule_script = Mock()
+        # first loop. jobB partially runnning, jobC running
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 0)
+
+    def test_resume_running_second_level_with_previous_retry_ii(self, mocked_get_jobs):
+        """Ensure that a running job that is a retry, is not retried after resuming workflow"""
+        mocked_get_jobs.side_effect = [
+            [{"tags": ["NAME=test", "FLOW_ID=34ab"]}],  # call to determine if there is resuming
+            [
+                {"tags": ["PARENT_NAME=test", "FLOW_ID=34ab", "TASK_ID=jobC"], "key": "999/3/2"}
+            ],  # call to get running jobs
+            [
+                {
+                    "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", "TASK_ID=jobA"],
+                    "key": "999/1/1",
+                    "close_reason": "finished",
+                },
+                {
+                    "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", "TASK_ID=jobB"],
+                    "key": "999/2/1",
+                    "close_reason": "finished",
+                },
+                {
+                    "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", "TASK_ID=jobC"],
+                    "key": "999/3/1",
+                    "close_reason": "failed",
+                }
+            ],  # call to get finished jobs
+        ]
+        with script_args(["--flow-id=34ab", "--root-jobs"]):
+            manager = TestManager()
+        manager._on_start()
+        self.assertTrue(manager.is_resumed)
+
+        manager.is_finished = lambda x: None
+
+        manager.schedule_script = Mock()
+        # first loop. jobB partially runnning, jobC running
+        result = next(manager._run_loops())
+        self.assertTrue(result)
+        self.assertEqual(manager.schedule_script.call_count, 0)

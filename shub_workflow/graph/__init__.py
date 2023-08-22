@@ -107,9 +107,9 @@ class GraphManager(WorkFlowManager):
             wait_for: List[TaskId] = self.get_jobdict(taskid).get("wait_for", [])
             self._add_pending_job(taskid, wait_for=tuple(wait_for))
 
-        initial_pending_jobs: Set[TaskId] = set()
-        while initial_pending_jobs != set(self.__pending_jobs.keys()):
-            initial_pending_jobs = set(self.__pending_jobs.keys())
+        initial_pending_jobs: Dict[TaskId, PendingJobDict] = OrderedDict()
+        while initial_pending_jobs != self.__pending_jobs:
+            initial_pending_jobs = deepcopy(self.__pending_jobs)
             for taskid in list(self.__pending_jobs.keys()):
                 if taskid in self.__completed_jobs:
                     jobid, outcome = self.__completed_jobs[taskid]
