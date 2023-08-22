@@ -107,13 +107,16 @@ class GraphManager(WorkFlowManager):
             wait_for: List[TaskId] = self.get_jobdict(taskid).get("wait_for", [])
             self._add_pending_job(taskid, wait_for=tuple(wait_for))
 
-        for taskid in list(self.__pending_jobs.keys()):
-            if taskid in self.__completed_jobs:
-                jobid, outcome = self.__completed_jobs[taskid]
-                self.__pending_jobs.pop(taskid)
-                self._check_completed_job(taskid, jobid, outcome)
-            elif taskid in self.__running_jobs:
-                self.__pending_jobs.pop(taskid)
+        initial_pending_jobs: Set[TaskId] = set()
+        while initial_pending_jobs != set(self.__pending_jobs.keys()):
+            initial_pending_jobs = set(self.__pending_jobs.keys())
+            for taskid in list(self.__pending_jobs.keys()):
+                if taskid in self.__completed_jobs:
+                    jobid, outcome = self.__completed_jobs[taskid]
+                    self.__pending_jobs.pop(taskid)
+                    self._check_completed_job(taskid, jobid, outcome)
+                elif taskid in self.__running_jobs:
+                    self.__pending_jobs.pop(taskid)
 
     def _fill_available_resources(self):
         """
@@ -360,6 +363,7 @@ class GraphManager(WorkFlowManager):
         retries = jobconf.get("retries", 0)
         if retries > 0:
             self._add_pending_job(job, is_retry=True)
+            self.__completed_jobs.pop(job, None)
             jobconf["retries"] -= 1
             logger.warning(
                 "Will retry job %s (outcome: %s, number of retries left: %s)",
