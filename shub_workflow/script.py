@@ -134,7 +134,7 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
         ...
 
     @abc.abstractmethod
-    def get_job_tags(self, jobkey=None) -> List[str]:
+    def get_job_tags(self, jobkey: Optional[JobKey] = None) -> List[str]:
         ...
 
     @abc.abstractmethod
@@ -242,7 +242,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         )
         self.argparser.add_argument("--flow-id", help="If given, use the given flow id.")
         self.argparser.add_argument(
-            "--children-tag",
+            "--children-tag", "-t",
             help="Additional tag added to the scheduled jobs. Can be given multiple times.",
             action="append",
             default=self.children_tags or [],
@@ -287,7 +287,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
             return project.jobs.get(jobkey)
         logger.warning("SHUB_JOBKEY not set: not running on ScrapyCloud.")
 
-    def get_job_tags(self, jobkey=None) -> List[str]:
+    def get_job_tags(self, jobkey: Optional[JobKey] = None) -> List[str]:
         """If jobkey is None, get own tags"""
         metadata = self.get_job_metadata(jobkey)
         if metadata:
