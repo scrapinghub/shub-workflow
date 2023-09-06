@@ -1,21 +1,20 @@
 import abc
 import time
-import json
 import asyncio
 import logging
 from collections import defaultdict
-from typing import Generator, List, Tuple, Optional, Protocol, Union, Type, Dict
+from typing import Generator, List, Tuple, Protocol, Union, Type, Dict
 
 from scrapinghub.client.jobs import Job
 from scrapy import Item
 
-from shub_workflow.script import BaseLoopScript, JobKey
+from shub_workflow.script import BaseLoopScript, BaseScriptProtocol
 from shub_workflow.utils.dupefilter import SqliteDictDupesFilter, DupesFilterProtocol
 
 _LOG = logging.getLogger(__name__)
 
 
-class DeliverScriptProtocol(Protocol):
+class DeliverScriptProtocol(BaseScriptProtocol, Protocol):
 
     DELIVERED_TAG: str
     SCRAPERNAME_NARGS: Union[str, int]
@@ -30,11 +29,11 @@ class DeliverScriptProtocol(Protocol):
         ...
 
     @abc.abstractmethod
-    def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
+    def has_delivery_running_spider_jobs(self, scrapername: str, target_tags: List[str]) -> bool:
         ...
 
     @abc.abstractmethod
-    def has_delivery_running_spider_jobs(self, scrapername: str, target_tags: List[str]) -> bool:
+    def on_item(self, item: Item, scrapername: str):
         ...
 
 
@@ -160,9 +159,6 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
                 idx += 1
         except UnicodeDecodeError as e:
             _LOG.error(f"Exception while decoding item {spider_job.key}/{idx + 1}: {e}")
-
-    def on_item(self, item: Item, scrapername: str):
-        print(json.dumps(item))
 
     def workflow_loop(self) -> bool:
         for scrapername in self.args.scrapername:
