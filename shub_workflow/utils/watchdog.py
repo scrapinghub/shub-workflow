@@ -76,7 +76,7 @@ class WatchdogBaseScript(BaseClonner):
                     LOGGER.error(msg)
                     new_job = None
                     if script in self.CLONE_SCRIPTS:
-                        _, new_job = self.clone_job(job["key"])
+                        new_job = self.clone_job(job["key"])
                     if new_job is None:
                         self.append_notification_line(msg)
                 self.add_job_tags(job["key"], tags=[WATCHDOG_CHECKED_TAG])

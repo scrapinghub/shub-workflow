@@ -5,7 +5,7 @@ By default cloned jobs are scheduled in the same project as source job. If --pro
 is overriden.
 """
 import logging
-from typing import Optional, List, Tuple
+from typing import Optional, List
 
 from scrapinghub.client.jobs import Job
 
@@ -48,7 +48,7 @@ class BaseClonner(BaseScript):
 
     def clone_job(
         self, job_key: JobKey, units: Optional[int] = None, extra_tags: Optional[List[str]] = None
-    ) -> Tuple[Job, Optional[Job]]:
+    ) -> Optional[Job]:
         extra_tags = extra_tags or []
         job = self.get_job(job_key)
 
@@ -77,7 +77,7 @@ class BaseClonner(BaseScript):
 
         if clone_number >= self.MAX_CLONES:
             _LOG.warning(f"Already reached max clones allowed for job {job_key}.")
-            return Job, None
+            return None
 
         add_tag = list(filter(lambda x: not x.startswith("CloneNumber="), add_tag))
         add_tag.append(f"CloneNumber={clone_number}")
@@ -108,7 +108,7 @@ class BaseClonner(BaseScript):
         jobtags.append(f"ClonedTo={new_job.key}")
         self._update_metadata(job.metadata, {"tags": jobtags})
 
-        return job, new_job
+        return new_job
 
     @dash_retry_decorator
     def schedule_generic(self, project, spider, **job_params):
