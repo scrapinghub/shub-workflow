@@ -21,7 +21,7 @@ import abc
 import logging
 from typing import List, Tuple
 
-from shub_workflow.script import JobKey, Outcome
+from shub_workflow.script import JobKey, Outcome, JobDict
 from shub_workflow.utils.clone_job import BaseClonner
 
 
@@ -34,6 +34,8 @@ class WatchdogBaseScript(BaseClonner):
 
     MONITORED_SCRIPTS: Tuple[str, ...] = ()
     CLONE_SCRIPTS: Tuple[str, ...] = ()
+    DEFAULT_SPIDER_MAX_RUNNING_TIME_SECS: int = 3600 * 24 * 365
+    CHECK_RUNNING_SPIDERS = False
 
     def __init__(self) -> None:
         super().__init__()
@@ -52,6 +54,8 @@ class WatchdogBaseScript(BaseClonner):
 
     def run(self) -> None:
         self.check_failed_scripts()
+        if self.CHECK_RUNNING_SPIDERS:
+            self.check_running_spider_jobs()
         self.close()
 
     def check_failed_scripts(self) -> None:
@@ -81,6 +85,30 @@ class WatchdogBaseScript(BaseClonner):
                         self.append_notification_line(msg)
                 self.add_job_tags(job["key"], tags=[WATCHDOG_CHECKED_TAG])
             LOGGER.info(f"Checked {count} {script} jobs")
+
+    def get_spider_job_max_running_time(self, job: JobDict) -> int:
+        """
+        Return max running job time in seconds
+        """
+        return self.DEFAULT_SPIDER_MAX_RUNNING_TIME_SECS
+
+    def check_running_spider_jobs(self) -> None:
+        now = time.time()
+        for job in self.get_jobs(
+            state=["running"], meta=["spider", "spider_args", "running_time", "job_settings"]
+        ):
+            if job["spider"].startswith("py:"):
+                continue
+            if job["spider"] == "attorneys" and not int(job["spider_args"].get("is_critical", 0)):
+                continue
+            max_seconds = self.get_spider_job_max_running_time(job)
+            if max_seconds:
+                running_time = now - job["running_time"] / 1000
+                if running_time > int(max_seconds) * 1.1:
+                    self.finish(job["key"], close_reason="cancelled (watchdog)")
+                    msg = f"Cancelled job https://app.zyte.com/p/{job['key']} (running for {int(running_time)} seconds)"
+                    LOGGER.warning(msg)
+                    self.append_notification_line(msg)
 
     def close(self) -> None:
         if self.__notification_lines:
