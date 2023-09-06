@@ -44,7 +44,7 @@ class WatchdogBaseScript(BaseClonner):
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument("period", help="How much go to past to check (in seconds)", type=int)
+        self.argparser.add_argument("period", help="How much go to past to check (in hours)", type=int)
 
     def append_notification_line(self, line: str):
         self.__notification_lines.append(line)
@@ -68,7 +68,7 @@ class WatchdogBaseScript(BaseClonner):
                 meta=["finished_time", "close_reason"],
                 lacks_tag=WATCHDOG_CHECKED_TAG,
             ):
-                age = now - job["finished_time"] / 1000
+                age = (now - job["finished_time"] / 1000) / 3600
                 if age > self.args.period:
                     break
                 count += 1
