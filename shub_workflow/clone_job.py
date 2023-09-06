@@ -5,7 +5,9 @@ By default cloned jobs are scheduled in the same project as source job. If --pro
 is overriden.
 """
 import logging
-from typing import Optional, List
+from typing import Optional, List, Tuple
+
+from scrapinghub.client.jobs import Job
 
 from shub_workflow.script import BaseScript, JobKey
 from shub_workflow.utils import dash_retry_decorator
@@ -44,7 +46,9 @@ class BaseClonner(BaseScript):
     def job_params_hook(self, job_params):
         pass
 
-    def clone_job(self, job_key: JobKey, units: Optional[int] = None, extra_tags: Optional[List[str]] = None):
+    def clone_job(
+        self, job_key: JobKey, units: Optional[int] = None, extra_tags: Optional[List[str]] = None
+    ) -> Tuple[Job, Optional[Job]]:
         extra_tags = extra_tags or []
         job = self.get_job(job_key)
 
@@ -73,7 +77,7 @@ class BaseClonner(BaseScript):
 
         if clone_number >= self.MAX_CLONES:
             _LOG.warning(f"Already reached max clones allowed for job {job_key}.")
-            return
+            return Job, None
 
         add_tag = list(filter(lambda x: not x.startswith("CloneNumber="), add_tag))
         add_tag.append(f"CloneNumber={clone_number}")
