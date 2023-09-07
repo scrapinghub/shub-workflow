@@ -99,8 +99,6 @@ class WatchdogBaseScript(BaseClonner):
         ):
             if job["spider"].startswith("py:"):
                 continue
-            if job["spider"] == "attorneys" and not int(job["spider_args"].get("is_critical", 0)):
-                continue
             max_seconds = self.get_spider_job_max_running_time(job)
             if max_seconds:
                 running_time = now - job["running_time"] / 1000
