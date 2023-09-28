@@ -42,6 +42,10 @@ class FullJobParams(JobParams, total=False):
     spider: SpiderName
 
 
+class StopRetry(Exception):
+    pass
+
+
 def get_jobseq(tags: List[str]) -> Tuple[int, int]:
     """
     returns tuple (job sequence, retry index)
@@ -175,10 +179,12 @@ class CrawlManager(WorkFlowManager, CrawlManagerProtocol):
     def resume_running_job_hook(self, job: JobDict):
         key = job["key"]
         spider_args = job.get("spider_args", {}).copy()
-        job_args_override = JobParams({
-            "tags": job["tags"],
-            "spider_args": spider_args,
-        })
+        job_args_override = JobParams(
+            {
+                "tags": job["tags"],
+                "spider_args": spider_args,
+            }
+        )
         self._running_job_keys[key] = job["spider"], job_args_override
         _LOG.info(f"added running job {key}")
 
@@ -272,8 +278,18 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                     break
             tags.append(f"RETRIED_FROM={jobkey}")
             spider_args["retry_num"] = str(retries + 1)
-            self.add_job(spider, job_args_override)
-            _LOG.info(f"Job {jobkey} failed with reason '{outcome}'. Retrying ({retries + 1} of {self.MAX_RETRIES}).")
+            try:
+                job_args_override.update(self.get_retry_override(spider, outcome, job_args_override))
+            except StopRetry as e:
+                _LOG.info(f"Job {jobkey} failed with reason '{outcome}'. Will not be retried. Reason: {e}")
+            else:
+                self.add_job(spider, job_args_override)
+                _LOG.info(
+                    f"Job {jobkey} failed with reason '{outcome}'. Retrying ({retries + 1} of {self.MAX_RETRIES})."
+                )
+
+    def get_retry_override(self, spider: SpiderName, outcome: Outcome, job_args_override: JobParams) -> JobParams:
+        return JobParams({})
 
     def add_job(self, spider: SpiderName, job_args_override: JobParams):
         params = cast(FullJobParams, (job_args_override or {}).copy())
