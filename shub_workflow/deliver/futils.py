@@ -193,10 +193,16 @@ def get_glob(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> L
 
 def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     region = kwargs.pop("region", None)
-    if check_s3_path(src_path):
+    if check_s3_path(src_path) and check_s3_path(dest_path):
         op_kwargs = kwargs.pop("op_kwargs", {})
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         fs.copy(s3_path(src_path), s3_path(dest_path), **op_kwargs)
+    elif check_s3_path(src_path):
+        download_file(src_path, dest_path, aws_key, aws_secret, aws_token, **kwargs)
+    elif check_s3_path(dest_path):
+        upload_file(src_path, dest_path, aws_key, aws_secret, aws_token, **kwargs)
+    elif check_gcs_path(dest_path):
+        gcstorage.upload_file(src_path, dest_path)
     else:
         copyfile(src_path, dest_path)
 
