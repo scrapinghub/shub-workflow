@@ -283,8 +283,8 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                 for rtag in retry_override.pop("tags", []):
                     if rtag not in tags:
                         tags.append(rtag)
-                job_args_override["spider_args"].update(retry_override.pop("spider_args", {}))
-                job_args_override["job_settings"].update(retry_override.pop("job_settings", {}))
+                job_args_override.setdefault("spider_args", {}).update(retry_override.pop("spider_args", {}))
+                job_args_override.setdefault("job_settings", {}).update(retry_override.pop("job_settings", {}))
                 job_args_override.update(retry_override)
             except StopRetry as e:
                 _LOG.info(f"Job {jobkey} failed with reason '{outcome}'. Will not be retried. Reason: {e}")
