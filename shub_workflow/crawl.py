@@ -279,7 +279,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
             tags.append(f"RETRIED_FROM={jobkey}")
             spider_args["retry_num"] = str(retries + 1)
             try:
-                retry_override = self.get_retry_override(spider, outcome, job_args_override)
+                retry_override = self.get_retry_override(spider, outcome, job_args_override, jobkey)
                 for rtag in retry_override.pop("tags", []):
                     if rtag not in tags:
                         tags.append(rtag)
@@ -294,7 +294,9 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                     f"Job {jobkey} failed with reason '{outcome}'. Retrying ({retries + 1} of {self.MAX_RETRIES})."
                 )
 
-    def get_retry_override(self, spider: SpiderName, outcome: Outcome, job_args_override: JobParams) -> JobParams:
+    def get_retry_override(
+        self, spider: SpiderName, outcome: Outcome, job_args_override: JobParams, jobkey: JobKey
+    ) -> JobParams:
         return JobParams({})
 
     def add_job(self, spider: SpiderName, job_args_override: JobParams):
