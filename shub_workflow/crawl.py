@@ -252,6 +252,9 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
     def get_delayed_jobs(self) -> List[FullJobParams]:
         return deepcopy(self.__delayed_jobs)
 
+    def add_delayed_jobs(self, params: FullJobParams):
+        self.__delayed_jobs.append(params)
+
     @classmethod
     def create_dupe_filter(cls) -> DupesFilterProtocol:
         return BloomFilter(max_elements=1e6, error_rate=1e-6)
