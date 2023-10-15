@@ -61,6 +61,7 @@ class JobDict(TypedDict):
     running_time: NotRequired[int]
     finished_time: NotRequired[int]
     scrapystats: NotRequired[Dict[str, Any]]
+    state: NotRequired[str]
 
 
 class ArgumentParserScriptProtocol(Protocol):
