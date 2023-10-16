@@ -8,6 +8,7 @@ import logging
 from typing import Optional, List
 
 from scrapinghub.client.jobs import Job
+from scrapinghub import DuplicateJobError
 
 from shub_workflow.script import BaseScript, JobKey
 from shub_workflow.utils import dash_retry_decorator
@@ -103,16 +104,21 @@ class BaseClonner(BaseScript):
         project_id, _, _ = job_key.split("/")
         project = self.get_project(self.project_id or project_id)
         new_job = self.schedule_generic(project, spider, **job_params)
-        _LOG.info("Cloned %s to %s", job_key, new_job.key)
-        jobtags = self._get_metadata_key(job.metadata, "tags")
-        jobtags.append(f"ClonedTo={new_job.key}")
-        self._update_metadata(job.metadata, {"tags": jobtags})
+        if new_job is not None:
+            _LOG.info("Cloned %s to %s", job_key, new_job.key)
+            jobtags = self._get_metadata_key(job.metadata, "tags")
+            jobtags.append(f"ClonedTo={new_job.key}")
+            self._update_metadata(job.metadata, {"tags": jobtags})
 
         return new_job
 
     @dash_retry_decorator
-    def schedule_generic(self, project, spider, **job_params):
-        return project.jobs.run(spider, **job_params)
+    def schedule_generic(self, project, spider, **job_params) -> Optional[Job]:
+        try:
+            return project.jobs.run(spider, **job_params)
+        except DuplicateJobError as e:
+            logger.error(str(e))
+        return None
 
 
 class CloneJobScript(BaseClonner):
