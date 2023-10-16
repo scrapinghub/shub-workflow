@@ -117,7 +117,7 @@ class BaseClonner(BaseScript):
         try:
             return project.jobs.run(spider, **job_params)
         except DuplicateJobError as e:
-            logger.error(str(e))
+            _LOG.error(str(e))
         return None
 
 
