@@ -192,6 +192,8 @@ def get_glob(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> L
 
 
 def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
+    if dest_path.endswith("/"):
+        dest_path = dest_path + basename(src_path)
     region = kwargs.pop("region", None)
     if check_s3_path(src_path) and check_s3_path(dest_path):
         op_kwargs = kwargs.pop("op_kwargs", {})
@@ -208,6 +210,8 @@ def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, 
 
 
 def mv_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
+    if dest_path.endswith("/"):
+        dest_path = dest_path + basename(src_path)
     if check_s3_path(src_path) and check_s3_path(dest_path):
         cp_file(src_path, dest_path, aws_key, aws_secret, aws_token, **kwargs)
         rm_file(src_path, aws_key, aws_secret, aws_token, **kwargs)
