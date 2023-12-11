@@ -61,13 +61,18 @@ MINS_IN_A_DAY = 24 * 60
 ONE_MIN_IN_S = 60
 
 
+DASH_RETRY_MAX = int(os.environ.get("DASH_RETRY_MAX", MINS_IN_A_DAY))
+DASH_RETRY_WAIT_SECS = int(os.environ.get("DASH_RETRY_WAIT_SECS", ONE_MIN_IN_S))
+DASH_RETRY_LOGGING_LEVEL = os.environ.get("DASH_RETRY_LOGGING_LEVEL", "ERROR")
+
+
 dash_retry_decorator = retry(
     # ServerError is the only ScrapinghubAPIError that should be retried. Don't capture ScrapinghubAPIError here
     retry=retry_if_exception_type((ServerError, ReadTimeout, ConnectionError, HTTPError)),
-    before_sleep=before_sleep_log(logger, logging.ERROR),
+    before_sleep=before_sleep_log(logger, getattr(logging, DASH_RETRY_LOGGING_LEVEL)),
     reraise=True,
-    stop=stop_after_attempt(MINS_IN_A_DAY),
-    wait=wait_fixed(ONE_MIN_IN_S),
+    stop=stop_after_attempt(DASH_RETRY_MAX),
+    wait=wait_fixed(DASH_RETRY_WAIT_SECS),
 )
 
 
