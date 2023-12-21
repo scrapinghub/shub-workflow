@@ -392,10 +392,10 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
             return job.key
         return None
 
-    def handle_schedule_duplicate_error(**schedule_kwargs):
+    def handle_schedule_duplicate_error(self, **schedule_kwargs):
         pass
 
-    def handle_schedule_error(e: Exception, **schedule_kwargs):
+    def handle_schedule_error(self, e: Exception, **schedule_kwargs):
         raise e
 
     def schedule_script(self, cmd: List[str], tags=None, project_id=None, units=None, meta=None) -> Optional[JobKey]:
