@@ -383,13 +383,20 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
             job = project.jobs.run(**schedule_kwargs)
         except DuplicateJobError as e:
             logger.error(str(e))
-        except Exception:
-            logger.error(f"Failed to schedule job with arguments {schedule_kwargs}")
-            raise
+            self.handle_schedule_duplicate_error(**schedule_kwargs)
+        except Exception as e:
+            logger.error(f"Failed to schedule job with arguments {schedule_kwargs}: {e}")
+            self.handle_schedule_error(e, **schedule_kwargs)
         else:
             logger.info(f"Scheduled job {job.key}")
             return job.key
         return None
+
+    def handle_schedule_duplicate_error(**schedule_kwargs):
+        pass
+
+    def handle_schedule_error(e: Exception, **schedule_kwargs):
+        raise e
 
     def schedule_script(self, cmd: List[str], tags=None, project_id=None, units=None, meta=None) -> Optional[JobKey]:
         cmd = [str(x) for x in cmd]
