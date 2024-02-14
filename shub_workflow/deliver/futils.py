@@ -253,7 +253,7 @@ def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> 
         for result in bucket.objects.filter(Prefix=path):
             yield f"s3://{bucket.name}/{result.key}"
     elif check_gcs_path(path):
-        yield from gcstorage.list_folder(path)
+        yield from gcstorage.list_path(path)
     else:
         listing = []
         if path.strip().endswith("/"):

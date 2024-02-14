@@ -1,7 +1,7 @@
 import os
 import re
 import logging
-from typing import Generator
+from typing import Generator, List
 
 from pkg_resources import resource_filename
 
@@ -38,16 +38,47 @@ def upload_file(src_path: str, dest_path: str):
     _LOGGER.info(f"File {src_path} uploaded to {dest_path}.")
 
 
-def list_folder(path: str) -> Generator[str, None, None]:
+def list_path(path: str) -> Generator[str, None, None]:
     storage_client = storage.Client()
     m = _GS_FOLDER_RE.match(path)
-    if m:
-        bucket_name, blob_prefix = m.groups()
-    else:
+    if m is None:
         raise ValueError(f"Invalid path {path} for GCS.")
+    bucket_name, blob_prefix = m.groups()
     bucket = storage_client.bucket(bucket_name)
+
     for blob in bucket.list_blobs(prefix=blob_prefix, retry=storage.retry.DEFAULT_RETRY):
         yield f"gs://{bucket_name}/{blob.name}"
+
+
+def list_folder(path: str) -> List[str]:
+    storage_client = storage.Client()
+    m = _GS_FOLDER_RE.match(path)
+    if m is None:
+        raise ValueError(f"Invalid path {path} for GCS.")
+    bucket_name, blob_prefix = m.groups()
+    bucket = storage_client.bucket(bucket_name)
+
+    start_offset = ""
+    new_results = True
+    result = []
+    while new_results:
+        new_results = False
+        for blob in bucket.list_blobs(prefix=blob_prefix, retry=storage.retry.DEFAULT_RETRY, start_offset=start_offset):
+            new_results = True
+            if blob_prefix:
+                suffix = blob.name.split(blob_prefix, 1)[1]
+            else:
+                suffix = blob.name
+            if "/" not in suffix.lstrip("/"):
+                result.append(f"gs://{bucket_name}/{blob.name}")
+            else:
+                folder = (blob_prefix + suffix.split("/")[0]).lstrip("/")
+                result.append(f"gs://{bucket_name}/{folder}/")
+                start_offset = folder + "0"
+                break
+        else:
+            break
+    return result
 
 
 def download_file(path: str, dest: str):
