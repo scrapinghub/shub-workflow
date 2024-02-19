@@ -106,3 +106,20 @@ def rm_file(path: str):
     blob = bucket.blob(blob_name)
     blob.delete(retry=storage.retry.DEFAULT_RETRY)
     _LOGGER.info(f"Deleted {path}.")
+
+
+def mv_file(src: str, dest: str):
+    storage_client = storage.Client()
+    m = _GS_FOLDER_RE.match(src)
+    assert m is not None, "Source must be in the format gs://<bucket>/<blob>"
+    src_bucket_name, src_blob_name = m.groups()
+
+    m = _GS_FOLDER_RE.match(dest)
+    assert m is not None, "Destination must be in the format gs://<bucket>/<blob>"
+    dest_bucket_name, dest_blob_name = m.groups()
+
+    assert src_bucket_name == dest_bucket_name, "Source and destination bucket must be the same."
+
+    bucket = storage_client.bucket(src_bucket_name)
+    bucket.rename_blob(bucket.blob(src_blob_name), dest_blob_name)
+    _LOGGER.info(f"Moved {src} to {dest}")
