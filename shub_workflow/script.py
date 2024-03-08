@@ -24,8 +24,8 @@ from typing import (
     cast,
     Protocol,
 )
-from typing_extensions import TypedDict, NotRequired
 from pprint import pformat
+from typing_extensions import TypedDict, NotRequired
 
 from scrapy.utils.misc import load_object
 from scrapy.spiderloader import SpiderLoader
