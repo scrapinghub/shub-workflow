@@ -507,6 +507,9 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         if hasattr(self.stats, "_upload_stats"):
             self.stats._upload_stats()
 
+    def print_stats(self):
+        logger.info(pformat(self.stats.get_stats()))
+
 
 class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
     @abc.abstractmethod
@@ -631,7 +634,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
         self.on_close()
         self.__close_reason = self.__close_reason or "finished"
         self.upload_stats()
-        logger.info(pformat(self.stats.get_stats()))
+        self.print_stats()
 
 
 class BaseLoopScriptAsyncMixin(BaseLoopScriptProtocol):
