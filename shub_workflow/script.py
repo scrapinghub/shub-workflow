@@ -25,6 +25,7 @@ from typing import (
     Protocol,
 )
 from typing_extensions import TypedDict, NotRequired
+from pprint import pformat
 
 from scrapy.utils.misc import load_object
 from scrapy.spiderloader import SpiderLoader
@@ -630,6 +631,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
         self.on_close()
         self.__close_reason = self.__close_reason or "finished"
         self.upload_stats()
+        logger.info(pformat(self.stats.get_stats()))
 
 
 class BaseLoopScriptAsyncMixin(BaseLoopScriptProtocol):
