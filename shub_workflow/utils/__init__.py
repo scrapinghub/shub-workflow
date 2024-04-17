@@ -75,15 +75,19 @@ dash_retry_decorator = retry(
     wait=wait_fixed(DASH_RETRY_WAIT_SECS),
 )
 
+_settings_warning_issued = False
+
 
 def kumo_settings():
+    global _settings_warning_issued
     settings = {}
     shub_job_data = json.loads(os.environ.get("SHUB_SETTINGS", "{}"))
     if shub_job_data:
         settings.update(shub_job_data["project_settings"])
         settings.update(shub_job_data["spider_settings"])
-    else:
-        logger.info("Couldn't find Dash project settings, probably not running in Dash")
+    elif not _settings_warning_issued:
+        logger.warning("Couldn't find Dash project settings, probably not running in Dash")
+        _settings_warning_issued = True
     return settings
 
 
