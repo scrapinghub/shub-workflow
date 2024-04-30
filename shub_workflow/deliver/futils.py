@@ -106,7 +106,7 @@ def get_s3_bucket_keyname(s3path, aws_key, aws_secret, aws_token, **kwargs):
         aws_session_token=aws_token,
         region_name=region_name,
         botocore_session=botocore_session,
-        profile_name=profile_name
+        profile_name=profile_name,
     )
     s3 = session.resource("s3")
     m = S3_PATH_RE.match(s3path)
@@ -178,6 +178,8 @@ def upload_file(path, dest, aws_key=None, aws_secret=None, aws_token=None, **kwa
         logger.info(f"Uploaded {path} to {dest}.")
     elif check_gcs_path(dest):
         gcstorage.upload_file(path, dest)
+    else:
+        raise ValueError("Not a supported cloud.")
 
 
 def get_glob(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> List[str]:
@@ -429,7 +431,15 @@ class S3Helper:
     upload_file: Callable
     upload_file_obj: Callable
 
-    def __init__(self, aws_key, aws_secret, aws_role=None, aws_external_id=None, expiration_margin_minutes=10):
+    def __init__(
+        self,
+        aws_key,
+        aws_secret,
+        aws_role=None,
+        aws_external_id=None,
+        expiration_margin_minutes=10,
+        op_kwargs_by_method_name=None,
+    ):
         self.s3_session_factory = None
         self.credentials = {"aws_key": aws_key, "aws_secret": aws_secret}
         if aws_role is not None and aws_external_id is not None:
@@ -437,15 +447,18 @@ class S3Helper:
                 aws_key, aws_secret, aws_role, aws_external_id, expiration_margin_minutes
             )
 
+        op_kwargs_by_method_name = op_kwargs_by_method_name or {}
         for method_name, _type in S3Helper.__annotations__.items():
             if not hasattr(self, method_name) and _type is Callable:
                 method = globals()[method_name]
-                self._wrap_method(method)
+                self._wrap_method(method, **op_kwargs_by_method_name.get(method_name, {}))
 
-    def _wrap_method(self, method):
+    def _wrap_method(self, method, **op_kwargs):
         def _method(*args, **kwargs):
             if self.s3_session_factory is not None:
                 self.credentials = self.s3_session_factory.get_credentials()
+            if op_kwargs:
+                kwargs.update({"op_kwargs": op_kwargs})
             kwargs.update(self.credentials)
             return method(*args, **kwargs)
 
