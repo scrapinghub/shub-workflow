@@ -208,6 +208,9 @@ def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, 
     elif check_gcs_path(dest_path):
         gcstorage.upload_file(src_path, dest_path)
     else:
+        dname = dirname(dest_path)
+        if dname:
+            makedirs(dname, exist_ok=True)
         copyfile(src_path, dest_path)
 
 
