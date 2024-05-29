@@ -205,6 +205,10 @@ def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, 
         download_file(src_path, dest_path, aws_key, aws_secret, aws_token, **kwargs)
     elif check_s3_path(dest_path):
         upload_file(src_path, dest_path, aws_key, aws_secret, aws_token, **kwargs)
+    elif check_gcs_path(src_path) and check_gcs_path(dest_path):
+        gcstorage.cp_file(src_path, dest_path)
+    elif check_gcs_path(src_path):
+        gcstorage.download_file(src_path, dest_path)
     elif check_gcs_path(dest_path):
         gcstorage.upload_file(src_path, dest_path)
     else:
