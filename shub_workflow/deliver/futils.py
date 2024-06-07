@@ -340,6 +340,8 @@ def exists(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     if check_s3_path(path):
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         return fs.exists(path)
+    if check_gcs_path(path):
+        return gcstorage.exists(path)
     return os_exists(path)
 
 
