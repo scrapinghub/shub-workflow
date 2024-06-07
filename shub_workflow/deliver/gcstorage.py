@@ -151,3 +151,13 @@ def exists(src: str) -> bool:
 
     bucket = storage_client.bucket(src_bucket_name)
     return bucket.blob(src_blob_name).exists()
+
+
+def get_file(src: str, *args, **kwargs):
+    storage_client = storage.Client()
+    m = _GS_FOLDER_RE.match(src)
+    assert m is not None, "Source must be in the format gs://<bucket>/<blob>"
+    src_bucket_name, src_blob_name = m.groups()
+
+    bucket = storage_client.bucket(src_bucket_name)
+    return bucket.blob(src_blob_name).open(*args, **kwargs)

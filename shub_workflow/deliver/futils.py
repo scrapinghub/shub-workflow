@@ -130,6 +130,8 @@ def get_file(path, *args, aws_key=None, aws_secret=None, aws_token=None, **kwarg
             fp.name = path
         except Exception:
             pass
+    elif check_gcs_path(path):
+        fp = gcstorage.get_file(path, *args, **kwargs)
     else:
         fp = open(path, *args, **kwargs)
 
