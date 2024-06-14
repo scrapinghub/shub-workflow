@@ -467,6 +467,19 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
     def on_close(self):
         self._jobuids.close()
 
+    def get_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
+        if self.flow_id_required:
+            yield from super().get_owned_jobs(project_id, **kwargs)
+        else:
+            # all jobs with the crawlmanager spider are owned regardless flow id
+            meta = kwargs.get("meta") or []
+            if meta and "spider" not in meta:
+                meta.append("spider")
+            kwargs["meta"] = meta
+            for job in self.get_jobs(project_id, **kwargs):
+                if job["spider"] == self.spider:
+                    yield job
+
 
 class AsyncSchedulerCrawlManagerMixin(BaseLoopScriptAsyncMixin, GeneratorCrawlManagerProtocol):
     async def _async_workflow_step_gen(self, max_next_params: int) -> AsyncGenerator[Tuple[str, JobKey], None]:
