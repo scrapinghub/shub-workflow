@@ -19,7 +19,7 @@ except ImportError:
 
 
 try:
-    from shub_workflow.deliver import gcstorage
+    from shub_workflow.utils import gcstorage
 
     gcs_enabled = True
 except ImportError:
