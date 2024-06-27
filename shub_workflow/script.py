@@ -549,7 +549,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         """
         running_spiders: Set[SpiderName] = set()
         spiders = self.spider_loader.list()
-        for jdict in self.get_jobs(state=["running"], meta=["job_cmd"]):
+        for jdict in self.get_jobs(state=["running"], meta=["job_cmd", "spider"]):
             if jdict["spider"].startswith("py:"):
                 if jdict["spider"] in crawlmanagers:
                     for fragment in jdict["job_cmd"][1:]:
