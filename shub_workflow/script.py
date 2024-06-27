@@ -23,10 +23,13 @@ from typing import (
     Awaitable,
     cast,
     Protocol,
+    Type,
+    Set,
 )
 from pprint import pformat
 from typing_extensions import TypedDict, NotRequired
 
+from scrapy import Spider
 from scrapy.utils.misc import load_object
 from scrapy.spiderloader import SpiderLoader
 from scrapy.statscollectors import StatsCollector
@@ -34,12 +37,13 @@ from scrapy.settings import BaseSettings
 from scrapinghub import ScrapinghubClient, DuplicateJobError
 from scrapinghub.client.jobs import Job, JobMeta
 from scrapinghub.client.projects import Project
-from shub_workflow.utils import get_project_settings
 
+from shub_workflow.utils import get_project_settings
 from shub_workflow.utils import (
     resolve_project_id,
     dash_retry_decorator,
 )
+from shub_workflow.deliver.futils import FSHelper
 
 
 logger = logging.getLogger(__name__)
@@ -118,6 +122,8 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
     name: str
     stats: StatsCollector
     project_settings: BaseSettings
+    spider_loader: SpiderLoader
+    fshelper: FSHelper
 
     @abc.abstractmethod
     def append_flow_tag(self, tag: str):
@@ -188,6 +194,16 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
     def _make_children_tags(self, tags: Optional[List[str]]) -> Optional[List[str]]:
         ...
 
+    @abc.abstractmethod
+    def get_canonical_spidername(self, spidername: SpiderName) -> str:
+        ...
+
+    @abc.abstractmethod
+    def get_project_running_spiders(
+        self, canonical: bool = False, crawlmanagers: Tuple[str, ...] = ()
+    ) -> Set[SpiderName]:
+        ...
+
 
 class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
 
@@ -211,6 +227,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         stats_collector_class = self.project_settings["STATS_CLASS"]
         logger.debug(f"Stats collection class: {stats_collector_class}")
         self.stats = load_object(stats_collector_class)(PseudoCrawler(self))
+        self.fshelper = FSHelper()
 
     def append_flow_tag(self, tag: str):
         """
@@ -244,7 +261,8 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         )
         self.argparser.add_argument("--flow-id", help="If given, use the given flow id.")
         self.argparser.add_argument(
-            "--children-tag", "-t",
+            "--children-tag",
+            "-t",
             help="Additional tag added to the scheduled jobs. Can be given multiple times.",
             action="append",
             default=self.children_tags or [],
@@ -509,6 +527,40 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
 
     def print_stats(self):
         logger.info(pformat(self.stats.get_stats()))
+
+    def get_canonical_spidername(self, spidername: SpiderName) -> SpiderName:
+        """
+        For some applications where same site is handled by different spider classes
+        but you need same canonical name to refer to all them, set the attribute "canonical_name"
+        of the spider to that common name. If not set, by default it is the spider name itself.
+        """
+        if spidername in self.spider_loader.list():
+            spidercls: Type[Spider] = self.spider_loader.load(spidername)
+            return getattr(spidercls, "canonical_name", None) or spidername
+        raise ValueError(f"Spider {spidername} does not exist.")
+
+    def get_project_running_spiders(
+        self, canonical: bool = False, crawlmanagers: Tuple[str, ...] = ()
+    ) -> Set[SpiderName]:
+        """
+        Get all running spiders. If canonical is True, get the canonical names (see get_canonical_spidername).
+        If crawlmanagers scripts (in the format py:<basename>.py) are provided, include the spider corresponding to
+        the given crawlmanagers.
+        """
+        running_spiders: Set[SpiderName] = set()
+        spiders = self.spider_loader.list()
+        for jdict in self.get_jobs(state=["running"], meta=["job_cmd"]):
+            if jdict["spider"].startswith("py:"):
+                if jdict["spider"] in crawlmanagers:
+                    for fragment in jdict["job_cmd"][1:]:
+                        if fragment in spiders:
+                            running_spiders.add(SpiderName(fragment))
+                            break
+            else:
+                running_spiders.add(jdict["spider"])
+        if canonical:
+            running_spiders = set(self.get_canonical_spidername(spidername) for spidername in running_spiders)
+        return running_spiders
 
 
 class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
