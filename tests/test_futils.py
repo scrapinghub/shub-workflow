@@ -1,7 +1,7 @@
 from tempfile import mktemp
 from unittest import TestCase
 
-from shub_workflow.deliver.futils import FSHelper
+from shub_workflow.utils.futils import FSHelper
 
 
 class FUtilsTest(TestCase):

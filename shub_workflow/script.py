@@ -43,7 +43,7 @@ from shub_workflow.utils import (
     resolve_project_id,
     dash_retry_decorator,
 )
-from shub_workflow.deliver.futils import FSHelper
+from shub_workflow.utils.futils import FSHelper
 
 
 logger = logging.getLogger(__name__)
