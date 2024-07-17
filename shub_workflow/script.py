@@ -540,12 +540,16 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         raise ValueError(f"Spider {spidername} does not exist.")
 
     def get_project_running_spiders(
-        self, canonical: bool = False, crawlmanagers: Tuple[str, ...] = ()
+        self, canonical: bool = False, crawlmanagers: Tuple[str, ...] = (),
+        only_crawlmanagers: bool = False
     ) -> Set[SpiderName]:
         """
-        Get all running spiders. If canonical is True, get the canonical names (see get_canonical_spidername).
-        If crawlmanagers scripts (in the format py:<basename>.py) are provided, include the spider corresponding to
-        the given crawlmanagers.
+        Get all running spiders.
+        - If canonical is True, get the canonical names (see get_canonical_spidername).
+        - If crawlmanagers scripts (in the format py:<basename>.py) are provided to the parameter crawlmanagers,
+          include in the check the script corresponding to the given crawlmanagers (that is, if the crawlmanager
+          is running, the spider is considered running even if no actual spider job is running)
+        - if only_crawlmanagers is True, only check crawlmanager, not actual spider jobs.
         """
         running_spiders: Set[SpiderName] = set()
         spiders = self.spider_loader.list()
@@ -556,7 +560,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
                         if fragment in spiders:
                             running_spiders.add(SpiderName(fragment))
                             break
-            else:
+            elif not only_crawlmanagers:
                 running_spiders.add(jdict["spider"])
         if canonical:
             running_spiders = set(self.get_canonical_spidername(spidername) for spidername in running_spiders)
