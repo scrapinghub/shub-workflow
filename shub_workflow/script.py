@@ -29,6 +29,8 @@ from typing import (
 from pprint import pformat
 from typing_extensions import TypedDict, NotRequired
 
+import requests
+from requests.auth import HTTPBasicAuth
 from scrapy import Spider
 from scrapy.utils.misc import load_object
 from scrapy.spiderloader import SpiderLoader
