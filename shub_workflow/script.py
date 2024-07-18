@@ -204,6 +204,10 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
     ) -> Set[SpiderName]:
         ...
 
+    @abc.abstractmethod
+    def get_sc_project_settings(self):
+        ...
+
 
 class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
 
@@ -565,6 +569,16 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         if canonical:
             running_spiders = set(self.get_canonical_spidername(spidername) for spidername in running_spiders)
         return running_spiders
+
+    @dash_retry_decorator
+    def get_sc_project_settings(self):
+        """
+        Reads real time settings from SC
+        """
+        shkey = self.project_settings["SH_APIKEY"]
+        return requests.get(
+            f"https://app.zyte.com/api/settings/get.json?project={self.project_id}", auth=HTTPBasicAuth(shkey, "")
+        ).json()["project_settings"]
 
 
 class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
