@@ -129,4 +129,5 @@ Minor version changes:
 
 - 1.14.0 generator crawl manager: acquire all jobs if crawlmanager doesn't have a flow id.
   Added `get_canonical_spidername()` and `get_project_running_spiders()` helper methods on base script.
+  Added fshelper base script attribute for readily access to this helper tool
 - 1.14.1 Added method for getting alive real time settings from ScrapyCloud
