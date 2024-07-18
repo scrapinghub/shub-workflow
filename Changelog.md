@@ -17,7 +17,7 @@ along all the way. In general you can find most incompatibilities by generous us
 Backward incompatibility issues:
 
 - Python older than 3.8 is not supported anymore
-- name attribute is now required for every subclass of WorkFlowManager
+- name attribute is now required for every subclass of WorkFlowManager (either as hardcoded attribute, or passed via command line required arguments)
 - The Delivery script has been refactored. The old code is deprecated. It will be removed in future versions.
 
 Minor version changes:
