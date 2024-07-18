@@ -28,7 +28,7 @@ Minor version changes:
 - 1.9.3 performance improvements
 - 1.9.4 name attribute logic fixes
 - 1.9.5 delivery script refactor, old delivery code deprecated.
-- 1.9.6 diverse fixes and improvements
+- 1.9.6 diverse fixes and improvements in base script, added `get_jobs_with_tags()` method.
 - 1.9.7 refactors and new s3 helper method
 
 1.10 (From October 2022 to April 2023)
