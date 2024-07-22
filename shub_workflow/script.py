@@ -207,7 +207,7 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
         ...
 
     @abc.abstractmethod
-    def get_sc_project_settings(self):
+    def get_sc_project_settings(self) -> Dict[str, Any]:
         ...
 
 
@@ -573,7 +573,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         return running_spiders
 
     @dash_retry_decorator
-    def get_sc_project_settings(self):
+    def get_sc_project_settings(self) -> Dict[str, Any]:
         """
         Reads real time settings from SC
         """
