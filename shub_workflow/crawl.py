@@ -239,7 +239,6 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
     """
 
     MAX_RETRIES = 0
-    max_jobs_per_spider = 1000
 
     def __init__(self):
         super().__init__()
@@ -340,18 +339,11 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                 count += 1
         return count
 
-    def can_schedule_job_with_params(self, params: FullJobParams, max_new_jobs_for_spider: int) -> bool:
+    def can_schedule_job_with_params(self, params: FullJobParams) -> bool:
         """
         If returns False, delay the scheduling of the params.
         """
-        return max_new_jobs_for_spider > 0
-
-    def _can_schedule_job_with_params(self, params: FullJobParams, max_new_jobs_per_spider: Dict[str, int]) -> bool:
-        if params["spider"] not in max_new_jobs_per_spider:
-            max_new_jobs_per_spider[params["spider"]] = self.get_max_jobs_per_spider(
-                params["spider"]
-            ) - self.spider_running_count(params["spider"])
-        return self.can_schedule_job_with_params(deepcopy(params), max_new_jobs_per_spider[params["spider"]]) > 0
+        return True
 
     def _fulljobparams_from_spiderargs(self, schedule_args: ScheduleArgs) -> FullJobParams:
         spider = schedule_args.get("spider", self.spider)
@@ -378,18 +370,16 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         new_params: List[FullJobParams] = []
         next_params: Optional[FullJobParams]
 
-        max_new_jobs_per_spider: Dict[str, int] = {}
-
         while len(new_params) < max_next_params:
             next_params = None
             for idx, np in enumerate(self.__delayed_jobs):
-                if self._can_schedule_job_with_params(np, max_new_jobs_per_spider):
+                if self.can_schedule_job_with_params(np):
                     next_params = np
                     self.__delayed_jobs = self.__delayed_jobs[:idx] + self.__delayed_jobs[idx + 1:]
                     break
             else:
                 for idx, np in enumerate(self.__additional_jobs):
-                    if self._can_schedule_job_with_params(np, max_new_jobs_per_spider):
+                    if self.can_schedule_job_with_params(np):
                         next_params = np
                         self.__additional_jobs = self.__additional_jobs[:idx] + self.__additional_jobs[idx + 1:]
                         break
@@ -402,7 +392,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                         spider = np.get("spider", self.spider)
                         assert spider, f"No spider set for parameters {np}"
                         np["spider"] = spider
-                        if self._can_schedule_job_with_params(np, max_new_jobs_per_spider):
+                        if self.can_schedule_job_with_params(np):
                             next_params = np
                         else:
                             self.__delayed_jobs.append(np)
@@ -416,15 +406,11 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
                 _LOG.warning(f"Job with parameters {next_params} was already scheduled. Skipped.")
                 continue
             new_params.append(next_params)
-            max_new_jobs_per_spider[next_params["spider"]] -= 1
 
         for next_params in new_params:
             spider = next_params.pop("spider")
             self.__add_jobseq_tag(next_params)
             yield jobuid, self.schedule_spider_with_jobargs(next_params, spider)
-
-    def get_max_jobs_per_spider(self, spider: SpiderName) -> int:
-        return self.max_jobs_per_spider
 
     def get_max_next_params(self) -> int:
         return self.max_running_jobs - len(self._running_job_keys)
