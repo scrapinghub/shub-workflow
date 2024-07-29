@@ -17,7 +17,7 @@ typing-extensions = "*"
 collection-scanner = "*"
 scrapy = "*"
 boto3 = ">=1.9.92"
-requests = "<=2.31.0"
+requests = "<=2.32.2"
 
 [dev-packages]
 flake8 = "*"
