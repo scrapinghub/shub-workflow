@@ -131,3 +131,4 @@ Minor version changes:
   Added `get_canonical_spidername()` and `get_project_running_spiders()` helper methods on base script.
   Added fshelper base script attribute for readily access to this helper tool
 - 1.14.1 Added method for getting alive real time settings from ScrapyCloud
+- 1.14.2 Added BaseMonitor class that is able to monitor aggregated stats on entire workflow jobs.
