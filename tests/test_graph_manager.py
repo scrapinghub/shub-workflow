@@ -144,7 +144,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # second loop, something went wrong with jobA, retry with retry_args instead
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/1" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/1/1" else None
         manager.schedule_script.reset_mock()
         manager.schedule_script.side_effect = ["999/1/3"]
         result = next(manager._run_loops())
@@ -154,20 +154,20 @@ class ManagerTest(BaseTestCase):
         )
 
         # third loop, both jobs are still running
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script.reset_mock()
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # fourth loop, jobA finished (but has to wait for jobB for next job)
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/3" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/3" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # fifth loop, jobB finished, now we can run jobC
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/2" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/2" else None
         manager.schedule_script.side_effect = ["999/1/4"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -177,7 +177,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # sixth loop, jobC finished, schedule jobD
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/4" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/4" else None
         manager.schedule_script.reset_mock()
         manager.schedule_script.side_effect = ["999/1/5"]
         result = next(manager._run_loops())
@@ -188,7 +188,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # last loop, jobD finished, workflow finished
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/5" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/5" else None
         manager.schedule_script.reset_mock()
         result = next(manager._run_loops())
         self.assertFalse(result)
@@ -270,7 +270,7 @@ class ManagerTest(BaseTestCase):
 
         with script_args(["--root-jobs"]):
             manager = TestManager2()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [
             "999/1/1",
@@ -299,7 +299,7 @@ class ManagerTest(BaseTestCase):
         self.assertFalse(manager.schedule_script.called)
 
         # third loop, job A.0 fails, must be retried
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/1" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/1/1" else None
         manager.schedule_script.side_effect = ["999/1/5"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -312,7 +312,7 @@ class ManagerTest(BaseTestCase):
 
         # fourth loop, job A.0 fails again, must be retried
         manager.schedule_script.reset_mock()
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/5" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/1/5" else None
         manager.schedule_script.side_effect = ["999/1/6"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -325,14 +325,14 @@ class ManagerTest(BaseTestCase):
 
         # fifth loop, job A.0 fails again, cannot be retried (retries=2)
         manager.schedule_script.reset_mock()
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/6" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/1/6" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # sixth loop, job A.1 fails, must be retried
         manager.schedule_script.reset_mock()
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/2" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/1/2" else None
         manager.schedule_script.side_effect = ["999/1/7"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -345,7 +345,7 @@ class ManagerTest(BaseTestCase):
 
         # 7th loop, job A.1 fails again, must be retried
         manager.schedule_script.reset_mock()
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/7" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/1/7" else None
         manager.schedule_script.side_effect = ["999/1/8"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -358,7 +358,7 @@ class ManagerTest(BaseTestCase):
 
         # 8th loop, job A.1 fails again, cannot be retried (retries=2)
         manager.schedule_script.reset_mock()
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/8" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/1/8" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
@@ -373,7 +373,7 @@ class ManagerTest(BaseTestCase):
         with script_args(["--starting-job=jobC"]):
             manager = TestManager2()
 
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/3/1"]
         manager._on_start()
@@ -387,7 +387,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # second loop, job C fails, must be retried.
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/3/1" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/3/1" else None
         manager.schedule_script.side_effect = ["999/3/2"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -406,7 +406,7 @@ class ManagerTest(BaseTestCase):
         with script_args(["--starting-job=jobC"]):
             manager = TestManager2()
 
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/3/1"]
         manager._on_start()
@@ -417,7 +417,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 1)
 
         # second loop, job C fails, must be retried.
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/3/1" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/3/1" else None
         manager.schedule_script.side_effect = ["999/3/2"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -427,7 +427,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # third loop, job C fails again, must be retried (last retry).
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/3/2" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/3/2" else None
         manager.schedule_script.side_effect = ["999/3/3"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -437,7 +437,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # fourth loop, job C fails again, give up.
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/3/3" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/3/3" else None
         result = next(manager._run_loops())
         self.assertFalse(result)
         self.assertEqual(manager.schedule_script.call_count, 3)
@@ -451,7 +451,7 @@ class ManagerTest(BaseTestCase):
 
         with script_args(["--starting-job=jobA"]):
             manager = TestManager2()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [
             "999/1/1",
@@ -480,7 +480,7 @@ class ManagerTest(BaseTestCase):
         self.assertFalse(manager.schedule_script.called)
 
         # third loop, job A.0 fails, must be resumed
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/1" else None
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/1/1" else None
         manager.schedule_script.side_effect = ["999/1/5"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -492,7 +492,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # fourth loop, job A finishes, will start now parallel job B
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = [
             "999/2/1",
             "999/2/2",
@@ -510,14 +510,14 @@ class ManagerTest(BaseTestCase):
             )
 
         # fifth loop, jobB finishes partially, neither jobD nor jobC can still be scheduled
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/2/1" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/2/1" else None
         manager.schedule_script.reset_mock()
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # sixth loop, jobB finishes, jobD now can run, also jobC is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/3/1", "999/3/2"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -535,7 +535,7 @@ class ManagerTest(BaseTestCase):
 
         with script_args(["--starting-job=jobA"]):
             manager = TestManager2()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [
             "999/1/1",
@@ -558,25 +558,25 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop one of the subtasks finished
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/2" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/2" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertTrue(manager.schedule_script.call_count, 0)
 
         # third loop a second subtask finished
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/1" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/1" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertTrue(manager.schedule_script.call_count, 0)
 
         # fourth loop a third subtask finished
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/4" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/4" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertTrue(manager.schedule_script.call_count, 0)
 
         # fifth loop, all job A finishes, will start now parallel job B
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/3" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/3" else None
         manager.schedule_script.side_effect = [
             "999/2/1",
             "999/2/2",
@@ -603,7 +603,7 @@ class ManagerTest(BaseTestCase):
 
         with script_args(["--starting-job=jobA"]):
             manager = TestManager2()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [
             "999/1/1",
@@ -626,7 +626,7 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop all subtasks finished, one with retry
-        manager.is_finished = lambda x: Outcome("failed") if x == "999/1/2" else Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("failed") if jobkey == "999/1/2" else Outcome("finished")
         manager.schedule_script.side_effect = ["999/1/5"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -639,7 +639,7 @@ class ManagerTest(BaseTestCase):
         )
 
         # third loop, all job A finishes, will start now parallel job B
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/5" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/5" else None
         manager.schedule_script.side_effect = [
             "999/2/1",
             "999/2/2",
@@ -665,7 +665,7 @@ class ManagerTest(BaseTestCase):
             manager = TestManager3()
         self.assertEqual(manager.flow_id, "mygeneratedflowid")
         project = mocked_get_project()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         project.jobs.run.side_effect = [
             Job("999/1/1"),
             Job("999/1/2"),
@@ -704,7 +704,7 @@ class ManagerTest(BaseTestCase):
             manager = TestManager3()
         self.assertEqual(manager.flow_id, "myclflowid")
         project = mocked_get_project()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         project.jobs.run.side_effect = [
             Job("999/1/1"),
             Job("999/1/2"),
@@ -741,7 +741,7 @@ class ManagerTest(BaseTestCase):
             manager = _TestManager()
         self.assertEqual(manager.flow_id, "myflowidfromtag")
         project = mocked_get_project()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         project.jobs.run.side_effect = [
             Job("999/1/1"),
             Job("999/1/2"),
@@ -776,7 +776,7 @@ class ManagerTest(BaseTestCase):
             manager.append_flow_tag("EXEC_ID=myexecid")
         self.assertEqual(manager.flow_id, "mygeneratedflowid")
         project = mocked_get_project()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         project.jobs.run.side_effect = [
             Job("999/1/1"),
             Job("999/1/2"),
@@ -812,7 +812,7 @@ class ManagerTest(BaseTestCase):
 
         with script_args(["--starting-job=jobA", "--skip-job=jobC"]):
             manager = TestManager3()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [
             "999/1/1",
@@ -835,7 +835,7 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop, jobA finishes, jobB is scheduled, not jobC or next ones as it was skipped
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = [
             "999/2/1",
             "999/2/2",
@@ -853,7 +853,7 @@ class ManagerTest(BaseTestCase):
             )
 
         # last loop, jobB finished, workflow finished
-        manager.is_finished = lambda x: Outcome("finished") if x.startswith("999/2") else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey.startswith("999/2") else None
         manager.schedule_script.reset_mock()
         result = next(manager._run_loops())
         self.assertFalse(result)
@@ -865,7 +865,7 @@ class ManagerTest(BaseTestCase):
 
         with script_args(["--starting-job=jobA"]):
             manager = TestManager3()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [
             "999/1/1",
@@ -888,7 +888,7 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop, jobA finishes, jobB and jobC are scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = [
             "999/2/1",
             "999/2/2",
@@ -910,21 +910,21 @@ class ManagerTest(BaseTestCase):
         )
 
         # third loop, jobB finishes
-        manager.is_finished = lambda x: Outcome("finished") if x.startswith("999/2/") else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey.startswith("999/2/") else None
         manager.schedule_script.reset_mock()
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertFalse(manager.schedule_script.called)
 
         # fourth loop, jobC finishes, jobD is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # fifth loop, jobD finishes, jobE is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -948,7 +948,7 @@ class ManagerTest(BaseTestCase):
         # second loop, jobD finishes, jobE is scheduled, regardless it should wait for jobB to finish.
         # However, as defined in the start jobs, jobB will never be scheduled (i.e. could have been
         # already scheduled/finished by another instance of the manager)
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -960,7 +960,7 @@ class ManagerTest(BaseTestCase):
 
         with script_args(["--starting-job=jobA", "--skip-job=jobB"]):
             manager = TestManager3()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = [
             "999/1/1",
@@ -983,7 +983,7 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop, jobA finishes, jobC is scheduled, but not jobB as it is skipped.
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/3/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -992,14 +992,14 @@ class ManagerTest(BaseTestCase):
         )
 
         # third loop, jobC finishes, jobD is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # fourth loop, jobD finishes, jobE is scheduled (will not wait for B as it was skipped)
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1032,7 +1032,7 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop, jobB finishes, jobE is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1065,7 +1065,7 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop, one jobB finishes, jobC must not still be scheduled
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/2/1" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/2/1" else None
         manager.schedule_script.reset_mock()
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1124,14 +1124,14 @@ class ManagerTest(BaseTestCase):
         )
 
         # second loop, jobC finishes, jobD is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # third loop, jobD finishes, jobE is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1200,7 +1200,7 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop, jobB finishes, jobC is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/3/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1209,14 +1209,14 @@ class ManagerTest(BaseTestCase):
         )
 
         # third loop, jobC finishes, jobD is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # fourth loop, jobD finishes, jobE is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1285,7 +1285,7 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop, jobB finishes, jobC must be scheduled, but not jobD
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/3/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1294,14 +1294,14 @@ class ManagerTest(BaseTestCase):
         )
 
         # third loop, jobC finishes, jobD is scheduled, but not jobE
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandD"], tags=["TASK_ID=jobD"], units=None, project_id=None)
 
         # fourth loop, jobD finishes, jobE is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1370,7 +1370,7 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop, jobB finishes, jobC must be scheduled, but not jobE
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/3/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1379,14 +1379,14 @@ class ManagerTest(BaseTestCase):
         )
 
         # third loop, jobC finishes, jobE is scheduled, but not jobD
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/5/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandE"], tags=["TASK_ID=jobE"], units=None, project_id=None)
 
         # fourth loop, jobE finishes, jobD is scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1445,11 +1445,11 @@ class ManagerTest(BaseTestCase):
             )
 
         # second loop, jobs still running, nothing scheduled
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         self.assertTrue(next(manager._run_loops()))
 
         # third loop, jobs A finishes, jobB scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/2/1"]
         self.assertTrue(next(manager._run_loops()))
         manager.schedule_script.assert_called_with(
@@ -1457,11 +1457,11 @@ class ManagerTest(BaseTestCase):
         )
 
         # fourth loop, jobs still running, nothing scheduled
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         self.assertTrue(next(manager._run_loops()))
 
         # 5th loop, job B finishes, jobC scheduled
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/3/1"]
         self.assertTrue(next(manager._run_loops()))
         manager.schedule_script.assert_called_with(
@@ -1508,7 +1508,7 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         manager.schedule_script.assert_any_call(["commandA"], tags=["TASK_ID=jobA"], units=None, project_id=None)
 
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         with self.assertRaisesRegex(
             RuntimeError,
             re.escape(
@@ -1560,7 +1560,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.assert_called_with(["commandA"], tags=["TASK_ID=jobA"], units=None, project_id=None)
 
         # If commandA is still running, commandB should not get started.
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager.schedule_script.side_effect = ["999/2/2"]
 
@@ -1568,7 +1568,7 @@ class ManagerTest(BaseTestCase):
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 0)
 
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
@@ -1616,7 +1616,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.assert_any_call(["commandC"], tags=["TASK_ID=jobC"], units=None, project_id=None)
 
         # Second loop: if both commandA and command C are still running, nor commandB neither commandD can't start.
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script.reset_mock()
 
         result = next(manager._run_loops())
@@ -1624,7 +1624,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # third loop: commandC finishes so commandD can run
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/3/1" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/3/1" else None
         manager.schedule_script.side_effect = ["999/4/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1633,13 +1633,13 @@ class ManagerTest(BaseTestCase):
 
         # fourth loop: commandD finishes. commandB, can't still run
         manager.schedule_script.reset_mock()
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/4/1" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/4/1" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # fifth loop: commandA finishes so commandB can run
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = ["999/2/1"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1692,7 +1692,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.assert_has_calls(calls)
 
         # Second loop. If commandA is still running, commandB should not get started.
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script.reset_mock()
 
         result = next(manager._run_loops())
@@ -1700,7 +1700,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # Third loop. All jobA subjobs finished. Schedule jobB.
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 1)
@@ -1756,7 +1756,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.assert_has_calls(calls)
 
         # If only jobA is finished, jobC can't run
-        manager.is_finished = lambda x: Outcome("finished") if x.startswith("999/1/") else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey.startswith("999/1/") else None
         manager.schedule_script.reset_mock()
 
         result = next(manager._run_loops())
@@ -1764,7 +1764,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # finished jobB, jobC can run
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = [f"999/3/{i}" for i in range(1, 5)]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1825,7 +1825,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.assert_has_calls(calls)
 
         # If any job is finished, jobC can run
-        manager.is_finished = lambda x: Outcome("finished") if x.startswith("999/1/") else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey.startswith("999/1/") else None
         manager.schedule_script.reset_mock()
 
         manager.schedule_script.side_effect = [f"999/3/{i}" for i in range(1, 5)]
@@ -1883,7 +1883,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script.assert_has_calls(calls)
 
         # second loop: run remaining jobA and two jobC
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.reset_mock()
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -1927,7 +1927,7 @@ class ManagerTest(BaseTestCase):
 
         with script_args(["--starting-job=jobA", "--starting-job=jobB", "--max-running-jobs=2"]):
             manager = _TestManager()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager._on_start()
         # will test that all 5 jobs (4 for A and 1 for B) will run one by one
@@ -1938,7 +1938,7 @@ class ManagerTest(BaseTestCase):
             result = next(manager._run_loops())
             self.assertTrue(result)
             self.assertEqual(manager.schedule_script.call_count, len(side_effect))
-            manager.is_finished = lambda x: Outcome("finished")
+            manager.is_finished = lambda jobkey: Outcome("finished")
             manager.schedule_script.reset_mock()
         result = next(manager._run_loops())
         self.assertFalse(result)
@@ -1949,7 +1949,7 @@ class ManagerTest(BaseTestCase):
 
         with script_args(["--starting-job=jobA", "--starting-job=jobB", "--only-starting-jobs"]):
             manager = TestManager()
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         manager.schedule_script = Mock()
         manager._on_start()
 
@@ -1958,7 +1958,7 @@ class ManagerTest(BaseTestCase):
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 2)
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
 
         result = next(manager._run_loops())
         self.assertFalse(result)
@@ -2085,7 +2085,7 @@ class ManagerTest(BaseTestCase):
 
         # third loop: jobA finishes, can run jobB
         manager.schedule_script.side_effect = ["999/2/1"]
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 5)
         manager.schedule_script.assert_called_with(["commandB"], tags=["TASK_ID=jobB"], units=None, project_id=None)
@@ -2175,7 +2175,7 @@ class ManagerTest(BaseTestCase):
 
         # second loop
         manager.schedule_script.side_effect = ["999/2/1"]
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 2)
 
@@ -2227,7 +2227,7 @@ class ManagerTest(BaseTestCase):
 
         # second loop, jobB is started, so start callback is called
         manager.schedule_script.side_effect = ["999/2/1"]
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_any_call(
@@ -2238,7 +2238,7 @@ class ManagerTest(BaseTestCase):
 
         # second loop, jobB is started, so start callback is called
         manager.schedule_script.side_effect = ["999/3/1"]
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 3)
         manager.schedule_script.assert_any_call(
@@ -2284,7 +2284,7 @@ class ManagerTest(BaseTestCase):
 
         # second loop, jobB is started, so start callback is called
         manager.schedule_script.side_effect = ["999/2/1"]
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         self.assertTrue(next(manager._run_loops()))
         self.assertEqual(manager.schedule_script.call_count, 2)
         manager.schedule_script.assert_any_call(
@@ -2356,7 +2356,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
         self.assertTrue(manager.is_resumed)
 
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
 
         manager.schedule_script = Mock()
         # first loop. jobA partially finished. Need to wait for the remaining parallel jobs to finish
@@ -2365,7 +2365,7 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # second loop. jobA remaining jobs completed. Continue with jobB and jobC
-        manager.is_finished = lambda x: Outcome("finished")
+        manager.is_finished = lambda jobkey: Outcome("finished")
         manager.schedule_script.side_effect = [
             "999/2/1",
             "999/2/2",
@@ -2456,7 +2456,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
         self.assertTrue(manager.is_resumed)
 
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
 
         manager.schedule_script = Mock()
         # first loop. jobB partially runnning, jobC running
@@ -2465,13 +2465,13 @@ class ManagerTest(BaseTestCase):
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # second loop. Still no change
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(manager.schedule_script.call_count, 0)
 
         # Third loop. jobC completes
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/3/1" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/3/1" else None
         manager.schedule_script.side_effect = [
             "999/4/1",
         ]
@@ -2523,7 +2523,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
         self.assertTrue(manager.is_resumed)
 
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
 
         manager.schedule_script = Mock()
         # first loop. jobB partially runnning, jobC running
@@ -2561,7 +2561,7 @@ class ManagerTest(BaseTestCase):
         manager._on_start()
         self.assertTrue(manager.is_resumed)
 
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
 
         manager.schedule_script = Mock()
         # first loop. jobB partially runnning, jobC running

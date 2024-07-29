@@ -22,7 +22,7 @@ class SESHelper:
 
     DEFAULT_EMAIL_SUBJECT_PREFIX = "[Zyte]"
     DEFAULT_EMAIL_SUBJECT = "Notification from Zyte"
-    DEFAULT_FROM_ADDR = None
+    DEFAULT_FROM_ADDR: str
 
     def __init__(self, aws_key: str, aws_secret: str, aws_region: Optional[str] = None):
         self.aws_key = aws_key

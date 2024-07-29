@@ -71,12 +71,12 @@ class CrawlManagerTest(TestCase):
         mocked_super_schedule_spider.assert_any_call("myspider", units=None, job_settings={})
 
         # second loop: spider still running. Continue.
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         result = next(manager._run_loops())
         self.assertTrue(result)
 
         # third loop: spider is finished. Stop.
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/1" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/1" else None
         mocked_super_schedule_spider.reset_mock()
         result = next(manager._run_loops())
 
@@ -116,12 +116,12 @@ class CrawlManagerTest(TestCase):
         mocked_super_schedule_spider.assert_any_call("myspider", units=None, job_settings={})
 
         # second loop: spider still running. Continue.
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         result = next(manager._run_loops())
         self.assertTrue(result)
 
         # third loop: spider is cancelled. Stop. Manager must be closed with cancelled close reason
-        manager.is_finished = lambda x: Outcome("cancelled") if x == "999/1/1" else None
+        manager.is_finished = lambda jobkey: Outcome("cancelled") if jobkey == "999/1/1" else None
         mocked_super_schedule_spider.reset_mock()
         result = next(manager._run_loops())
 
@@ -155,12 +155,12 @@ class CrawlManagerTest(TestCase):
         mocked_add_job_tags.assert_any_call(tags=["FLOW_ID=3a20", "NAME=test", "OTHER=other"])
 
         # first loop: spider still running in workflow. Continue.
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         result = next(manager._run_loops())
         self.assertTrue(result)
 
         # second loop: spider is finished. Stop.
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/1" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/1" else None
         result = next(manager._run_loops())
 
         self.assertFalse(result)
@@ -203,14 +203,14 @@ class CrawlManagerTest(TestCase):
         self.assertEqual(len(manager._running_job_keys), 0)
 
         # first loop: no spider, schedule one.
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         mocked_super_schedule_spider.side_effect = ["999/1/2"]
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 1)
 
         # second loop: spider is finished. Stop.
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/2" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/2" else None
         result = next(manager._run_loops())
 
         self.assertFalse(result)
@@ -231,12 +231,12 @@ class CrawlManagerTest(TestCase):
         mocked_super_schedule_spider.assert_any_call("myspider", units=None, job_settings={})
 
         # second loop: spider still running. Continue.
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         result = next(manager._run_loops())
         self.assertTrue(result)
 
         # third loop: spider is finished. Schedule again.
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/1" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/1" else None
         mocked_super_schedule_spider.reset_mock()
         mocked_super_schedule_spider.side_effect = ["999/1/2"]
         result = next(manager._run_loops())
@@ -245,7 +245,7 @@ class CrawlManagerTest(TestCase):
         mocked_super_schedule_spider.assert_any_call("myspider", units=None, job_settings={})
 
         # four loop: spider is cancelled. Schedule again.
-        manager.is_finished = lambda x: Outcome("cancelled") if x == "999/1/2" else None
+        manager.is_finished = lambda jobkey: Outcome("cancelled") if jobkey == "999/1/2" else None
         mocked_super_schedule_spider.reset_mock()
         mocked_super_schedule_spider.side_effect = ["999/1/3"]
         result = next(manager._run_loops())
@@ -276,13 +276,13 @@ class CrawlManagerTest(TestCase):
         )
 
         # second loop: still no job finished. Wait for a free slot
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 2)
 
         # third loop: finish one job. We can schedule last one with third set of arguments
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/1" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/1" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 3)
@@ -297,7 +297,7 @@ class CrawlManagerTest(TestCase):
 
         # fifth loop: second job finished with failed outcome. Retry according
         # to bad outcome hook
-        manager.is_finished = lambda x: Outcome("cancelled (stalled)") if x == "999/1/2" else None
+        manager.is_finished = lambda jobkey: Outcome("cancelled (stalled)") if jobkey == "999/1/2" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 4)
@@ -306,13 +306,13 @@ class CrawlManagerTest(TestCase):
         )
 
         # sixth loop: third job finished.
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/3" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/3" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 4)
 
         # seventh loop: retried job failed again. Retry with new argument.
-        manager.is_finished = lambda x: Outcome("memusage_exceeded") if x == "999/1/4" else None
+        manager.is_finished = lambda jobkey: Outcome("memusage_exceeded") if jobkey == "999/1/4" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 5)
@@ -321,7 +321,7 @@ class CrawlManagerTest(TestCase):
         )
 
         # eighth loop: retried job finished. Exit.
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/1/5" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/1/5" else None
         result = next(manager._run_loops())
         self.assertFalse(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 5)
@@ -449,7 +449,7 @@ class CrawlManagerTest(TestCase):
         self.assertEqual(len(manager._running_job_keys), 0)
 
         # first loop: only second task will be scheduled. First one already completed before resuming.
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 1)
@@ -458,7 +458,7 @@ class CrawlManagerTest(TestCase):
         )
 
         # second loop: finished second spider. Finish execution
-        manager.is_finished = lambda x: Outcome("finished") if x == "999/2/1" else None
+        manager.is_finished = lambda jobkey: Outcome("finished") if jobkey == "999/2/1" else None
         result = next(manager._run_loops())
         self.assertEqual(mocked_super_schedule_spider.call_count, 1)
         self.assertFalse(result)
@@ -507,14 +507,14 @@ class CrawlManagerTest(TestCase):
             self.assertEqual(set(v[1].keys()), {"spider_args", "tags"})
 
         # first loop: acquire running job.
-        manager.is_finished = lambda x: None
+        manager.is_finished = lambda jobkey: None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 0)
 
         # second loop: second job finished with failed outcome. Retry according
         # to bad outcome hook
-        manager.is_finished = lambda x: Outcome("cancelled (stalled)")
+        manager.is_finished = lambda jobkey: Outcome("cancelled (stalled)")
         mocked_super_schedule_spider.side_effect = ["999/2/2"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -559,7 +559,7 @@ class CrawlManagerTest(TestCase):
         )
 
         # second loop: finish job with bad outcome, but there is no retry. Stop.
-        manager.is_finished = lambda x: Outcome("cancelled (stalled)") if x == "999/1/1" else None
+        manager.is_finished = lambda jobkey: Outcome("cancelled (stalled)") if jobkey == "999/1/1" else None
         result = next(manager._run_loops())
         self.assertFalse(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 1)
@@ -602,7 +602,7 @@ class CrawlManagerTest(TestCase):
         )
 
         # second loop: finish first job with bad outcome, retry 1.
-        manager.is_finished = lambda x: Outcome("cancelled (stalled)") if x == "999/1/1" else None
+        manager.is_finished = lambda jobkey: Outcome("cancelled (stalled)") if jobkey == "999/1/1" else None
         mocked_super_schedule_spider.side_effect = ["999/1/2"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -612,13 +612,13 @@ class CrawlManagerTest(TestCase):
         )
 
         # second loop: second job finishes with "cancelled", don't retry it.
-        manager.is_finished = lambda x: Outcome("cancelled") if x == "999/2/1" else None
+        manager.is_finished = lambda jobkey: Outcome("cancelled") if jobkey == "999/2/1" else None
         result = next(manager._run_loops())
         self.assertTrue(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 3)
 
         # third loop: first job finishes again with abnormal reason, retry it.
-        manager.is_finished = lambda x: Outcome("cancelled (stalled)") if x == "999/1/2" else None
+        manager.is_finished = lambda jobkey: Outcome("cancelled (stalled)") if jobkey == "999/1/2" else None
         mocked_super_schedule_spider.side_effect = ["999/1/3"]
         result = next(manager._run_loops())
         self.assertTrue(result)
@@ -628,7 +628,7 @@ class CrawlManagerTest(TestCase):
         )
 
         # fourth loop: first job finishes again with abnormal reason, but max retries reached. Stop.
-        manager.is_finished = lambda x: Outcome("cancelled (stalled)") if x == "999/1/3" else None
+        manager.is_finished = lambda jobkey: Outcome("cancelled (stalled)") if jobkey == "999/1/3" else None
         result = next(manager._run_loops())
         self.assertFalse(result)
         self.assertEqual(mocked_super_schedule_spider.call_count, 4)
