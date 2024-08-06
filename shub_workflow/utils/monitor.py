@@ -216,9 +216,13 @@ that can be recognized by dateparser.""",
                         for regex, stat in regexes:
                             if (m := re.search(regex, logline["message"])) is not None:
                                 if gr := m.groups():
-                                    val = int(gr[0])
+                                    try:
+                                        val = int(gr[0])
+                                        stat_suffix = gr[1] if len(gr) > 0 else ""
+                                    except ValueError:
+                                        val = int(gr[1])
+                                        stat_suffix = gr[0]
                                     self.stats.inc_value(stat, val)
-                                    stat_suffix = gr[1] if len(gr) > 0 else ""
                                     if stat_suffix:
                                         self.stats.inc_value(stat + f"/{stat_suffix}", val)
                                 else:
