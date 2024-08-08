@@ -120,6 +120,7 @@ that can be recognized by dateparser.""",
             self.get_jobs(
                 state=["finished"],
                 meta=["spider", "finished_time", "scrapystats", "spider_args"],
+                has_tag=[f"FLOW_ID={self.flow_id}"] if self.flow_id is not None else None,
                 endts=int(end_limit * 1000),
             ),
             start=1,
@@ -186,7 +187,10 @@ that can be recognized by dateparser.""",
             plural = script.replace("py:", "").replace(".py", "") + "s"
             LOG.info(f"Checking {plural} stats ...")
             for jobdict in self.get_jobs(
-                spider=script, meta=["finished_time", "scrapystats"], endts=int(end_limit * 1000)
+                spider=script,
+                meta=["finished_time", "scrapystats"],
+                endts=int(end_limit * 1000),
+                has_tag=[f"FLOW_ID={self.flow_id}"] if self.flow_id is not None else None,
             ):
                 if jobdict["finished_time"] / 1000 < start_limit:
                     break
@@ -205,7 +209,12 @@ that can be recognized by dateparser.""",
         for script, regexes in self.target_script_logs.items():
             plural = script.replace("py:", "").replace(".py", "") + "s"
             LOG.info(f"Checking {plural} logs ...")
-            for jobdict in self.get_jobs(spider=script, state=["running", "finished"], meta=["state", "finished_time"]):
+            for jobdict in self.get_jobs(
+                spider=script,
+                state=["running", "finished"],
+                meta=["state", "finished_time"],
+                has_tag=[f"FLOW_ID={self.flow_id}"] if self.flow_id is not None else None,
+            ):
                 if jobdict["state"] == "running" or jobdict["finished_time"] / 1000 > start_limit:
                     job = self.get_job(jobdict["key"])
                     for logline in job.logs.iter():
