@@ -161,7 +161,7 @@ that can be recognized by dateparser.""",
         for spidername, itemcount in items.items():
             stats_added_prefix = self._get_stats_prefix_from_spider_class(spiders[spidername])
             total_crawled[stats_added_prefix] += itemcount
-            self.stats.inc_value(f"{stats_added_prefix}/scraped_items/total", itemcount)
+            self.stats.inc_value(f"{stats_added_prefix}/scraped_items/total".strip("/"), itemcount)
 
         for spidername, itemcount in items.items():
             canonical = self.get_canonical_spidername(spidername)
