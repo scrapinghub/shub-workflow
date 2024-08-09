@@ -41,13 +41,13 @@ class BaseMonitor(BaseScript):
     def add_argparser_options(self):
         super().add_argparser_options()
         self.argparser.add_argument(
-            "--period", "-p", type=int, default=86400, help="Target period in seconds. Default: %(default)s"
+            "--period", "-p", type=int, default=86400, help="Time window period in seconds. Default: %(default)s"
         )
         self.argparser.add_argument(
             "--end-time",
             "-e",
             type=str,
-            help="""End side of the target period. By default it is just now. Format: any string
+            help="""End side of the time window. By default it is just now. Format: any string
 that can be recognized by dateparser.""",
         )
         self.argparser.add_argument(
@@ -55,7 +55,7 @@ that can be recognized by dateparser.""",
             "-s",
             type=str,
             help="""
-            Starting side of the target period. By default it is the end side minus the period. Format:
+            Starting side of the time window. By default it is the end side minus the period. Format:
             any string that can be recognized by dateparser.
         """,
         )
