@@ -18,7 +18,7 @@ class BaseMonitor(BaseScript):
 
     # a map from spiders classes to check, to a stats prefix to identify the aggregated stats.
     target_spider_classes: Dict[Type[Spider], str] = {Spider: ""}
-    # stats aggregated from spiders
+    # stats aggregated from spiders. A tuple of stats prefixes.
     target_spider_stats: Tuple[str, ...] = ()
 
     # - a map from script name into a tuple of 2-elem tuples (aggregating stat regex, aggregated stat prefix)
