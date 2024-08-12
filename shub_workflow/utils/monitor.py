@@ -34,6 +34,12 @@ class BaseMonitor(BaseScript):
     #   from it. If not a group number is extracted, the match alone aggregates 1.
     # - the aggregated stat name is the name where to aggregate the number extracted by the regex, plus a second group,
     #   if exists.
+
+    # - a map from script name into a tuple of 2-elem tuples (aggregating log regex, aggregated stat name)
+    # - the aggregating log regex must match log lines in the target script job, with a group to extract a number
+    #   from it. If not a group number is extracted, the match alone aggregates 1.
+    # - the final aggregated stat name is the specified aggregated stat name, plus a second non numeric group in the
+    #   match, if exists.
     target_script_logs: Dict[str, Tuple[Tuple[str, str], ...]] = {}
 
     # A dict from a stat name to a callable that receives only the value of that stat.
