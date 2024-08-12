@@ -25,7 +25,8 @@ class BaseMonitor(BaseScript):
     # - the aggregating stat regex is used to match stat on target script
     # - the aggregated stat prefix is used to generate the monitor stat. The original stat name is appended to
     #   the prefix.
-    # - if a group is present in the regex, its value is used as suffix of the generate stat.
+    # - if a group is present in the regex, its value is used as suffix of the generate stat, instead of
+    #   the complete original stat name.
     target_script_stats: Dict[str, Tuple[Tuple[str, str], ...]] = {}
 
     # - a map from script name into a tuple of 2-elem tuples (aggregating log regex, aggregated stat name)
