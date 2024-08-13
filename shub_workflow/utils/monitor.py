@@ -14,6 +14,13 @@ from shub_workflow.script import BaseScript, SpiderName, JobDict
 LOG = logging.getLogger(__name__)
 
 
+def _get_number(txt: str) -> int | None:
+    try:
+        return int(txt)
+    except ValueError:
+        return None
+
+
 class BaseMonitor(BaseScript):
 
     # a map from spiders classes to check, to a stats prefix to identify the aggregated stats.
@@ -232,15 +239,19 @@ that can be recognized by dateparser.""",
                             break
                         for regex, stat in regexes:
                             if (m := re.search(regex, logline["message"])) is not None:
+                                stat_suffix = ""
                                 if gr := m.groups():
-                                    try:
-                                        val = int(gr[0])
+                                    val = _get_number(gr[0])
+                                    if val is None:
+                                        if len(gr) > 1:
+                                            val = _get_number(gr[1])
+                                            stat_suffix = gr[0]
+                                        if val is None:
+                                            val = 1
+                                    else:
                                         stat_suffix = gr[1] if len(gr) > 0 else ""
-                                    except ValueError:
-                                        val = int(gr[1])
-                                        stat_suffix = gr[0]
-                                    self.stats.inc_value(stat, val)
-                                    if stat_suffix:
-                                        self.stats.inc_value(stat + f"/{stat_suffix}", val)
                                 else:
-                                    self.stats.inc_value(stat)
+                                    val = 1
+                                self.stats.inc_value(stat, val)
+                                if stat_suffix:
+                                    self.stats.inc_value(stat + f"/{stat_suffix}", val)
