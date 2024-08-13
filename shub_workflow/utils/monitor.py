@@ -2,7 +2,7 @@ import re
 import time
 import logging
 import inspect
-from typing import Dict, Type, Tuple, Any, Callable
+from typing import Dict, Type, Tuple, Any, Callable, Optional
 from datetime import timedelta, datetime
 from collections import defaultdict
 
@@ -14,7 +14,7 @@ from shub_workflow.script import BaseScript, SpiderName, JobDict
 LOG = logging.getLogger(__name__)
 
 
-def _get_number(txt: str) -> int | None:
+def _get_number(txt: str) -> Optional[int]:
     try:
         return int(txt)
     except ValueError:
