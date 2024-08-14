@@ -203,7 +203,7 @@ that can be recognized by dateparser.""",
             LOG.info(f"Checking {plural} stats ...")
             for jobdict in self.get_jobs(
                 spider=script,
-                meta=["finished_time", "scrapystats"],
+                meta=["finished_time", "scrapystats", "close_reason", "job_cmd", "tags"],
                 endts=int(end_limit * 1000),
                 has_tag=[f"FLOW_ID={self.flow_id}"] if self.flow_id is not None else None,
             ):
