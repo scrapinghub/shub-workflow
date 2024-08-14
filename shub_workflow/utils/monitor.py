@@ -118,7 +118,7 @@ that can be recognized by dateparser.""",
 
     def spider_job_hook(self, jobdict: JobDict):
         """
-        This is called for every spider job retrieved, from the spiders declared on target_spider_stats,
+        This is called for every spider job retrieved, from the spiders declared on target_spider_classes,
         so additional per job customization can be added.
         """
 
@@ -134,7 +134,7 @@ that can be recognized by dateparser.""",
         for jobcount, jobdict in enumerate(
             self.get_jobs(
                 state=["finished"],
-                meta=["spider", "finished_time", "scrapystats", "spider_args"],
+                meta=["spider", "finished_time", "scrapystats", "spider_args", "close_reason", "tags"],
                 has_tag=[f"FLOW_ID={self.flow_id}"] if self.flow_id is not None else None,
                 endts=int(end_limit * 1000),
             ),
@@ -144,8 +144,8 @@ that can be recognized by dateparser.""",
                 break
             if jobdict["finished_time"] / 1000 > end_limit:
                 continue
-            self.spider_job_hook(jobdict)
             if jobdict["spider"] in spiders:
+                self.spider_job_hook(jobdict)
                 canonical = self.get_canonical_spidername(jobdict["spider"])
                 stats_added_prefix = self._get_stats_prefix_from_spider_class(spiders[jobdict["spider"]])
                 if "scrapystats" in jobdict:
