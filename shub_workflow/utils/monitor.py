@@ -75,7 +75,7 @@ that can be recognized by dateparser.""",
         """,
         )
 
-    def stats_postprocessing(self):
+    def stats_postprocessing(self, start_limit, end_limit):
         """
         Apply here any additional code for post processing stats, generate derivated stats, etc.
         """
@@ -100,7 +100,7 @@ that can be recognized by dateparser.""",
                     LOG.info(f"Checking {check_name}...")
                     method(start_limit, end_limit)
 
-        self.stats_postprocessing()
+        self.stats_postprocessing(start_limit, end_limit)
 
         self.run_stats_hooks()
         self.upload_stats()
