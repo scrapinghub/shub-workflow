@@ -2,7 +2,7 @@ import re
 import time
 import logging
 import inspect
-from typing import Dict, Type, Tuple, Any, Callable, Optional
+from typing import Dict, Type, Tuple, Optional
 from datetime import timedelta, datetime
 from collections import defaultdict
 
@@ -49,9 +49,12 @@ class BaseMonitor(BaseScript):
     #   match, if exists.
     target_script_logs: Dict[str, Tuple[Tuple[str, str], ...]] = {}
 
-    # A dict from a stat name to a callable that receives only the value of that stat.
+    # A tuple of 2-elem tuples each one with a stat regex and the name of the monitor instance method that will receive:
+    # - start and end limit of the window (epoch seconds)
+    # - the value of the stat
+    # - one extra argument per regex group, if any.
     # Useful for adding monitor alerts or any kind of reaction according to stat value.
-    stats_hooks: Dict[str, Callable[[Any], None]] = {}
+    stats_hooks: Tuple[Tuple[str, str], ...] = ()
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -102,13 +105,16 @@ that can be recognized by dateparser.""",
 
         self.stats_postprocessing(start_limit, end_limit)
 
-        self.run_stats_hooks()
+        self.run_stats_hooks(start_limit, end_limit)
         self.upload_stats()
         self.print_stats()
 
-    def run_stats_hooks(self):
-        for stat, hook in self.stats_hooks.items():
-            hook(self.stats.get_value(stat))
+    def run_stats_hooks(self, start_limit, end_limit):
+        for stat, val in self.stats.get_stats().items():
+            for stat_re, hook_name in self.stats_hooks:
+                if (m := re.search(stat_re, stat)) is not None:
+                    hook = getattr(self, hook_name)
+                    hook(start_limit, end_limit, self.stats.get_value(stat), *m.groups())
 
     def _get_stats_prefix_from_spider_class(self, spiderclass: Type[Spider]) -> str:
         for cls, prefix in self.target_spider_classes.items():
