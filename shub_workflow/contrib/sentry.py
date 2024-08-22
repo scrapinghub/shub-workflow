@@ -18,6 +18,7 @@ class SentryMixin(BaseScriptProtocol):
     """
 
     def __init__(self):
+        super().__init__()
         self.sentry_handler = SendSentryMessage(
             fake=self.project_settings.get("SPIDERMON_SENTRY_FAKE"),
             sentry_dsn=self.project_settings.get("SPIDERMON_SENTRY_DSN"),
