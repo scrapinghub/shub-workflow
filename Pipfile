@@ -19,6 +19,7 @@ scrapy = "*"
 boto3 = ">=1.9.92"
 requests = "<=2.32.2"
 spidermon = "*"
+sentry-sdk = "*"
 
 [dev-packages]
 flake8 = "*"
