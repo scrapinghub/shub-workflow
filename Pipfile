@@ -18,6 +18,7 @@ collection-scanner = "*"
 scrapy = "*"
 boto3 = ">=1.9.92"
 requests = "<=2.32.2"
+spidermon = "*"
 
 [dev-packages]
 flake8 = "*"
