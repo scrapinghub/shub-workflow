@@ -19,6 +19,10 @@ def hashstr(text: str) -> str:
     return u.hexdigest()
 
 
+def resolve_shub_jobkey() -> Optional[str]:
+    return os.environ.get("SHUB_JOBKEY")
+
+
 def resolve_project_id(project_id=None) -> Optional[int]:
     """
     Gets project id from following sources in following order of precedence:
@@ -37,8 +41,9 @@ def resolve_project_id(project_id=None) -> Optional[int]:
         return int(os.environ["PROJECT_ID"])
 
     # for ScrapyCloud jobs:
-    if os.environ.get("SHUB_JOBKEY"):
-        return int(os.environ["SHUB_JOBKEY"].split("/")[0])
+    jobkey = resolve_shub_jobkey()
+    if jobkey:
+        return int(jobkey.split("/")[0])
 
     # read from scrapinghub.yml
     try:

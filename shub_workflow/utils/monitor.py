@@ -1,15 +1,16 @@
 import re
+import abc
 import time
 import logging
 import inspect
-from typing import Dict, Type, Tuple, Optional
+from typing import Dict, Type, Tuple, Optional, Protocol
 from datetime import timedelta, datetime
 from collections import defaultdict
 
 import dateparser
 from scrapy import Spider
 
-from shub_workflow.script import BaseScript, SpiderName, JobDict
+from shub_workflow.script import BaseScript, BaseScriptProtocol, SpiderName, JobDict
 
 LOG = logging.getLogger(__name__)
 
@@ -21,7 +22,14 @@ def _get_number(txt: str) -> Optional[int]:
         return None
 
 
-class BaseMonitor(BaseScript):
+class BaseMonitorProtocol(BaseScriptProtocol, Protocol):
+
+    @abc.abstractmethod
+    def close(self):
+        ...
+
+
+class BaseMonitor(BaseScript, BaseMonitorProtocol):
 
     # a map from spiders classes to check, to a stats prefix to identify the aggregated stats.
     target_spider_classes: Dict[Type[Spider], str] = {Spider: ""}
@@ -108,6 +116,7 @@ that can be recognized by dateparser.""",
         self.run_stats_hooks(start_limit, end_limit)
         self.upload_stats()
         self.print_stats()
+        self.close()
 
     def run_stats_hooks(self, start_limit, end_limit):
         for stat, val in self.stats.get_stats().items():
@@ -261,3 +270,6 @@ that can be recognized by dateparser.""",
                                 self.stats.inc_value(stat, val)
                                 if stat_suffix:
                                     self.stats.inc_value(stat + f"/{stat_suffix}", val)
+
+    def close(self):
+        pass
