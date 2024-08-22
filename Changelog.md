@@ -132,3 +132,4 @@ Minor version changes:
   Added fshelper base script attribute for readily access to this helper tool
 - 1.14.1 Added method for getting alive real time settings from ScrapyCloud
 - 1.14.2 Added BaseMonitor class that is able to monitor aggregated stats on entire workflow jobs.
+- 1.14.3 Mixin for provision of Sentry alert capabilities in monitor.
