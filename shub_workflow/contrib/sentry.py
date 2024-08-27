@@ -1,6 +1,6 @@
 import logging
-
-from typing import List
+from pprint import pformat
+from typing import List, Dict, Any
 
 from spidermon.contrib.actions.sentry import SendSentryMessage
 
@@ -30,7 +30,7 @@ class SentryMixin(BaseScriptProtocol):
 
     def send_sentry_message(self):
         if self.messages:
-            message = dict()
+            message: Dict[str, Any] = dict()
             title = f"{self.sentry_handler.project_name} | {self.sentry_handler.environment} | Monitor notification"
             message["title"] = title
             message["failure_reasons"] = "/n".join(self.messages)
@@ -38,7 +38,8 @@ class SentryMixin(BaseScriptProtocol):
             if job_key:
                 message["job_link"] = f"https://app.zyte.com/p/{job_key}"
             if self.sentry_handler.fake:
-                LOG.info(message)
+                message["failure_reasons"] = self.messages
+                LOG.info(pformat(message))
             else:
                 self.sentry_handler.send_message(message)
 
