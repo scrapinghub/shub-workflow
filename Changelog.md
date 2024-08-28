@@ -133,3 +133,4 @@ Minor version changes:
 - 1.14.1 Added method for getting alive real time settings from ScrapyCloud
 - 1.14.2 Added BaseMonitor class that is able to monitor aggregated stats on entire workflow jobs.
 - 1.14.3 Mixin for provision of Sentry alert capabilities in monitor.
+- 1.14.4 Monitor ratios
