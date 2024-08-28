@@ -5,7 +5,7 @@ import logging
 import inspect
 from typing import Dict, Type, Tuple, Optional, Protocol
 from datetime import timedelta, datetime
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 import dateparser
 from scrapy import Spider
@@ -56,6 +56,16 @@ class BaseMonitor(BaseScript, BaseMonitorProtocol):
     # - the final aggregated stat name is the specified aggregated stat name, plus a second non numeric group in the
     #   match, if exists.
     target_script_logs: Dict[str, Tuple[Tuple[str, str], ...]] = {}
+
+    # Define here ratios computations. Each 3-tuple contains:
+    # - a string or regex that matches the numerator stat. You can use a regex group here for computing multiple ratios
+    # - a string or regex that matches the denominator stat. You can use a regex group for matching numerator group and
+    #   have a different denominator for each one. If no regex group in denominator, there will be a single
+    #   denominator.
+    # - the target stat. If there are numerator groups, this will be the target stat prefix.
+    # Ratios computing are performed after the stats_postprocessing() method is called. It is a stat postprocessing
+    #   itself.
+    stats_ratios: Tuple[Tuple[str, str, str], ...] = ()
 
     # A tuple of 2-elem tuples each one with a stat regex and the name of the monitor instance method that will receive:
     # - start and end limit of the window (epoch seconds)
@@ -112,11 +122,44 @@ that can be recognized by dateparser.""",
                     method(start_limit, end_limit)
 
         self.stats_postprocessing(start_limit, end_limit)
-
+        self.run_stats_ratios()
         self.run_stats_hooks(start_limit, end_limit)
         self.upload_stats()
         self.print_stats()
         self.close()
+
+    def run_stats_ratios(self):
+        for num_regex, den_regex, target_prefix in self.stats_ratios:
+            numerators: Dict[str, int] = Counter()
+            denominators: Dict[str, int] = Counter()
+            numerator_has_groups = False
+            denominator_has_groups = False
+            for stat, value in list(self.stats.get_stats().items()):
+                if m := re.search(num_regex, stat):
+                    if m.groups():
+                        source = m.groups()[0]
+                        numerators[source] += value
+                        numerator_has_groups = True
+                    else:
+                        numerators[stat] += value
+                if m := re.search(den_regex, stat):
+                    if m.groups():
+                        source = m.groups()[0]
+                        denominators[source] += value
+                        denominator_has_groups = True
+                    else:
+                        denominators[stat] += value
+            for source, verrors in numerators.items():
+                denominator = 0
+                if denominator_has_groups:
+                    denominator = denominators.get(source, 0)
+                elif denominators:
+                    denominator = list(denominators.values())[0]
+                if denominator > 0:
+                    target_stat = target_prefix
+                    if numerator_has_groups:
+                        target_stat += "/" + source
+                    self.stats.set_value(target_stat, round(verrors / denominator, 4))
 
     def run_stats_hooks(self, start_limit, end_limit):
         for stat, val in self.stats.get_stats().items():
