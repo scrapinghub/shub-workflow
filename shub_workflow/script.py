@@ -507,7 +507,10 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         return None
 
     def finished_metadata_hook(self, jobkey: JobKey, metadata: JobMeta):
-        ...
+        """
+        allow to add some reaction on each finished job, based solely on its metadata.
+        Use self.get_metadata_key(metadata, <key>) in order to get metadata with handled retries.
+        """
 
     @dash_retry_decorator
     def finish(self, jobkey: Optional[JobKey] = None, close_reason: Optional[str] = None):
