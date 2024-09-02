@@ -26,7 +26,7 @@ class BaseMonitorProtocol(BaseScriptProtocol, Protocol):
 
     @abc.abstractmethod
     def close(self):
-        ...
+        pass
 
 
 class BaseMonitor(BaseScript, BaseMonitorProtocol):
@@ -210,7 +210,9 @@ that can be recognized by dateparser.""",
                     items[jobdict["spider"]] += jobdict["scrapystats"].get("item_scraped_count", 0)
                     self.stats.inc_value(f"{stats_added_prefix}/jobs/{canonical}".strip("/"))
                     for statkey in jobdict["scrapystats"]:
-                        if statkey.startswith("downloader/response_count"):
+                        if statkey.startswith("downloader/response_count") or statkey.startswith(
+                            "downloader/response_status_count/"
+                        ):
                             self.stats.inc_value(
                                 f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"),
                                 jobdict["scrapystats"][statkey],
