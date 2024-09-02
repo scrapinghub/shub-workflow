@@ -53,7 +53,7 @@ class BaseClonner(BaseScript):
         extra_tags = extra_tags or []
         job = self.get_job(job_key)
 
-        spider = self._get_metadata_key(job.metadata, "spider")
+        spider = self.get_metadata_key(job.metadata, "spider")
 
         job_params = dict()
         for key, (target_key, _) in _COPIED_FROM_META.items():
@@ -61,7 +61,7 @@ class BaseClonner(BaseScript):
             if target_key is None:
                 target_key = key
 
-            job_params[target_key] = self._get_metadata_key(job.metadata, key)
+            job_params[target_key] = self.get_metadata_key(job.metadata, key)
 
         clone_number = 0
         add_tag = job_params.setdefault("add_tag", [])
@@ -106,7 +106,7 @@ class BaseClonner(BaseScript):
         new_job = self.schedule_generic(project, spider, **job_params)
         if new_job is not None:
             _LOG.info("Cloned %s to %s", job_key, new_job.key)
-            jobtags = self._get_metadata_key(job.metadata, "tags")
+            jobtags = self.get_metadata_key(job.metadata, "tags")
             jobtags.append(f"ClonedTo={new_job.key}")
             self._update_metadata(job.metadata, {"tags": jobtags})
 

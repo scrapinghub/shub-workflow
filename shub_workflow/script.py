@@ -338,7 +338,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
 
     @staticmethod
     @dash_retry_decorator
-    def _get_metadata_key(metadata: JobMeta, key: str) -> Any:
+    def get_metadata_key(metadata: JobMeta, key: str) -> Any:
         return metadata.get(key)
 
     def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
@@ -492,7 +492,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         project_id = jobkey.split("/", 1)[0]
         project = self.get_project(project_id)
         job = project.jobs.get(jobkey)
-        if self._get_metadata_key(job.metadata, "state") in ("running", "pending"):
+        if self.get_metadata_key(job.metadata, "state") in ("running", "pending"):
             return True
         return False
 
@@ -501,9 +501,13 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         Checks whether a job is finished. if so, return close_reason. Otherwise return None.
         """
         metadata = self.get_job_metadata(jobkey)
-        if self._get_metadata_key(metadata, "state") == "finished":
-            return self._get_metadata_key(metadata, "close_reason")
+        if self.get_metadata_key(metadata, "state") == "finished":
+            self.finished_metadata_hook(jobkey, metadata)
+            return self.get_metadata_key(metadata, "close_reason")
         return None
+
+    def finished_metadata_hook(self, jobkey: JobKey, metadata: JobMeta):
+        ...
 
     @dash_retry_decorator
     def finish(self, jobkey: Optional[JobKey] = None, close_reason: Optional[str] = None):
