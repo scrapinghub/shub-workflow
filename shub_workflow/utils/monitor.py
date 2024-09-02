@@ -29,6 +29,13 @@ class BaseMonitorProtocol(BaseScriptProtocol, Protocol):
         pass
 
 
+BASE_TARGET_SPIDER_STATS = (
+    "downloader/response_status_count/",
+    "downloader/response_count",
+    "spider_exceptions/",
+)
+
+
 class BaseMonitor(BaseScript, BaseMonitorProtocol):
 
     # a map from spiders classes to check, to a stats prefix to identify the aggregated stats.
@@ -210,24 +217,16 @@ that can be recognized by dateparser.""",
                     items[jobdict["spider"]] += jobdict["scrapystats"].get("item_scraped_count", 0)
                     self.stats.inc_value(f"{stats_added_prefix}/jobs/{canonical}".strip("/"))
                     for statkey in jobdict["scrapystats"]:
-                        if statkey.startswith("downloader/response_count") or statkey.startswith(
-                            "downloader/response_status_count/"
-                        ):
-                            self.stats.inc_value(
-                                f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"),
-                                jobdict["scrapystats"][statkey],
-                            )
-                        else:
-                            for statnameprefix in self.target_spider_stats:
-                                if statkey.startswith(statnameprefix):
-                                    value = jobdict["scrapystats"][statkey]
-                                    if stats_added_prefix != canonical:
-                                        self.stats.inc_value(
-                                            f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"), value
-                                        )
-                                        self.stats.inc_value(f"{stats_added_prefix}/{statkey}/total".strip("/"), value)
-                                    else:
-                                        self.stats.inc_value(f"{stats_added_prefix}/{statkey}".strip("/"), value)
+                        for statnameprefix in self.target_spider_stats + BASE_TARGET_SPIDER_STATS:
+                            if statkey.startswith(statnameprefix):
+                                value = jobdict["scrapystats"][statkey]
+                                if stats_added_prefix != canonical:
+                                    self.stats.inc_value(
+                                        f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"), value
+                                    )
+                                    self.stats.inc_value(f"{stats_added_prefix}/{statkey}/total".strip("/"), value)
+                                else:
+                                    self.stats.inc_value(f"{stats_added_prefix}/{statkey}".strip("/"), value)
                 else:
                     LOG.error(f"Job {jobdict['key']} does not have scrapystats.")
             if jobcount % 1000 == 0:
