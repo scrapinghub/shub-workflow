@@ -40,7 +40,7 @@ from scrapinghub import ScrapinghubClient, DuplicateJobError
 from scrapinghub.client.jobs import Job, JobMeta
 from scrapinghub.client.projects import Project
 
-from shub_workflow.utils import get_project_settings
+from shub_workflow.utils import get_project_settings, resolve_shub_jobkey
 from shub_workflow.utils import (
     resolve_project_id,
     dash_retry_decorator,
@@ -224,6 +224,8 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         self.project_settings = get_project_settings()
         self.spider_loader = SpiderLoader(self.project_settings)
         super().__init__()
+        if resolve_shub_jobkey() is None:
+            self.project_settings.setdict(self.get_sc_project_settings(), priority="project")
         self.set_flow_id_name(self.args)
 
         class PseudoCrawler:
@@ -584,10 +586,12 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         """
         Reads real time settings from SC
         """
-        shkey = self.project_settings["SH_APIKEY"]
-        return requests.get(
-            f"https://app.zyte.com/api/settings/get.json?project={self.project_id}", auth=HTTPBasicAuth(shkey, "")
-        ).json()["project_settings"]
+        shkey = self.project_settings["SH_APIKEY"] or os.environ.get("SH_APIKEY")
+        if shkey is not None:
+            return requests.get(
+                f"https://app.zyte.com/api/settings/get.json?project={self.project_id}", auth=HTTPBasicAuth(shkey, "")
+            ).json()["project_settings"]
+        return {}
 
 
 class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
