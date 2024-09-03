@@ -49,6 +49,7 @@ class TestManagerWithSpider(CrawlManager):
 
 @patch("shub_workflow.script.BaseScript.get_jobs")
 @patch("shub_workflow.script.BaseScript.add_job_tags")
+@patch("shub_workflow.script.BaseScript.get_sc_project_settings", new=lambda _: {})
 class CrawlManagerTest(TestCase):
     def setUp(self):
         os.environ["SH_APIKEY"] = "ffff"

@@ -118,6 +118,7 @@ class BaseTestCase(TestCase):
 
 
 @patch("shub_workflow.script.BaseScript.get_jobs")
+@patch("shub_workflow.script.BaseScript.get_sc_project_settings", new=lambda _: {})
 class ManagerTest(BaseTestCase):
     def test_full_specs(self, mocked_get_jobs):
 

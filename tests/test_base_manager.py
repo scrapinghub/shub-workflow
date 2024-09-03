@@ -9,6 +9,7 @@ from shub_workflow.utils.contexts import script_args
 
 @patch("shub_workflow.base.WorkFlowManager.get_job_tags")
 @patch("shub_workflow.base.WorkFlowManager._update_metadata")
+@patch("shub_workflow.script.BaseScript.get_sc_project_settings", new=lambda _: {})
 class WorkFlowManagerTest(TestCase):
     def setUp(self):
         os.environ["SH_APIKEY"] = "ffff"

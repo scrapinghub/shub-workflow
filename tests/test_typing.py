@@ -66,6 +66,7 @@ class MyAsyncCrawlManager(AsyncSchedulerCrawlManagerMixin, GeneratorCrawlManager
         yield from ()
 
 
+@patch("shub_workflow.script.BaseScript.get_sc_project_settings", new=lambda _: {})
 class TypingTest(TestCase):
     def setUp(self):
         os.environ["SH_APIKEY"] = "ffff"
