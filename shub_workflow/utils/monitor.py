@@ -156,17 +156,23 @@ that can be recognized by dateparser.""",
                         denominator_has_groups = True
                     else:
                         denominators[stat] += value
-            for source, verrors in numerators.items():
+            for source, numer in numerators.items():
                 denominator = 0
                 if denominator_has_groups:
-                    denominator = denominators.get(source, 0)
+                    denominator = denominators.pop(source, 0)
                 elif denominators:
                     denominator = list(denominators.values())[0]
+                    denominators = {}
                 if denominator > 0:
                     target_stat = target_prefix
                     if numerator_has_groups:
                         target_stat += "/" + source
-                    self.stats.set_value(target_stat, round(verrors / denominator, 4))
+                    self.stats.set_value(target_stat, round(numer / denominator, 4))
+            for source, denom in denominators.items():
+                target_stat = target_prefix
+                if numerator_has_groups:
+                    target_stat += "/" + source
+                self.stats.set_value(target_stat, round(0, 4))
 
     def run_stats_hooks(self, start_limit, end_limit):
         for stat, val in self.stats.get_stats().items():
