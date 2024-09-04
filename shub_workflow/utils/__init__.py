@@ -23,7 +23,7 @@ def resolve_shub_jobkey() -> Optional[str]:
     return os.environ.get("SHUB_JOBKEY")
 
 
-def resolve_project_id(project_id=None) -> Optional[int]:
+def resolve_project_id(project_id=None) -> int:
     """
     Gets project id from following sources in following order of precedence:
     - default parameter values
@@ -34,32 +34,37 @@ def resolve_project_id(project_id=None) -> Optional[int]:
     either locally or from scrapinghub, correctly configured
     """
     if project_id:
-        return int(project_id)
+        try:
+            return int(project_id)
+        except ValueError:
+            pass
+    else:
+        # read from environment only if not explicitly provided
+        if os.environ.get("PROJECT_ID") is not None:
+            return int(os.environ["PROJECT_ID"])
 
-    # read from environment
-    if os.environ.get("PROJECT_ID") is not None:
-        return int(os.environ["PROJECT_ID"])
-
-    # for ScrapyCloud jobs:
-    jobkey = resolve_shub_jobkey()
-    if jobkey:
-        return int(jobkey.split("/")[0])
+        # for ScrapyCloud jobs:
+        jobkey = resolve_shub_jobkey()
+        if jobkey:
+            return int(jobkey.split("/")[0])
 
     # read from scrapinghub.yml
     try:
-        from shub.config import load_shub_config  # pylint: disable=import-error
+        from shub.config import load_shub_config
 
         cfg = load_shub_config()
-        project_id = cfg.get_project_id("default")
-        if project_id:
-            return int(project_id)
+        try:
+            project_id = project_id or "default"
+            return int(cfg.get_project_id(project_id))
+        except Exception:
+            logger.error(f"Project entry '{project_id}' not found in scrapinghub.yml.")
     except ImportError:
-        logger.warning("Install shub package if want to access scrapinghub.yml")
+        logger.error("Install shub package if want to access scrapinghub.yml")
 
-    if not project_id:
-        logger.warning("Project id not found. Use either PROJECT_ID env. variable or scrapinghub.yml default target.")
-
-    return None
+    raise ValueError(
+        "No default project id found. Use either PROJECT_ID env. variable or set 'default' entry in scrapinghub.yml, "
+        "or use --project-id with a project numeric id or an existing entry in scrapinghub.yml."
+    )
 
 
 MINS_IN_A_DAY = 24 * 60

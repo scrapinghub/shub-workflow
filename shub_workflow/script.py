@@ -106,12 +106,11 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
 
 class SCProjectClassProtocol(Protocol):
 
-    project_id: Optional[int]
+    project_id: int
 
 
 class SCProjectClass(SCProjectClassProtocol):
     def __init__(self):
-        self.project_id = resolve_project_id()
         self.client = ScrapinghubClient(max_retries=100)
         super().__init__()
 
@@ -263,8 +262,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
     def add_argparser_options(self):
         self.argparser.add_argument(
             "--project-id",
-            help="Overrides target project id.",
-            type=int,
+            help="Either numeric id, or entry keyword in scrapinghub.yml. Overrides target project id.",
             default=self.default_project_id,
         )
         self.argparser.add_argument("--flow-id", help="If given, use the given flow id.")
@@ -285,6 +283,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         self.project_id = resolve_project_id(self.parse_project_id(args))
         if not self.project_id:
             self.argparser.error("Project id not provided.")
+        logger.info(f"Running on project {self.project_id}")
 
         return args
 
