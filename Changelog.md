@@ -135,3 +135,4 @@ Minor version changes:
 - 1.14.3 Mixin for provision of Sentry alert capabilities in monitor.
 - 1.14.4 Monitor ratios
 - 1.14.5 Finished job metadata hook
+- 1.14.6 Allow to use project entry keyword in scrapinghub.yml as alternative to project numeric id, when passing command line --project-id option.
