@@ -46,7 +46,7 @@ for installing the environment, and:
 for initiating it.
 
 There is a script, lint.sh, that you can run everytime you need from the repo root folder, but it is also executed each time you do `git commit` (provided
-you installed the pre-commit hook during the installation step described above).
+you installed the pre-commit hook during the installation step described above). It checks code pep8 and typing integrity, via flake8 and mypy.
 
 ```
 > ./lint.sh
