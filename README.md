@@ -26,3 +26,28 @@ Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for docu
 
 The requirements for this library are defined in setup.py as usual. The Pipfile files in the repository don't define dependencies. It is only used
 for setting up a development environment for shub-workflow library development and testing.
+
+
+# For developers
+
+For installing a development environment for shub-workflow, the package comes with Pipfile and Pipfile.lock files. So, clone or fork the repository and do:
+
+```
+> pipenv install --dev
+> cp pre-commit .git/hooks/
+```
+
+for installing the environment, and:
+
+```
+> pipenv shell
+```
+
+for initiating it.
+
+There is a script, lint.sh, that you can run everytime you need from the repo root folder, but it is also executed each time you do `git commit` (provided
+you installed the pre-commit hook during the installation step described above).
+
+```
+> ./lint.sh
+```

@@ -1,0 +1,4 @@
+#!/bin/sh
+BASE=$(git rev-parse --show-toplevel)
+cd $BASE
+./lint.sh
