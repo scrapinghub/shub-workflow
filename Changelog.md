@@ -9,7 +9,9 @@ Y - Minor version. Introduces new features.
 Z - Micro version. Fixes and improvements.
 
 Fixes and performance improvements are done
-along all the way. In general you can find most incompatibilities by generous using of typing hints and mypy in your project.
+along all the way and are not indicated there.
+
+In general you can find most incompatibilities by generous using of typing hints and mypy in your project.
 
 1.9 (From July 2022 to October 2022)
 ------------------------------------
