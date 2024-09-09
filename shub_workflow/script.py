@@ -223,7 +223,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         self.project_settings = get_project_settings()
         self.spider_loader = SpiderLoader(self.project_settings)
         super().__init__()
-        if resolve_shub_jobkey() is None:
+        if self.args.load_sc_settings and resolve_shub_jobkey() is None:
             self.project_settings.setdict(self.get_sc_project_settings(), priority="project")
         self.set_flow_id_name(self.args)
 
@@ -272,6 +272,11 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
             help="Additional tag added to the scheduled jobs. Can be given multiple times.",
             action="append",
             default=self.children_tags or [],
+        )
+        self.argparser.add_argument(
+            "--load-sc-settings",
+            action="store_true",
+            help="If provided, and running on a local environment, load scrapy cloud settings.",
         )
 
     def parse_project_id(self, args: Namespace) -> int:
@@ -554,8 +559,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         raise ValueError(f"Spider {spidername} does not exist.")
 
     def get_project_running_spiders(
-        self, canonical: bool = False, crawlmanagers: Tuple[str, ...] = (),
-        only_crawlmanagers: bool = False
+        self, canonical: bool = False, crawlmanagers: Tuple[str, ...] = (), only_crawlmanagers: bool = False
     ) -> Set[SpiderName]:
         """
         Get all running spiders.
