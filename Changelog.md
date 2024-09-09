@@ -139,3 +139,4 @@ Minor version changes:
 - 1.14.5 Finished job metadata hook
 - 1.14.6 Allow to use project entry keyword in scrapinghub.yml as alternative to project numeric id, when passing command line --project-id option.
 - 1.14.7 Mixin for provision of Slack alert capabilities in monitor.
+- 1.14.8 Allow to load settings from SC when running script on local environment.
