@@ -19,7 +19,7 @@ class SlackMixin(BaseScriptProtocol):
     def __init__(self):
         super().__init__()
         self.slack_handler = SlackMessageManager(
-            fake=self.project_settings.get("SPIDERMON_SLACK_FAKE"),
+            fake=self.project_settings.getbool("SPIDERMON_SLACK_FAKE"),
             sender_token=self.project_settings.get("SPIDERMON_SLACK_SENDER_TOKEN"),
             sender_name=self.project_settings.get("SPIDERMON_SLACK_SENDER_NAME"),
         )
