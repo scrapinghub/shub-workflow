@@ -5,7 +5,7 @@ import logging
 import inspect
 from typing import Dict, Type, Tuple, Optional, Protocol
 from datetime import timedelta, datetime
-from collections import defaultdict, Counter
+from collections import Counter
 
 import dateparser
 from scrapy import Spider
@@ -32,6 +32,7 @@ class BaseMonitorProtocol(BaseScriptProtocol, Protocol):
 BASE_TARGET_SPIDER_STATS = (
     "downloader/response_status_count/",
     "downloader/response_count",
+    "item_scraped_count",
     "spider_exceptions/",
 )
 
@@ -201,7 +202,6 @@ that can be recognized by dateparser.""",
             if issubclass(subclass, tuple(self.target_spider_classes.keys())):
                 spiders[SpiderName(s)] = subclass
 
-        items: Dict[SpiderName, int] = defaultdict(int)
         for jobcount, jobdict in enumerate(
             self.get_jobs(
                 state=["finished"],
@@ -220,8 +220,6 @@ that can be recognized by dateparser.""",
                 canonical = self.get_canonical_spidername(jobdict["spider"])
                 stats_added_prefix = self._get_stats_prefix_from_spider_class(spiders[jobdict["spider"]])
                 if "scrapystats" in jobdict:
-                    items[jobdict["spider"]] += jobdict["scrapystats"].get("item_scraped_count", 0)
-                    self.stats.inc_value(f"{stats_added_prefix}/jobs/{canonical}".strip("/"))
                     for statkey in jobdict["scrapystats"]:
                         for statnameprefix in self.target_spider_stats + BASE_TARGET_SPIDER_STATS:
                             if statkey.startswith(statnameprefix):
@@ -237,24 +235,6 @@ that can be recognized by dateparser.""",
                     LOG.error(f"Job {jobdict['key']} does not have scrapystats.")
             if jobcount % 1000 == 0:
                 LOG.info(f"Read {jobcount} jobs")
-
-        total_crawled: Dict[str, int] = defaultdict(int)
-        for spidername, itemcount in items.items():
-            stats_added_prefix = self._get_stats_prefix_from_spider_class(spiders[spidername])
-            total_crawled[stats_added_prefix] += itemcount
-            self.stats.inc_value(f"{stats_added_prefix}/scraped_items/total".strip("/"), itemcount)
-
-        for spidername, itemcount in items.items():
-            canonical = self.get_canonical_spidername(spidername)
-            stats_added_prefix = self._get_stats_prefix_from_spider_class(spiders[spidername])
-            self.stats.set_value(f"{stats_added_prefix}/scraped_items/{canonical}".strip("/"), itemcount)
-            if total_crawled[stats_added_prefix] > 0:
-                self.stats.set_value(
-                    f"{stats_added_prefix}/scraped_items_ratio/{canonical}".strip("/"),
-                    round(100 * itemcount / total_crawled[stats_added_prefix], 2),
-                )
-
-        return total_crawled
 
     def script_job_hook(self, jobdict: JobDict):
         """
