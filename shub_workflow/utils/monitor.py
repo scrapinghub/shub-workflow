@@ -37,12 +37,32 @@ BASE_TARGET_SPIDER_STATS = (
 )
 
 
-class BaseMonitor(BaseScript, BaseMonitorProtocol):
+class SpiderStatsAggregatorMixin(BaseScriptProtocol):
+    # stats aggregated from spiders. A tuple of stats prefixes.
+    target_spider_stats: Tuple[str, ...] = ()
+
+    def aggregate_spider_stats(self, jobdict: JobDict, stats_added_prefix: str = ""):
+        canonical = self.get_canonical_spidername(jobdict["spider"])
+        if "scrapystats" in jobdict:
+            for statkey in jobdict["scrapystats"]:
+                for statnameprefix in self.target_spider_stats + BASE_TARGET_SPIDER_STATS:
+                    if statkey.startswith(statnameprefix):
+                        value = jobdict["scrapystats"][statkey]
+                        if stats_added_prefix != canonical:
+                            self.stats.inc_value(
+                                f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"), value
+                            )
+                            self.stats.inc_value(f"{stats_added_prefix}/{statkey}/total".strip("/"), value)
+                        else:
+                            self.stats.inc_value(f"{stats_added_prefix}/{statkey}".strip("/"), value)
+        else:
+            LOG.error(f"Job {jobdict['key']} does not have scrapystats.")
+
+
+class BaseMonitor(SpiderStatsAggregatorMixin, BaseScript, BaseMonitorProtocol):
 
     # a map from spiders classes to check, to a stats prefix to identify the aggregated stats.
     target_spider_classes: Dict[Type[Spider], str] = {Spider: ""}
-    # stats aggregated from spiders. A tuple of stats prefixes.
-    target_spider_stats: Tuple[str, ...] = ()
 
     # - a map from script name into a tuple of 2-elem tuples (aggregating stat regex, aggregated stat prefix)
     # - the aggregating stat regex is used to match stat on target script
@@ -217,22 +237,8 @@ that can be recognized by dateparser.""",
                 continue
             if jobdict["spider"] in spiders:
                 self.spider_job_hook(jobdict)
-                canonical = self.get_canonical_spidername(jobdict["spider"])
                 stats_added_prefix = self._get_stats_prefix_from_spider_class(spiders[jobdict["spider"]])
-                if "scrapystats" in jobdict:
-                    for statkey in jobdict["scrapystats"]:
-                        for statnameprefix in self.target_spider_stats + BASE_TARGET_SPIDER_STATS:
-                            if statkey.startswith(statnameprefix):
-                                value = jobdict["scrapystats"][statkey]
-                                if stats_added_prefix != canonical:
-                                    self.stats.inc_value(
-                                        f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"), value
-                                    )
-                                    self.stats.inc_value(f"{stats_added_prefix}/{statkey}/total".strip("/"), value)
-                                else:
-                                    self.stats.inc_value(f"{stats_added_prefix}/{statkey}".strip("/"), value)
-                else:
-                    LOG.error(f"Job {jobdict['key']} does not have scrapystats.")
+                self.aggregate_spider_stats(jobdict, stats_added_prefix)
             if jobcount % 1000 == 0:
                 LOG.info(f"Read {jobcount} jobs")
 
