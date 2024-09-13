@@ -22,6 +22,7 @@ from shub_workflow.script import (
 from shub_workflow.base import WorkFlowManager
 from shub_workflow.utils import hashstr
 from shub_workflow.utils.dupefilter import DupesFilterProtocol
+from shub_workflow.utils.monitor import SpiderStatsAggregatorMixin
 
 
 _LOG = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ class CrawlManagerProtocol(Protocol):
         ...
 
 
-class CrawlManager(WorkFlowManager, CrawlManagerProtocol):
+class CrawlManager(SpiderStatsAggregatorMixin, WorkFlowManager, CrawlManagerProtocol):
     """
     Schedules a single spider job. If loop mode is enabled, it will shutdown only after the scheduled spider
     finished. Close reason of the manager will be inherited from spider one.
@@ -149,7 +150,10 @@ class CrawlManager(WorkFlowManager, CrawlManagerProtocol):
         while running_job_keys:
             jobkey = running_job_keys.pop()
             if (outcome := self.is_finished(jobkey)) is not None:
-                self.finished_metadata_hook(jobkey, self.get_job_metadata(jobkey))
+
+                metadata = self.get_job_metadata(jobkey)
+                self.finished_metadata_hook(jobkey, metadata)
+
                 spider, job_args_override = self._running_job_keys.pop(jobkey)
                 if outcome in self.failed_outcomes:
                     _LOG.warning(f"Job {jobkey} finished with outcome {outcome}.")
@@ -159,6 +163,9 @@ class CrawlManager(WorkFlowManager, CrawlManagerProtocol):
                 else:
                     self.finished_ok_hook(spider, outcome, job_args_override, jobkey)
                 outcomes[jobkey] = outcome
+
+                scrapystats = self.get_metadata_key(metadata, "scrapystats")
+                self.aggregate_spider_stats(JobDict(spider=spider, key=jobkey, scrapystats=scrapystats))
         _LOG.info(f"There are {len(self._running_job_keys)} jobs still running.")
 
         return outcomes
