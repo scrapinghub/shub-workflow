@@ -549,7 +549,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         if spidername in self.spider_loader.list():
             spidercls: Type[Spider] = self.spider_loader.load(spidername)
             return getattr(spidercls, "canonical_name", None) or spidername
-        raise ValueError(f"Spider {spidername} does not exist.")
+        return spidername
 
     def get_project_running_spiders(
         self, canonical: bool = False, crawlmanagers: Tuple[str, ...] = (), only_crawlmanagers: bool = False
