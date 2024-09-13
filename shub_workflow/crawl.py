@@ -14,6 +14,7 @@ from bloom_filter2 import BloomFilter
 from shub_workflow.script import (
     JobKey,
     JobDict,
+    JobMeta,
     SpiderName,
     Outcome,
     BaseLoopScriptAsyncMixin,
@@ -148,6 +149,7 @@ class CrawlManager(WorkFlowManager, CrawlManagerProtocol):
         while running_job_keys:
             jobkey = running_job_keys.pop()
             if (outcome := self.is_finished(jobkey)) is not None:
+                self.finished_metadata_hook(jobkey, self.get_job_metadata(jobkey))
                 spider, job_args_override = self._running_job_keys.pop(jobkey)
                 if outcome in self.failed_outcomes:
                     _LOG.warning(f"Job {jobkey} finished with outcome {outcome}.")
@@ -160,6 +162,12 @@ class CrawlManager(WorkFlowManager, CrawlManagerProtocol):
         _LOG.info(f"There are {len(self._running_job_keys)} jobs still running.")
 
         return outcomes
+
+    def finished_metadata_hook(self, jobkey: JobKey, metadata: JobMeta):
+        """
+        allow to add some reaction on each finished job, based solely on its metadata.
+        Use self.get_metadata_key(metadata, <key>) in order to get metadata with handled retries.
+        """
 
     def bad_outcome_hook(self, spider: SpiderName, outcome: Outcome, job_args_override: JobParams, jobkey: JobKey):
         if self.get_close_reason() is None:
