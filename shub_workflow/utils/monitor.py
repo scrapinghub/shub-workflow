@@ -40,6 +40,7 @@ BASE_TARGET_SPIDER_STATS = (
 class SpiderStatsAggregatorMixin(BaseScriptProtocol):
     # stats aggregated from spiders. A tuple of stats prefixes.
     target_spider_stats: Tuple[str, ...] = ()
+    stats_only_total = True
 
     def aggregate_spider_stats(self, jobdict: JobDict, stats_added_prefix: str = ""):
         canonical = self.get_canonical_spidername(jobdict["spider"])
@@ -49,9 +50,10 @@ class SpiderStatsAggregatorMixin(BaseScriptProtocol):
                     if statkey.startswith(statnameprefix):
                         value = jobdict["scrapystats"][statkey]
                         if stats_added_prefix != canonical:
-                            self.stats.inc_value(
-                                f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"), value
-                            )
+                            if not self.stats_only_total:
+                                self.stats.inc_value(
+                                    f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"), value
+                                )
                             self.stats.inc_value(f"{stats_added_prefix}/{statkey}/total".strip("/"), value)
                         else:
                             self.stats.inc_value(f"{stats_added_prefix}/{statkey}".strip("/"), value)
@@ -101,6 +103,8 @@ class BaseMonitor(SpiderStatsAggregatorMixin, BaseScript, BaseMonitorProtocol):
     # - one extra argument per regex group, if any.
     # Useful for adding monitor alerts or any kind of reaction according to stat value.
     stats_hooks: Tuple[Tuple[str, str], ...] = ()
+
+    stats_only_total = False
 
     def add_argparser_options(self):
         super().add_argparser_options()
