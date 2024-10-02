@@ -141,3 +141,4 @@ Minor version changes:
 - 1.14.7 Mixin for provision of Slack alert capabilities in monitor.
 - 1.14.8 Allow to load settings from SC when running script on local environment.
 - 1.14.9 Added stats aggregation capabilities to crawlmanager
+- 1.14.10 AlertSender class to allow both slack and sentry alerts combined.
