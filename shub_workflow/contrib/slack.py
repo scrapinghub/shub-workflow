@@ -1,17 +1,16 @@
 import logging
 from pprint import pformat
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from spidermon.contrib.actions.slack import SlackMessageManager
 
-from shub_workflow.script import BaseScriptProtocol
 from shub_workflow.utils import resolve_shub_jobkey
-from shub_workflow.utils.monitor import BaseMonitorProtocol
+from shub_workflow.utils.alert_sender import AlertSenderMixin
 
 LOG = logging.getLogger(__name__)
 
 
-class SlackMixin(BaseScriptProtocol):
+class SlackMixin(AlertSenderMixin):
     """
     A class for adding slack alert capabilities to a shub_workflow class.
     """
@@ -21,9 +20,9 @@ class SlackMixin(BaseScriptProtocol):
         self.slack_handler = SlackMessageManager(
             fake=self.project_settings.getbool("SPIDERMON_SLACK_FAKE"),
             sender_token=self.project_settings.get("SPIDERMON_SLACK_SENDER_TOKEN"),
-            sender_name=self.project_settings.get("SPIDERMON_SLACK_SENDER_NAME"),
+            sender_name=self.args.sender_name or self.project_settings.get("SPIDERMON_SLACK_SENDER_NAME"),
         )
-        self.messages: List[str] = []
+        self.register_sender_method(self.send_slack_message)
 
     def send_slack_message(self):
         if self.messages:
@@ -46,16 +45,3 @@ class SlackMixin(BaseScriptProtocol):
                 LOG.info(pformat(message))
             else:
                 self.slack_handler.send_message(to, text)
-
-    def append_message(self, message: str):
-        self.messages.append(message)
-
-
-class MonitorSlackMixin(SlackMixin, BaseMonitorProtocol):
-    """
-    Mixin for adding slack capabilities to shub_workflow monitors.
-    """
-
-    def close(self):
-        super().close()  # type: ignore
-        self.send_slack_message()

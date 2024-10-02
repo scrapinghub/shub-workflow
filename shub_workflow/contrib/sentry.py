@@ -1,18 +1,17 @@
 import logging
 from pprint import pformat
-from typing import List, Dict, Any
+from typing import Dict, Any
 
 from spidermon.contrib.actions.sentry import SendSentryMessage
 
-from shub_workflow.script import BaseScriptProtocol
 from shub_workflow.utils import resolve_shub_jobkey
-from shub_workflow.utils.monitor import BaseMonitorProtocol
+from shub_workflow.utils.alert_sender import AlertSenderMixin
 
 
 LOG = logging.getLogger(__name__)
 
 
-class SentryMixin(BaseScriptProtocol):
+class SentryMixin(AlertSenderMixin):
     """
     A class for adding sentry alert capabilities to a shub_workflow class.
     """
@@ -23,10 +22,10 @@ class SentryMixin(BaseScriptProtocol):
             fake=self.project_settings.getbool("SPIDERMON_SENTRY_FAKE"),
             sentry_dsn=self.project_settings.get("SPIDERMON_SENTRY_DSN"),
             sentry_log_level=self.project_settings.get("SPIDERMON_SENTRY_LOG_LEVEL"),
-            project_name=self.project_settings.get("SPIDERMON_SENTRY_PROJECT_NAME"),
+            project_name=self.args.sender_name or self.project_settings.get("SPIDERMON_SENTRY_PROJECT_NAME"),
             environment=self.project_settings.get("SPIDERMON_SENTRY_ENVIRONMENT_TYPE"),
         )
-        self.messages: List[str] = []
+        self.register_sender_method(self.send_sentry_message)
 
     def send_sentry_message(self):
         if self.messages:
@@ -42,15 +41,3 @@ class SentryMixin(BaseScriptProtocol):
                 LOG.info(pformat(message))
             else:
                 self.sentry_handler.send_message(message)
-
-    def append_message(self, message: str):
-        self.messages.append(message)
-
-
-class MonitorSentryMixin(SentryMixin, BaseMonitorProtocol):
-    """
-    Mixin for adding sentry capabilities to shub_workflow monitors.
-    """
-    def close(self):
-        super().close()  # type: ignore
-        self.send_sentry_message()

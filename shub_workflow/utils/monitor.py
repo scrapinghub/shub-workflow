@@ -11,6 +11,7 @@ import dateparser
 from scrapy import Spider
 
 from shub_workflow.script import BaseScript, BaseScriptProtocol, SpiderName, JobDict
+from shub_workflow.utils.alert_sender import AlertSenderMixin
 
 LOG = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class SpiderStatsAggregatorMixin(BaseScriptProtocol):
             LOG.error(f"Job {jobdict['key']} does not have scrapystats.")
 
 
-class BaseMonitor(SpiderStatsAggregatorMixin, BaseScript, BaseMonitorProtocol):
+class BaseMonitor(AlertSenderMixin, SpiderStatsAggregatorMixin, BaseScript, BaseMonitorProtocol):
 
     # a map from spiders classes to check, to a stats prefix to identify the aggregated stats.
     target_spider_classes: Dict[Type[Spider], str] = {Spider: ""}
@@ -312,4 +313,4 @@ that can be recognized by dateparser.""",
                                     self.stats.inc_value(stat + f"/{stat_suffix}", val)
 
     def close(self):
-        pass
+        self.send_messages()
