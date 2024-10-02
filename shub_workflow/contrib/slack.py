@@ -20,14 +20,14 @@ class SlackMixin(AlertSenderMixin):
         self.slack_handler = SlackMessageManager(
             fake=self.project_settings.getbool("SPIDERMON_SLACK_FAKE"),
             sender_token=self.project_settings.get("SPIDERMON_SLACK_SENDER_TOKEN"),
-            sender_name=self.args.sender_name or self.project_settings.get("SPIDERMON_SLACK_SENDER_NAME"),
+            sender_name=self.project_settings.get("SPIDERMON_SLACK_SENDER_NAME"),
         )
         self.register_sender_method(self.send_slack_message)
 
     def send_slack_message(self):
         if self.messages:
             message: Dict[str, Any] = dict()
-            title = f"{self.slack_handler.sender_name} | Monitor notification"
+            title = f"{self.slack_handler.sender_name} | {self.args.subject}"
             message["title"] = title
             message["failure_reasons"] = "\n".join(self.messages)
             job_key = resolve_shub_jobkey()

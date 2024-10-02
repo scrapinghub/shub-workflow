@@ -22,7 +22,7 @@ class SentryMixin(AlertSenderMixin):
             fake=self.project_settings.getbool("SPIDERMON_SENTRY_FAKE"),
             sentry_dsn=self.project_settings.get("SPIDERMON_SENTRY_DSN"),
             sentry_log_level=self.project_settings.get("SPIDERMON_SENTRY_LOG_LEVEL"),
-            project_name=self.args.sender_name or self.project_settings.get("SPIDERMON_SENTRY_PROJECT_NAME"),
+            project_name=self.project_settings.get("SPIDERMON_SENTRY_PROJECT_NAME"),
             environment=self.project_settings.get("SPIDERMON_SENTRY_ENVIRONMENT_TYPE"),
         )
         self.register_sender_method(self.send_sentry_message)
@@ -30,7 +30,7 @@ class SentryMixin(AlertSenderMixin):
     def send_sentry_message(self):
         if self.messages:
             message: Dict[str, Any] = dict()
-            title = f"{self.sentry_handler.project_name} | {self.sentry_handler.environment} | Monitor notification"
+            title = f"{self.sentry_handler.project_name} | {self.sentry_handler.environment} | self.args.subject"
             message["title"] = title
             message["failure_reasons"] = "/n".join(self.messages)
             job_key = resolve_shub_jobkey()

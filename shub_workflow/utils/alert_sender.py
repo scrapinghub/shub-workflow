@@ -18,7 +18,7 @@ class AlertSenderMixin(BaseScript):
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument("--sender-name", help="Set sender name.")
+        self.argparser.add_argument("--subject", help="Set alert message subject.")
 
     def append_message(self, message: str):
         self.messages.append(message)
