@@ -11,6 +11,8 @@ class AlertSenderMixin(BaseScript):
     A class for adding slack alert capabilities to a shub_workflow class.
     """
 
+    default_subject = "No Subject"
+
     def __init__(self):
         self.messages: List[str] = []
         self.registered_senders: List[Callable[[], None]] = []
@@ -18,7 +20,7 @@ class AlertSenderMixin(BaseScript):
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument("--subject", help="Set alert message subject.")
+        self.argparser.add_argument("--subject", help="Set alert message subject.", default=self.default_subject)
 
     def append_message(self, message: str):
         self.messages.append(message)
