@@ -35,6 +35,7 @@ BASE_TARGET_SPIDER_STATS = (
     "downloader/response_count",
     "item_scraped_count",
     "spider_exceptions/",
+    "scrapy-zyte-api/429",
 )
 
 
