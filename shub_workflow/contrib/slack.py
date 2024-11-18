@@ -35,7 +35,7 @@ class SlackMixin(AlertSenderMixin):
                 message["job_link"] = f"https://app.zyte.com/p/{job_key}"
             text = (
                 f"{title}\n\n"
-                "Failure Reasons:\n"
+                "Alert Reasons:\n"
                 f"{message['failure_reasons']}\n\n"
                 f"Job Link: {message.get('job_link', 'N/A')}"
             )
