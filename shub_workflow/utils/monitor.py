@@ -46,21 +46,18 @@ class SpiderStatsAggregatorMixin(BaseScriptProtocol):
 
     def aggregate_spider_stats(self, jobdict: JobDict, stats_added_prefix: str = ""):
         canonical = self.get_canonical_spidername(jobdict["spider"])
-        if "scrapystats" in jobdict:
-            for statkey in jobdict["scrapystats"]:
-                for statnameprefix in self.target_spider_stats + BASE_TARGET_SPIDER_STATS:
-                    if statkey.startswith(statnameprefix):
-                        value = jobdict["scrapystats"][statkey]
-                        if stats_added_prefix != canonical:
-                            if not self.stats_only_total:
-                                self.stats.inc_value(
-                                    f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"), value
-                                )
-                            self.stats.inc_value(f"{stats_added_prefix}/{statkey}/total".strip("/"), value)
-                        else:
-                            self.stats.inc_value(f"{stats_added_prefix}/{statkey}".strip("/"), value)
-        else:
-            LOG.error(f"Job {jobdict['key']} does not have scrapystats.")
+        for statkey in jobdict.get("scrapystats") or {}:
+            for statnameprefix in self.target_spider_stats + BASE_TARGET_SPIDER_STATS:
+                if statkey.startswith(statnameprefix):
+                    value = jobdict["scrapystats"][statkey]
+                    if stats_added_prefix != canonical:
+                        if not self.stats_only_total:
+                            self.stats.inc_value(
+                                f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"), value
+                            )
+                        self.stats.inc_value(f"{stats_added_prefix}/{statkey}/total".strip("/"), value)
+                    else:
+                        self.stats.inc_value(f"{stats_added_prefix}/{statkey}".strip("/"), value)
 
 
 class BaseMonitor(AlertSenderMixin, SpiderStatsAggregatorMixin, BaseScript, BaseMonitorProtocol):
