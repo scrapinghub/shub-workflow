@@ -20,7 +20,7 @@ class SlackSender:
         )
         self.recipients = project_settings.get("SPIDERMON_SLACK_RECIPIENTS")
 
-    def send_slack_messages(self, messages: List[str], subject: str):
+    def send_slack_messages(self, messages: List[str], subject: str, attachments=None):
         message: Dict[str, Any] = dict()
         title = f"{self.slack_handler.sender_name} | {subject}"
         message["title"] = title
@@ -38,7 +38,7 @@ class SlackSender:
             message["failure_reasons"] = messages
             LOG.info(pformat(message))
         else:
-            self.slack_handler.send_message(self.recipients, text)
+            self.slack_handler.send_message(self.recipients, text, attachments=attachments)
 
 
 class SlackMixin(AlertSenderMixin):
