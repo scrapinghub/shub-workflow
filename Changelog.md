@@ -142,3 +142,6 @@ Minor version changes:
 - 1.14.8 Allow to load settings from SC when running script on local environment.
 - 1.14.9 Added stats aggregation capabilities to crawlmanager
 - 1.14.10 AlertSender class to allow both slack and sentry alerts combined.
+- 1.14.11 Created SlackSender class for easier reusage of slack messaging
+- 1.14.12 SlackSender: allow to send attachments
+- 1.14.13 Extended monitor to be able to generate reports
