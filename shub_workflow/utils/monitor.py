@@ -3,15 +3,19 @@ import abc
 import time
 import logging
 import inspect
+import csv
+from io import StringIO
 from typing import Dict, Type, Tuple, Optional, Protocol
 from datetime import timedelta, datetime
 from collections import Counter
 
 import dateparser
 from scrapy import Spider
+from prettytable import PrettyTable
 
 from shub_workflow.script import BaseScript, BaseScriptProtocol, SpiderName, JobDict
 from shub_workflow.utils.alert_sender import AlertSenderMixin
+from shub_workflow.contrib.slack import SlackSender
 
 LOG = logging.getLogger(__name__)
 
@@ -103,7 +107,13 @@ class BaseMonitor(AlertSenderMixin, SpiderStatsAggregatorMixin, BaseScript, Base
     # Useful for adding monitor alerts or any kind of reaction according to stat value.
     stats_hooks: Tuple[Tuple[str, str], ...] = ()
 
+    # if True, only generate the totals and not per crawler stats. This has effect on default stats only, not the
+    # custom ones added by the developer.
     stats_only_total = False
+
+    # A tuple of string tuples for generating a report table.
+    # The first line is the header. Following ones are the rows. Ensure that all tuples has the same length.
+    report_table: Tuple[Tuple[str, ...], ...] = ()
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -126,11 +136,60 @@ that can be recognized by dateparser.""",
             any string that can be recognized by dateparser.
         """,
         )
+        self.argparser.add_argument(
+            "--generate-report",
+            action="store_true",
+            help=(
+                "Generate report table. See report_table attribute and generate_report() method."
+            ),
+        )
+        self.argparser.add_argument(
+            "--report-format", choices=("csv", "pretty", "pretty_with_borders"), default=["pretty"]
+        )
+        self.argparser.add_argument(
+            "--slack-report", action="store_true", help="Send report to slack. By default it just prints it in the log."
+        )
 
     def stats_postprocessing(self, start_limit, end_limit):
         """
-        Apply here any additional code for post processing stats, generate derivated stats, etc.
+        Apply here any additional code for post processing stats, generate derivated stats, reports, etc.
         """
+
+    def generate_report(self):
+        """
+        Facilitates the generation of printed/slack reports.
+        """
+        header: Tuple[str, ...] = self.report_table[0]
+        rows: Tuple[Tuple[str, ...], ...] = self.report_table[1:]
+
+        table = PrettyTable(
+            field_names=header, border=self.args.report_format == "pretty_with_borders"
+        )
+        for row in rows:
+            table.add_row(list(row))
+
+        if self.args.report_format == "csv":
+            fp = StringIO()
+            w = csv.writer(fp)
+            w.writerow(table.field_names)
+            w.writerows(table.rows)
+            fp.seek(0)
+            table_text = fp.read()
+            fp.close()
+        else:
+            table_text = str(table)
+
+        if self.args.slack_report:
+            table_text = "```" + table_text + "```"
+            sender = SlackSender(self.project_settings)
+            sender.send_slack_messages(
+                [table_text],
+                self.args.subject or "Stats Report",
+            )
+            # avoid slack rate limit error when sending the rates alert to slack
+            time.sleep(30)
+        else:
+            print(table_text)
 
     def run(self):
         end_limit = time.time()
@@ -154,12 +213,17 @@ that can be recognized by dateparser.""",
 
         self.stats_postprocessing(start_limit, end_limit)
         self.run_stats_ratios()
+        if self.args.generate_report:
+            self.generate_report()
         self.run_stats_hooks(start_limit, end_limit)
         self.upload_stats()
         self.print_stats()
         self.close()
 
     def run_stats_ratios(self):
+        """
+        Generate new ratio stats, based on definitions in stats_ratios attribute.
+        """
         for num_regex, den_regex, target_prefix in self.stats_ratios:
             numerators: Dict[str, int] = Counter()
             denominators: Dict[str, int] = Counter()
@@ -219,7 +283,7 @@ that can be recognized by dateparser.""",
 
     def check_spiders(self, start_limit, end_limit):
 
-        spiders: Dict[SpiderName, Type[SpiderName]] = {}
+        spiders: Dict[SpiderName, Type[Spider]] = {}
         for s in self.spider_loader.list():
             subclass = self.spider_loader.load(s)
             if issubclass(subclass, tuple(self.target_spider_classes.keys())):

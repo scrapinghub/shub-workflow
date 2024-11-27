@@ -23,6 +23,7 @@ setup(
         "tenacity",
         "typing-extensions",
         "scrapy",
+        "prettytable",
     ),
     extras_require = {
         "with-s3-tools": ["s3fs>=0.4.0"],

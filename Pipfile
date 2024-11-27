@@ -21,6 +21,7 @@ requests = "<=2.32.3"
 spidermon = "*"
 sentry-sdk = "*"
 slack_sdk = "*"
+prettytable = "*"
 
 [dev-packages]
 flake8 = "*"
