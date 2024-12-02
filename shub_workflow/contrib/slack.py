@@ -33,6 +33,7 @@ class SlackSender:
             "Alert Reasons:\n"
             f"{message['failure_reasons']}\n\n"
             f"Job Link: {message.get('job_link', 'N/A')}"
+            f"-------------------------------------"
         )
         if self.slack_handler.fake:
             message["failure_reasons"] = messages
