@@ -30,7 +30,7 @@ class SentryMixin(AlertSenderMixin):
     def send_sentry_message(self):
         if self.messages:
             message: Dict[str, Any] = dict()
-            title = f"{self.sentry_handler.project_name} | {self.sentry_handler.environment} | self.args.subject"
+            title = f"{self.sentry_handler.project_name} | {self.sentry_handler.environment} | {self.args.subject}"
             message["title"] = title
             message["failure_reasons"] = "/n".join(self.messages)
             job_key = resolve_shub_jobkey()
