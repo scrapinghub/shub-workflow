@@ -52,7 +52,7 @@ class SpiderStatsAggregatorMixin(BaseScriptProtocol):
         canonical = self.get_canonical_spidername(jobdict["spider"])
         for statkey in jobdict.get("scrapystats") or {}:
             for statnameprefix in self.target_spider_stats + BASE_TARGET_SPIDER_STATS:
-                if statkey.startswith(statnameprefix):
+                if re.match(statnameprefix, statkey) is not None:
                     value = jobdict["scrapystats"][statkey]
                     if stats_added_prefix != canonical:
                         if not self.stats_only_total:
