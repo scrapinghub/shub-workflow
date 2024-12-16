@@ -44,7 +44,7 @@ BASE_TARGET_SPIDER_STATS = (
 
 
 class SpiderStatsAggregatorMixin(BaseScriptProtocol):
-    # stats aggregated from spiders. A tuple of stats prefixes.
+    # stats aggregated from spiders. A tuple of stats regex prefixes.
     target_spider_stats: Tuple[str, ...] = ()
     stats_only_total = True
 
@@ -56,9 +56,7 @@ class SpiderStatsAggregatorMixin(BaseScriptProtocol):
                     value = jobdict["scrapystats"][statkey]
                     if stats_added_prefix != canonical:
                         if not self.stats_only_total:
-                            self.stats.inc_value(
-                                f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"), value
-                            )
+                            self.stats.inc_value(f"{stats_added_prefix}/{statkey}/{canonical}".strip("/"), value)
                         self.stats.inc_value(f"{stats_added_prefix}/{statkey}/total".strip("/"), value)
                     else:
                         self.stats.inc_value(f"{stats_added_prefix}/{statkey}".strip("/"), value)
@@ -139,12 +137,13 @@ that can be recognized by dateparser.""",
         self.argparser.add_argument(
             "--generate-report",
             action="store_true",
-            help=(
-                "Generate report table. See report_table attribute and generate_report() method."
-            ),
+            help=("Generate report table. See report_table attribute and generate_report() method."),
         )
         self.argparser.add_argument(
-            "--report-format", choices=("csv", "pretty", "pretty_with_borders"), default=["pretty"]
+            "--report-format",
+            choices=("csv", "pretty", "pretty_with_borders", "pretty_with_tabs"),
+            default="pretty",
+            help="'pretty_with_tabs' is suitable for easy copy and paste over a spreadsheet.",
         )
         self.argparser.add_argument(
             "--slack-report", action="store_true", help="Send report to slack. By default it just prints it in the log."
@@ -163,7 +162,9 @@ that can be recognized by dateparser.""",
         rows: Tuple[Tuple[str, ...], ...] = self.report_table[1:]
 
         table = PrettyTable(
-            field_names=header, border=self.args.report_format == "pretty_with_borders"
+            field_names=header,
+            border=self.args.report_format == "pretty_with_borders",
+            preserve_internal_border=self.args.report_format == "pretty_with_tabs",
         )
         for row in rows:
             table.add_row(list(row))
@@ -176,6 +177,8 @@ that can be recognized by dateparser.""",
             fp.seek(0)
             table_text = fp.read()
             fp.close()
+        elif self.args.report_format == "pretty_with_tabs":
+            table_text = str(table).replace(" | ", " \t ")
         else:
             table_text = str(table)
 
