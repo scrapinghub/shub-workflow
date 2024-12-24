@@ -16,7 +16,7 @@ setup(
         "pyyaml>=3.12",
         "scrapinghub[msgpack]>=2.3.1",
         "jinja2>=2.7.3",
-        "sqlitedict==1.6.0",
+        "sqlitedict==2.1.0",
         "boto3>=1.9.92",
         "bloom-filter2==2.0.0",
         "collection-scanner",
