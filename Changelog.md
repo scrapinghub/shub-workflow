@@ -146,3 +146,4 @@ Minor version changes:
 - 1.14.12 SlackSender: allow to send attachments
 - 1.14.13 Extended monitor to be able to generate reports
 - 1.14.14 Monitor improvements: target_spider_stats can be a regex, and allow to print report tables suitable for copy/paste over spreadsheet
+- 1.14.15 Allow to tune how finished and running jobs are acquired, via a couple of new attributes
