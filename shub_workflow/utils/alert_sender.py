@@ -30,4 +30,7 @@ class AlertSenderMixin(BaseScript):
 
     def send_messages(self):
         for sender in self.registered_senders:
-            sender()
+            try:
+                sender()
+            except Exception as e:
+                LOG.error(repr(e))
