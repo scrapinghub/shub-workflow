@@ -2,8 +2,6 @@ import logging
 from pprint import pformat
 from typing import Dict, Any
 
-from spidermon.contrib.actions.sentry import SendSentryMessage
-
 from shub_workflow.utils import resolve_shub_jobkey
 from shub_workflow.utils.alert_sender import AlertSenderMixin
 
@@ -18,6 +16,10 @@ class SentryMixin(AlertSenderMixin):
 
     def __init__(self):
         super().__init__()
+        try:
+            from spidermon.contrib.actions.sentry import SendSentryMessage
+        except ImportError:
+            raise ImportError("spidermon[sentry-sdk] is required for using SentryMixin.")
         self.sentry_handler = SendSentryMessage(
             fake=self.project_settings.getbool("SPIDERMON_SENTRY_FAKE"),
             sentry_dsn=self.project_settings.get("SPIDERMON_SENTRY_DSN"),

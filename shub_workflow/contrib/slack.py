@@ -2,8 +2,6 @@ import logging
 from pprint import pformat
 from typing import Any, Dict, List
 
-from spidermon.contrib.actions.slack import SlackMessageManager
-
 from shub_workflow.utils import resolve_shub_jobkey
 from shub_workflow.utils.alert_sender import AlertSenderMixin
 
@@ -13,6 +11,10 @@ LOG = logging.getLogger(__name__)
 class SlackSender:
     def __init__(self, project_settings):
         super().__init__()
+        try:
+            from spidermon.contrib.actions.slack import SlackMessageManager
+        except ImportError:
+            raise ImportError("spidermon[slack-sdk] is required for using SlackSender")
         self.slack_handler = SlackMessageManager(
             fake=project_settings.getbool("SPIDERMON_SLACK_FAKE"),
             sender_token=project_settings.get("SPIDERMON_SLACK_SENDER_TOKEN"),
