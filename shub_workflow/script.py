@@ -36,6 +36,7 @@ from scrapy.utils.misc import load_object
 from scrapy.spiderloader import SpiderLoader
 from scrapy.statscollectors import StatsCollector
 from scrapy.settings import BaseSettings
+from scrapy.signalmanager import SignalManager
 from scrapinghub import ScrapinghubClient, DuplicateJobError
 from scrapinghub.client.jobs import Job, JobMeta
 from scrapinghub.client.projects import Project
@@ -230,10 +231,13 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         class PseudoCrawler:
             def __init__(self, script):
                 self.settings = script.project_settings
+                self.signals = SignalManager(script)
+
+        self._pseudo_crawler = PseudoCrawler(self)
 
         stats_collector_class = self.project_settings["STATS_CLASS"]
         logger.debug(f"Stats collection class: {stats_collector_class}")
-        self.stats = load_object(stats_collector_class)(PseudoCrawler(self))
+        self.stats = load_object(stats_collector_class)(self._pseudo_crawler)
         self.fshelper = FSHelper()
 
     def append_flow_tag(self, tag: str):
