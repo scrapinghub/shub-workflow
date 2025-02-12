@@ -119,6 +119,12 @@ class SCProjectClass(SCProjectClassProtocol):
         return self.client.get_project(project_id or self.project_id)
 
 
+class _PseudoCrawler:
+    def __init__(self, script):
+        self.settings = script.project_settings
+        self.signals = SignalManager(script)
+
+
 class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, Protocol):
 
     name: str
@@ -126,6 +132,7 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
     project_settings: BaseSettings
     spider_loader: SpiderLoader
     fshelper: FSHelper
+    _pseudo_crawler: _PseudoCrawler
 
     @abc.abstractmethod
     def append_flow_tag(self, tag: str):
@@ -228,12 +235,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
             self.project_settings.setdict(self.get_sc_project_settings(), priority="project")
         self.set_flow_id_name(self.args)
 
-        class PseudoCrawler:
-            def __init__(self, script):
-                self.settings = script.project_settings
-                self.signals = SignalManager(script)
-
-        self._pseudo_crawler = PseudoCrawler(self)
+        self._pseudo_crawler = _PseudoCrawler(self)
 
         stats_collector_class = self.project_settings["STATS_CLASS"]
         logger.debug(f"Stats collection class: {stats_collector_class}")
