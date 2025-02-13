@@ -24,11 +24,14 @@ class ItemHSIssuerMixin(BaseScriptProtocol):
                     try:
                         return super().item_scraped(item, spider)
                     except RuntimeError:
-                        LOGGER.info(pformat(item))
+                        self.log_item(item)
 
             self.hextension = _HubstorageExtension.from_crawler(self._pseudo_crawler)
         except ImportError:
-            pass
+            self._pseudo_crawler.signals.connect(self.log_item, item_scraped)
+
+    def log_item(self, item, spider, **kwargs):
+        LOGGER.info(pformat(item))
 
     def hs_issue_item(self, item):
         self._pseudo_crawler.signals.send_catch_log_deferred(item_scraped, dont_log=True, item=item, spider=self)
