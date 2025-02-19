@@ -20,7 +20,7 @@ class ItemHSIssuerMixin(BaseScriptProtocol):
             from sh_scrapy.extension import HubstorageExtension
 
             class _HubstorageExtension(HubstorageExtension):
-                def item_scraped(self, item, spider):
+                def item_scraped(slf, item, spider):
                     try:
                         return super().item_scraped(item, spider)
                     except RuntimeError:
