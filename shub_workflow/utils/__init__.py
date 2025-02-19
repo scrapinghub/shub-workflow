@@ -59,7 +59,9 @@ def resolve_project_id(project_id=None) -> int:
         except Exception:
             logger.error(f"Project entry '{project_id}' not found in scrapinghub.yml.")
     except ImportError:
-        logger.error("Install shub package if want to access scrapinghub.yml")
+        logger.error("Install shub package if want to access scrapinghub.yml.")
+    except TypeError:
+        logger.error("Default project entry not available in scrapinghub.yml.")
 
     raise ValueError(
         "No default project id found. Use either PROJECT_ID env. variable or set 'default' entry in scrapinghub.yml, "

@@ -107,7 +107,7 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
 
 class SCProjectClassProtocol(Protocol):
 
-    project_id: int
+    project_id: Optional[int]
 
 
 class SCProjectClass(SCProjectClassProtocol):
@@ -224,12 +224,14 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
     flow_id_required = False  # if True, script can only run in the context of a flow_id
     children_tags: Optional[List[str]] = None  # extra tags added to children
     default_project_id: Optional[int] = None  # If None, autodetect (see shub_workflow.utils.resolve_project_id)
+    project_required: bool = True  # If False, don't fail because project not set (some applications don't need it)
 
     def __init__(self):
         self.close_reason: Optional[str] = None
         self.__flow_tags: List[str] = []
         self.project_settings = get_project_settings()
         self.spider_loader = SpiderLoader(self.project_settings)
+        self.project_id = None
         super().__init__()
         if self.args.load_sc_settings and resolve_shub_jobkey() is None:
             self.project_settings.setdict(self.get_sc_project_settings(), priority="project")
@@ -291,8 +293,12 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
     def parse_args(self) -> Namespace:
         args = super().parse_args()
 
-        self.project_id = resolve_project_id(self.parse_project_id(args))
-        if not self.project_id:
+        try:
+            self.project_id = resolve_project_id(self.parse_project_id(args))
+        except ValueError:
+            if self.project_required:
+                raise
+        if self.project_required and not self.project_id:
             self.argparser.error("Project id not provided.")
         logger.info(f"Running on project {self.project_id}")
 
