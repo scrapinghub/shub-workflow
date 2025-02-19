@@ -24,7 +24,7 @@ class ItemHSIssuerMixin(BaseScriptProtocol):
                     try:
                         return super().item_scraped(item, spider)
                     except RuntimeError:
-                        self.log_item(item)
+                        self.log_item(item, spider)
 
             self.hextension = _HubstorageExtension.from_crawler(self._pseudo_crawler)
         except ImportError:
