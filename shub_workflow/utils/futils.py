@@ -138,6 +138,13 @@ def get_file(path, *args, aws_key=None, aws_secret=None, aws_token=None, **kwarg
     return fp
 
 
+def get_object(path, *args, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
+    fp = None
+    if check_gcs_path(path):
+        fp = gcstorage.get_object(path)
+    return fp
+
+
 DOWNLOAD_CHUNK_SIZE = 500 * 1024 * 1024
 UPLOAD_CHUNK_SIZE = 100 * 1024 * 1024
 
@@ -431,6 +438,7 @@ class S3Helper:
     exists: Callable
     get_file: Callable
     get_glob: Callable
+    get_object: Callable
     list_folder: Callable
     list_folder_files_recursive: Callable
     list_folder_in_ts_order: Callable
