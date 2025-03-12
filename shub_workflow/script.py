@@ -234,7 +234,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         # this is the own project id, that is, where the actual script is running.
         # it is not configurable except if running outside SC (in this case, it will
         # take the value from self.project_id)
-        self.own_project_id = None
+        self._own_project_id = None
         # this is the working project id, that is, where child jobs will be scheduled.
         # it is configurable
         self.project_id = None
@@ -300,7 +300,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         args = super().parse_args()
 
         try:
-            self.own_project_id = resolve_project_id()
+            self._own_project_id = resolve_project_id()
         except ValueError:
             pass
 
@@ -310,7 +310,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
             if self.project_required:
                 raise
 
-        self.own_project_id = self.own_project_id or self.project_id
+        self._own_project_id = self._own_project_id or self.project_id
 
         if self.project_required and not self.project_id:
             self.argparser.error("Project id not provided.")
@@ -611,7 +611,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         shkey = self.project_settings["SH_APIKEY"] or os.environ.get("SH_APIKEY")
         if shkey is not None:
             return requests.get(
-                f"https://app.zyte.com/api/settings/get.json?project={self.own_project_id}",
+                f"https://app.zyte.com/api/settings/get.json?project={self._own_project_id}",
                 auth=HTTPBasicAuth(shkey, "")
             ).json()["project_settings"]
         return {}
