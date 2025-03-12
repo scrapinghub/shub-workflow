@@ -113,6 +113,9 @@ class BaseMonitor(AlertSenderMixin, SpiderStatsAggregatorMixin, BaseScript, Base
     # The first line is the header. Following ones are the rows. Ensure that all tuples has the same length.
     report_table: Tuple[Tuple[str, ...], ...] = ()
 
+    # additional projects in multiproject projects
+    additional_projects: Tuple[int, ...] = ()
+
     def add_argparser_options(self):
         super().add_argparser_options()
         self.argparser.add_argument(
@@ -284,6 +287,16 @@ that can be recognized by dateparser.""",
         so additional per job customization can be added.
         """
 
+    def get_jobs_in_window(self, start_limit: int, end_limit: int | float | None, **kwargs):
+        end_limit = end_limit or float("inf")
+        for project_id in (self.project_id,) + self.additional_projects:
+            for jobdict in self.get_jobs(project_id=project_id, **kwargs):
+                if "finished_time" in jobdict and jobdict["finished_time"] / 1000 < start_limit:
+                    break
+                if "finished_time" in jobdict and jobdict["finished_time"] / 1000 > end_limit:
+                    continue
+                yield jobdict
+
     def check_spiders(self, start_limit, end_limit):
 
         spiders: Dict[SpiderName, Type[Spider]] = {}
@@ -293,7 +306,9 @@ that can be recognized by dateparser.""",
                 spiders[SpiderName(s)] = subclass
 
         for jobcount, jobdict in enumerate(
-            self.get_jobs(
+            self.get_jobs_in_window(
+                start_limit,
+                end_limit,
                 state=["finished"],
                 meta=["spider", "finished_time", "scrapystats", "spider_args", "close_reason", "tags"],
                 has_tag=[f"FLOW_ID={self.flow_id}"] if self.flow_id is not None else None,
@@ -301,10 +316,6 @@ that can be recognized by dateparser.""",
             ),
             start=1,
         ):
-            if jobdict["finished_time"] / 1000 < start_limit:
-                break
-            if jobdict["finished_time"] / 1000 > end_limit:
-                continue
             if jobdict["spider"] in spiders:
                 self.spider_job_hook(jobdict)
                 stats_added_prefix = self._get_stats_prefix_from_spider_class(spiders[jobdict["spider"]])
@@ -322,16 +333,15 @@ that can be recognized by dateparser.""",
         for script, regexes in self.target_script_stats.items():
             plural = script.replace("py:", "").replace(".py", "") + "s"
             LOG.info(f"Checking {plural} stats ...")
-            for jobdict in self.get_jobs(
+            for jobdict in self.get_jobs_in_window(
+                start_limit,
+                end_limit,
                 spider=script,
+                state=["finished"],
                 meta=["finished_time", "scrapystats", "close_reason", "job_cmd", "tags"],
                 endts=int(end_limit * 1000),
                 has_tag=[f"FLOW_ID={self.flow_id}"] if self.flow_id is not None else None,
             ):
-                if jobdict["finished_time"] / 1000 < start_limit:
-                    break
-                if jobdict["finished_time"] / 1000 > end_limit:
-                    continue
                 self.script_job_hook(jobdict)
                 for key, val in jobdict.get("scrapystats", {}).items():
                     for regex, prefix in regexes:
@@ -345,7 +355,9 @@ that can be recognized by dateparser.""",
         for script, regexes in self.target_script_logs.items():
             plural = script.replace("py:", "").replace(".py", "") + "s"
             LOG.info(f"Checking {plural} logs ...")
-            for jobdict in self.get_jobs(
+            for jobdict in self.get_jobs_in_window(
+                start_limit,
+                None,
                 spider=script,
                 state=["running", "finished"],
                 meta=["state", "finished_time"],
