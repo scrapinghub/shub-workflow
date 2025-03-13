@@ -5,7 +5,7 @@ import logging
 import inspect
 import csv
 from io import StringIO
-from typing import Dict, Type, Tuple, Optional, Protocol
+from typing import Dict, Type, Tuple, Optional, Protocol, Union
 from datetime import timedelta, datetime
 from collections import Counter
 
@@ -287,7 +287,7 @@ that can be recognized by dateparser.""",
         so additional per job customization can be added.
         """
 
-    def get_jobs_in_window(self, start_limit: int, end_limit: int | float | None, **kwargs):
+    def get_jobs_in_window(self, start_limit: int, end_limit: Union[int, float, None], **kwargs):
         end_limit = end_limit or float("inf")
         for project_id in (self.project_id,) + self.additional_projects:
             for jobdict in self.get_jobs(project_id=project_id, **kwargs):
