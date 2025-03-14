@@ -5,7 +5,7 @@ import logging
 import inspect
 import csv
 from io import StringIO
-from typing import Dict, Type, Tuple, Optional, Protocol, Union
+from typing import Dict, Type, Tuple, Optional, Protocol
 from datetime import timedelta, datetime
 from collections import Counter
 
@@ -40,7 +40,11 @@ BASE_TARGET_SPIDER_STATS = (
     "item_scraped_count",
     "spider_exceptions/",
     "scrapy-zyte-api/429",
+    "zyte_api_proxy/response/status/429",
 )
+
+
+RESPONSE_STATUS_COUNT_RE = re.compile(r"downloader/response_status_count/(\d+)/(.+)")
 
 
 class SpiderStatsAggregatorMixin(BaseScriptProtocol):
@@ -230,7 +234,23 @@ that can be recognized by dateparser.""",
         """
         Generate new ratio stats, based on definitions in stats_ratios attribute.
         """
-        for num_regex, den_regex, target_prefix in self.stats_ratios:
+
+        stats_ratios = self.stats_ratios
+
+        # append response status ratios
+        for prefix in self.target_spider_classes.values():
+            if prefix:
+                prefix = prefix + "/"
+            for stat, value in list(self.stats.get_stats().items()):
+                if (m := RESPONSE_STATUS_COUNT_RE.search(stat)) is not None and stat.startswith(prefix):
+                    status_code, spider = m.groups()
+                    stats_ratios += ((
+                        f"{prefix}downloader/response_status_count/{status_code}/{spider}",
+                        f"{prefix}downloader/response_count/{spider}",
+                        f"{prefix}downloader/response_count/rate/{status_code}/{spider}"
+                    ),)
+
+        for num_regex, den_regex, target_prefix in stats_ratios:
             numerators: Dict[str, int] = Counter()
             denominators: Dict[str, int] = Counter()
             numerator_has_groups = False
@@ -287,7 +307,7 @@ that can be recognized by dateparser.""",
         so additional per job customization can be added.
         """
 
-    def get_jobs_in_window(self, start_limit: int, end_limit: Union[int, float, None], **kwargs):
+    def get_jobs_in_window(self, start_limit: int, end_limit: int | float | None, **kwargs):
         end_limit = end_limit or float("inf")
         for project_id in (self.project_id,) + self.additional_projects:
             for jobdict in self.get_jobs(project_id=project_id, **kwargs):
