@@ -150,3 +150,4 @@ Minor version changes:
 - 1.14.16 added mixin for allowing scripts to issue items on SC
 - 1.14.17 fshelper: allow to get GCS object for operations like metadata set/read
 - 1.14.18 monitor: allow to scan multiple SC projects
+- 1.14.19 monitor: compute response status ratios
