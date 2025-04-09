@@ -151,3 +151,4 @@ Minor version changes:
 - 1.14.17 fshelper: allow to get GCS object for operations like metadata set/read
 - 1.14.18 monitor: allow to scan multiple SC projects
 - 1.14.19 monitor: compute response status ratios
+- 1.14.20 Added tool for finding/analyzing jobs stats/logs/args/items
