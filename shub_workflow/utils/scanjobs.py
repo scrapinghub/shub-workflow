@@ -120,7 +120,7 @@ import time
 import json
 import argparse
 import datetime
-from typing import Iterator, Tuple, TypedDict, List, Iterable, Dict
+from typing import Iterator, Tuple, TypedDict, List, Iterable, Dict, Union
 from itertools import chain
 
 import dateparser
@@ -129,7 +129,7 @@ from scrapinghub.client.jobs import Job
 from shub_workflow.script import BaseScript, JobDict
 
 
-def post_process(instructions: Iterable[str | int | float]) -> List[str | int | float]:
+def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[str, int, float]]:
     """
     >>> post_process(["stringA", 3, 4, "dup"])
     ['stringA', 3, 4, 4]
@@ -155,7 +155,7 @@ def post_process(instructions: Iterable[str | int | float]) -> List[str | int | 
     ... "dup", "3", "1", "roll", "div", "3", "1", "roll", "div", "2", "1", "roll"])
     ['2025-04-08', 'residential', 0.3, 1.89]
     """
-    stack: List[str | int | float] = []
+    stack: List[Union[str, int, float]] = []
     for ins in instructions:
         if ins == "dup":
             stack.append(stack[-1])
@@ -190,10 +190,10 @@ def post_process(instructions: Iterable[str | int | float]) -> List[str | int | 
 class FilterResult(TypedDict):
     tstamp: str
     message: NotRequired[str]
-    groups: Tuple[str | int | float, ...]
+    groups: Tuple[Union[str, int, float], ...]
     field: NotRequired[str]
     itemno: NotRequired[int]
-    stats: NotRequired[Dict[str, str | int | float]]
+    stats: NotRequired[Dict[str, Union[str, int, float]]]
     value: NotRequired[str]
 
 
@@ -299,7 +299,7 @@ class Check(BaseScript):
         if not self.args.stat_pattern:
             return
         groups: List[str] = []
-        stats: Dict[str, str | int | float] = {}
+        stats: Dict[str, Union[str, int, float]] = {}
         for stat_pattern in self.args.stat_pattern:
             for key, val in jdict["scrapystats"].items():
                 if m := re.search(stat_pattern, key):
