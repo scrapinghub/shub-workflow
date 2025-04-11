@@ -256,7 +256,7 @@ class Check(BaseScript):
 
     def parse_args(self):
         args = super().parse_args()
-        if not any([args.log_pattern, args.spider_argument_pattern, args.item_field_pattern]):
+        if not any([args.log_pattern, args.spider_argument_pattern, args.item_field_pattern, args.stat_pattern]):
             self.argparser.error("You must provide at least one pattern. (use either -l, -a , -f or -s)")
         return args
 
