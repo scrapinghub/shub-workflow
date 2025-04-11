@@ -112,6 +112,8 @@ Examples
 
       ('datacenter', 0.3159090909090909, 6.7534090909090905))
 
+postscript instructions supported: add, sub, mul, div, dup, pop, roll, exch, count
+
 ======================================================================
 """
 
@@ -154,10 +156,52 @@ def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[s
     >>> post_process(["2025-04-08", "residential", "100", "30", "189", "3", "-1", "roll",
     ... "dup", "3", "1", "roll", "div", "3", "1", "roll", "div", "2", "1", "roll"])
     ['2025-04-08', 'residential', 0.3, 1.89]
+
+    >>> post_process(["3", "4", "5", "2", "{", "add", "}", "repeat"])
+    [12.0]
+
+    Lets suppose we have the following series: ['431', '2138', '412', '216', '829', '195']
+    lets divide 3 by sum of 0 and 3, 4 by sum of 1 and 4, 5 by sum of 2 and 5:
+    >>> [216 / (431 + 216), 829 / (2138 + 829), 195 / (412 + 195)]
+    [0.33384853168469864, 0.2794068082237951, 0.3212520593080725]
+
+    How to achieve same result with postprocess commands?
+    >>> post_process(['431', '2138', '412', '216', '829', '195', 3, 1, "roll", 4, 1, "roll",
+    ... 5, 1, "roll", "dup", 3, 1, "roll", "add", "div", "count", 1, "roll",
+    ... "dup", 3, 1, "roll", "add", "div", "count", 1, "roll",
+    ... "dup", 3, 1, "roll", "add", "div", "count", 1, "roll"])
+    [0.33384853168469864, 0.2794068082237951, 0.3212520593080725]
+
+    Notice the 3 times repetition of ["dup", 3, 1, "roll", "add", "div", "count", 1, "roll"]
+    The above can be simplified as:
+    >>> post_process(['431', '2138', '412', '216', '829', '195', 3, 1, "roll", 4, 1, "roll",
+    ... 5, 1, "roll", 3, "{", "dup", 3, 1, "roll", "add", "div", "count", 1, "roll", "}", "repeat"])
+    [0.33384853168469864, 0.2794068082237951, 0.3212520593080725]
     """
+
     stack: List[Union[str, int, float]] = []
+    repeat_level = 0
+
     for ins in instructions:
-        if ins == "dup":
+        if ins == "repeat":
+            assert stack.pop() == "}", "invalid syntax for repeat"
+            repeat_list: List[Union[str, int, float]] = []
+            try:
+                while (e := stack.pop()) != "{":
+                    repeat_list.insert(0, e)
+            except IndexError:
+                raise SyntaxError("Unclosed }")
+            num_repeats = int(stack.pop())
+            for _ in range(num_repeats):
+                stack = post_process(stack + repeat_list)
+            continue
+        if ins == "{":
+            repeat_level += 1
+        elif ins == "}":
+            repeat_level -= 1
+        if repeat_level > 0:
+            stack.append(ins)
+        elif ins == "dup":
             stack.append(stack[-1])
         elif ins == "pop":
             stack.pop()
@@ -182,6 +226,8 @@ def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[s
             a = float(stack.pop())
             b = float(stack.pop())
             stack.append(b - a)
+        elif ins == "count":
+            stack.append(len(stack))
         else:
             stack.append(ins)
     return stack
