@@ -504,17 +504,16 @@ class Check(BaseScript):
                     plot_options["save"] = True
                 else:
                     key, val = option.split("=")
-                    match key:
-                        case "X":
-                            plot_options["x_key"] = val
-                        case "Y":
-                            plot_options["y_key"] = val
-                        case "hue":
-                            plot_options["hue_key"] = val
-                        case "title":
-                            plot_options["title"] = val
-                        case "xticks":
-                            plot_options["max_xticks"] = val
+                    if key == "X":
+                        plot_options["x_key"] = val
+                    elif key == "Y":
+                        plot_options["y_key"] = val
+                    elif key == "hue":
+                        plot_options["hue_key"] = val
+                    elif key == "title":
+                        plot_options["title"] = val
+                    elif key == "xticks":
+                        plot_options["max_xticks"] = val
             assert "y_key" in plot_options, "Y option is required for --plot."
             plot_options.setdefault("x_key", "tstamp")
 
