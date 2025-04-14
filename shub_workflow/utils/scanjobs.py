@@ -259,6 +259,7 @@ class FilterResult(TypedDict):
     tstamp: str
     message: NotRequired[str]
     groups: Tuple[Union[str, int, float], ...]
+    dict_groups: NotRequired[Dict["str", Union[str, int, float]]]
     field: NotRequired[str]
     itemno: NotRequired[int]
     stats: NotRequired[Dict[str, Union[str, int, float]]]
@@ -321,6 +322,10 @@ class Check(BaseScript):
             help="If given, write the captured patterns into the provided json list file, along with dates.",
         )
         self.argparser.add_argument("--post-process", "-p", help="postscript like instructions to process groups.")
+        self.argparser.add_argument(
+            "--data-headers",
+            help="If provided, instead of generating a list per datapoint, it generates a dict. Comma separated list."
+        )
 
     def parse_args(self):
         args = super().parse_args()
@@ -443,9 +448,15 @@ class Check(BaseScript):
                     if self.args.post_process:
                         print("Data points extracted:", result["groups"])
                         result["groups"] = tuple(post_process(result["groups"] + tuple(self.args.post_process.split())))
-                    print("Data points generated:", result["groups"])
+                    if self.args.data_headers:
+                        headers = self.args.data_headers.split(",")
+                        result["dict_groups"] = dict(zip(headers, result["groups"]))
+                    print("Data points generated:", result.get("dict_groups") or result["groups"])
                 if self.args.write:
-                    if result["groups"]:
+                    if result.get("dict_groups"):
+                        result["dict_groups"]["tstamp"] = result["tstamp"]
+                        print(json.dumps(result["dict_groups"]), file=self.args.write)
+                    elif result["groups"]:
                         groups = (result["tstamp"],) + result["groups"]
                         print(json.dumps(groups), file=self.args.write)
                     else:
