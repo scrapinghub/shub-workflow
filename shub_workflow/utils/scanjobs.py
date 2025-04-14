@@ -135,10 +135,13 @@ cvi
 """
 
 import re
+import sys
 import time
 import json
 import argparse
 import datetime
+import math
+from uuid import uuid4
 from typing import Iterator, Tuple, TypedDict, List, Iterable, Dict, Union
 from itertools import chain
 
@@ -255,6 +258,88 @@ def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[s
     return stack
 
 
+def plot(data_list, x_key, y_key, hue_key=None, title="Line Plot", xlabel=None, ylabel=None, save=False, max_xticks=15):
+    """
+    Generates a line plot with potentially multiple lines based on a hue category
+    from a list of dictionaries using Seaborn. Assumes valid inputs.
+
+    Args:
+        data_list (list): A list of dictionaries.
+        x_key (str): The key in the dictionaries for the x-axis.
+        y_key (str): The key in the dictionaries for the y-axis.
+        hue_key (str): The key in the dictionaries to differentiate lines (create categories).
+        title (str, optional): The title for the plot. Defaults to "Line Plot".
+        xlabel (str, optional): The label for the x-axis. Defaults to x_key.
+        ylabel (str, optional): The label for the y-axis. Defaults to y_key.
+        save (bool, optional): Save plot image.
+        max_xticks (int, optional): The approximate maximum number of x-ticks to display. Defaults to 15.
+
+    Returns:
+        None: Displays the plot using matplotlib.pyplot.show() or saves it.
+    """
+    try:
+        import pandas as pd
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+    except ImportError as e:
+        print(f"Plotting requires library {e.name}")
+        return
+
+    # Convert the list of dictionaries to a Pandas DataFrame
+    df = pd.DataFrame(data_list)
+
+    # Set the plot style (optional)
+    sns.set_theme(style="whitegrid")
+
+    # Create the plot
+    plt.figure(figsize=(10, 6))  # Set figure size
+
+    # Generate the line plot, using 'hue' to create separate lines
+    ax = sns.lineplot(data=df, x=x_key, y=y_key, hue=hue_key, marker="o")  # Added marker for clarity
+
+    # --- Customization ---
+    plt.title(title)
+    plt.xlabel(xlabel if xlabel else x_key)
+    plt.ylabel(ylabel if ylabel else y_key)
+    if hue_key:
+        plt.legend(title=hue_key)  # Add a legend based on the hue key
+
+    # --- Improve Label Overlap ---
+    # Reduce the number of x-axis labels shown if there are too many
+    x_values = df[x_key].unique()  # Get unique x-values in sorted order
+    num_xticks = len(x_values)
+
+    if num_xticks > max_xticks:
+        # Calculate step size to show approximately max_xticks
+        step = math.ceil(num_xticks / max_xticks)
+        # Select ticks at calculated intervals
+        selected_ticks = x_values[::step]
+        ax.set_xticks(selected_ticks)  # Set the positions for the ticks
+
+    # Rotate the displayed x-axis labels for better readability
+    # Apply rotation to the labels corresponding to the selected ticks
+    plt.xticks(rotation=45, ha="right")
+
+    # Adjust layout to prevent labels from overlapping plot elements
+    plt.tight_layout()  # Call this *after* setting labels and titles
+
+    # --- Display / Save ---
+    if hasattr(sys, "ps1") or "ipykernel" in sys.modules or "spyder" in sys.modules:
+        plt.show()
+    else:
+        print("Cannot display plot. Will try to save on filesystem...")
+        save = True
+
+    if save:
+        try:
+            save_path = f"{uuid4()}.png"
+            plt.savefig(save_path)
+            print(f"Plot saved to {save_path}.")
+        except Exception as save_err:
+            print(f"Could not save plot: {save_err}")
+        plt.close()  # Close the plot figure
+
+
 class FilterResult(TypedDict):
     tstamp: str
     message: NotRequired[str]
@@ -324,7 +409,15 @@ class Check(BaseScript):
         self.argparser.add_argument("--post-process", "-p", help="postscript like instructions to process groups.")
         self.argparser.add_argument(
             "--data-headers",
-            help="If provided, instead of generating a list per datapoint, it generates a dict. Comma separated list."
+            help="If provided, instead of generating a list per datapoint, it generates a dict. Comma separated list.",
+        )
+        self.argparser.add_argument(
+            "--plot",
+            help=(
+                "If provided, generate a plot with the provided parameters. Format: "
+                "X=<x key>,Y=<y key>,hue=<hue key>,title=<title>,save,xticks=<num>"
+                "Only Y is required. X defaults to time stamp. save is a flag. If included, save plot image."
+            ),
         )
 
     def parse_args(self):
@@ -403,6 +496,28 @@ class Check(BaseScript):
         if self.args.max_timestamp is not None and (dt := dateparser.parse(self.args.max_timestamp)) is not None:
             end_limit = dt.timestamp()
 
+        plot_data_points = []
+        plot_options: Dict[str, Union[bool, str]] = {}
+        if self.args.plot:
+            for option in self.args.plot.split(","):
+                if option == "save":
+                    plot_options["save"] = True
+                else:
+                    key, val = option.split("=")
+                    match key:
+                        case "X":
+                            plot_options["x_key"] = val
+                        case "Y":
+                            plot_options["y_key"] = val
+                        case "hue":
+                            plot_options["hue_key"] = val
+                        case "title":
+                            plot_options["title"] = val
+                        case "xticks":
+                            plot_options["max_xticks"] = val
+            assert "y_key" in plot_options, "Y option is required for --plot."
+            plot_options.setdefault("x_key", "tstamp")
+
         limit = (end_limit - self.args.limit_secs) * 1000
         jobcount = 0
         for jdict in self.get_jobs(
@@ -420,7 +535,7 @@ class Check(BaseScript):
             if self.filter_spider_argument(jdict, tstamp, jobcount):
                 has_match = True
                 keyprinted = True
-                if not self.args.write:
+                if not self.args.write and not self.args.plot:
                     input("Press Enter to continue...\n")
             elif self.args.spider_argument_pattern:
                 continue
@@ -451,17 +566,19 @@ class Check(BaseScript):
                     if self.args.data_headers:
                         headers = self.args.data_headers.split(",")
                         result["dict_groups"] = dict(zip(headers, result["groups"]))
+                        result["dict_groups"]["tstamp"] = result["tstamp"]
+                        if self.args.plot:
+                            plot_data_points.append(result["dict_groups"])
                     print("Data points generated:", result.get("dict_groups") or result["groups"])
                 if self.args.write:
                     if result.get("dict_groups"):
-                        result["dict_groups"]["tstamp"] = result["tstamp"]
                         print(json.dumps(result["dict_groups"]), file=self.args.write)
                     elif result["groups"]:
                         groups = (result["tstamp"],) + result["groups"]
                         print(json.dumps(groups), file=self.args.write)
                     else:
                         print(json.dumps(result), file=self.args.write)
-                else:
+                elif not self.args.plot:
                     input("Press Enter to continue...\n")
 
                 if self.args.first_match_only and has_match:
@@ -475,6 +592,9 @@ class Check(BaseScript):
                 print(f"Reached limit of {self.args.limit_secs} seconds.")
                 print("Total jobs scanned:", jobcount)
                 break
+
+        if self.args.plot:
+            plot(plot_data_points, **plot_options)
 
 
 if __name__ == "__main__":
