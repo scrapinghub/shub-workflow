@@ -258,7 +258,18 @@ def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[s
     return stack
 
 
-def plot(data_list, x_key, y_key, hue_key=None, title="Line Plot", xlabel=None, ylabel=None, save=False, max_xticks=15):
+def plot(
+    data_list,
+    x_key,
+    y_key,
+    hue_key=None,
+    title="Line Plot",
+    xlabel=None,
+    ylabel=None,
+    save=False,
+    max_xticks=15,
+    smoothing_window=0,
+):
     """
     Generates a line plot with potentially multiple lines based on a hue category
     from a list of dictionaries using Seaborn. Assumes valid inputs.
@@ -273,6 +284,9 @@ def plot(data_list, x_key, y_key, hue_key=None, title="Line Plot", xlabel=None, 
         ylabel (str, optional): The label for the y-axis. Defaults to y_key.
         save (bool, optional): Save plot image.
         max_xticks (int, optional): The approximate maximum number of x-ticks to display. Defaults to 15.
+        smoothing_window (int, optional): The window size for the rolling average.
+                                          Smoothing is applied if window > 1.
+                                          Defaults to 0 (no smoothing).
 
     Returns:
         None: Displays the plot using matplotlib.pyplot.show() or saves it.
@@ -288,6 +302,21 @@ def plot(data_list, x_key, y_key, hue_key=None, title="Line Plot", xlabel=None, 
     # Convert the list of dictionaries to a Pandas DataFrame
     df = pd.DataFrame(data_list)
 
+    # --- Optional Smoothing (Implicitly controlled by smoothing_window) ---
+    # Relies on data being pre-sorted by hue_key, then x_key for meaningful rolling average
+    y_col_to_plot = y_key  # Default to original y-column
+
+    if smoothing_window > 1:
+        # Calculate rolling mean within each group defined by hue_key
+        smoothed_col_name = f"{y_key}_smoothed_{smoothing_window}"
+        # Group by hue_key. Assumes data within each group is sorted by x_key.
+        df[smoothed_col_name] = df.groupby(hue_key, group_keys=False)[y_key].transform(
+            lambda x: x.rolling(window=smoothing_window, min_periods=1, center=True).mean()
+        )
+        y_col_to_plot = smoothed_col_name  # Update the column to plot
+        print(f"Applied smoothing with window {smoothing_window}. Plotting '{y_col_to_plot}'.")
+        title += f" (Smoothed, Window={smoothing_window})"  # Append smoothing info to title
+
     # Set the plot style (optional)
     sns.set_theme(style="whitegrid")
 
@@ -295,7 +324,7 @@ def plot(data_list, x_key, y_key, hue_key=None, title="Line Plot", xlabel=None, 
     plt.figure(figsize=(10, 6))  # Set figure size
 
     # Generate the line plot, using 'hue' to create separate lines
-    ax = sns.lineplot(data=df, x=x_key, y=y_key, hue=hue_key, marker="o")  # Added marker for clarity
+    ax = sns.lineplot(data=df, x=x_key, y=y_col_to_plot, hue=hue_key, marker="o")  # Added marker for clarity
 
     # --- Customization ---
     plt.title(title)
@@ -415,7 +444,7 @@ class Check(BaseScript):
             "--plot",
             help=(
                 "If provided, generate a plot with the provided parameters. Format: "
-                "X=<x key>,Y=<y key>,hue=<hue key>,title=<title>,save,xticks=<num>"
+                "X=<x key>,Y=<y key>,hue=<hue key>,title=<title>,save,xticks=<num>,smooth=<num>"
                 "Only Y is required. X defaults to time stamp. save is a flag. If included, save plot image."
             ),
         )
@@ -496,8 +525,8 @@ class Check(BaseScript):
         if self.args.max_timestamp is not None and (dt := dateparser.parse(self.args.max_timestamp)) is not None:
             end_limit = dt.timestamp()
 
-        plot_data_points = []
-        plot_options: Dict[str, Union[bool, str]] = {}
+        plot_data_points: List[Dict[str, Union[str, int, float]]] = []
+        plot_options: Dict[str, Union[bool, str, int]] = {}
         if self.args.plot:
             for option in self.args.plot.split(","):
                 if option == "save":
@@ -513,7 +542,9 @@ class Check(BaseScript):
                     elif key == "title":
                         plot_options["title"] = val
                     elif key == "xticks":
-                        plot_options["max_xticks"] = val
+                        plot_options["max_xticks"] = int(val)
+                    elif key == "smooth":
+                        plot_options["smoothing_window"] = int(val)
             assert "y_key" in plot_options, "Y option is required for --plot."
             plot_options.setdefault("x_key", "tstamp")
 
@@ -567,7 +598,7 @@ class Check(BaseScript):
                         result["dict_groups"] = dict(zip(headers, result["groups"]))
                         result["dict_groups"]["tstamp"] = result["tstamp"]
                         if self.args.plot:
-                            plot_data_points.append(result["dict_groups"])
+                            plot_data_points.insert(0, result["dict_groups"])
                     print("Data points generated:", result.get("dict_groups") or result["groups"])
                 if self.args.write:
                     if result.get("dict_groups"):
