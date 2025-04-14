@@ -112,7 +112,24 @@ Examples
 
       ('datacenter', 0.3159090909090909, 6.7534090909090905))
 
-postscript instructions supported: add, sub, mul, div, dup, pop, roll, exch, count
+postscript instructions supported:
+----------------------------------
+
+1. operations:
+
+add, sub, mul, div
+
+2. stack manipulation and counting:
+
+dup, pop, roll, exch count
+
+3. flow manipulation:
+
+repeat
+
+4. conversion:
+
+cvi
 
 ======================================================================
 """
@@ -156,6 +173,9 @@ def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[s
     >>> post_process(["2025-04-08", "residential", "100", "30", "189", "3", "-1", "roll",
     ... "dup", "3", "1", "roll", "div", "3", "1", "roll", "div", "2", "1", "roll"])
     ['2025-04-08', 'residential', 0.3, 1.89]
+
+    >>> post_process(["123", "cvi"])
+    [123]
 
     >>> post_process(["3", "4", "5", "2", "{", "add", "}", "repeat"])
     [12.0]
@@ -228,6 +248,8 @@ def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[s
             stack.append(b - a)
         elif ins == "count":
             stack.append(len(stack))
+        elif ins == "cvi":
+            stack.append(int(stack.pop()))
         else:
             stack.append(ins)
     return stack
@@ -418,10 +440,10 @@ class Check(BaseScript):
                     print("Matching stats:", result["stats"])
                     has_match = True
                 if result["groups"]:
-                    print("Data generated:", result["groups"])
                     if self.args.post_process:
+                        print("Data points extracted:", result["groups"])
                         result["groups"] = tuple(post_process(result["groups"] + tuple(self.args.post_process.split())))
-                        print("Data post processed:", result["groups"])
+                    print("Data points generated:", result["groups"])
                 if self.args.write:
                     if result["groups"]:
                         groups = (result["tstamp"],) + result["groups"]
