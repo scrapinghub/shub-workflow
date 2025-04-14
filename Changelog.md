@@ -6,7 +6,7 @@ W.X.Y.Z
 W - Package version
 X - Major version. Introduces backward incompatibilities.
 Y - Minor version. Introduces new features.
-Z - Micro version. Fixes and improvements.
+Z - Micro version. Fixes and improvements. Sometimes incremental new sub features on a new feature added within same minor version
 
 Fixes and performance improvements are done
 along all the way and are not indicated there.
