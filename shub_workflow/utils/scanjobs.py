@@ -291,7 +291,7 @@ def plot(
         data_list (list): A list of dictionaries.
         x_key (str): The key in the dictionaries for the x-axis.
         y_keys (list): A list of keys in the dictionaries for the y-axis variables..
-        hue_key (str): The key in the dictionaries to differentiate lines (create categories).
+        hue_key (str, optional): The key to differentiate lines by color. Defaults to None.
         title (str, optional): The title for the plot. Defaults to "Line Plot".
         xlabel (str, optional): The label for the x-axis. Defaults to x_key.
         save (bool, optional): Save plot image.
@@ -327,11 +327,14 @@ def plot(
 
         if apply_smoothing:
             smoothed_col_name = f"{yk}_smoothed_{smoothing_window}"
-            # Group by hue_key. Assumes data within each group is sorted by x_key.
             try:
-                df[smoothed_col_name] = df.groupby(hue_key, group_keys=False)[yk].transform(
-                    lambda x: x.rolling(window=smoothing_window, min_periods=1, center=True).mean()
-                )
+                if hue_key is not None:
+                    df[smoothed_col_name] = df.groupby(hue_key, group_keys=False)[yk].transform(
+                        lambda x: x.rolling(window=smoothing_window, min_periods=1, center=True).mean()
+                    )
+                else:
+                    df[smoothed_col_name] = df[yk].rolling(window=smoothing_window, min_periods=1, center=True).mean()
+
                 plot_cols_map[yk] = smoothed_col_name  # Use smoothed column
                 print(f"Applied smoothing (window={smoothing_window}) to '{yk}'. Plotting '{smoothed_col_name}'.")
             except Exception as e:
@@ -348,9 +351,13 @@ def plot(
 
     # Set the plot style (optional)
     sns.set_theme(style="whitegrid")
-
-    # Determine columns needed for plotting (x, hue, and the actual y columns to use)
-    cols_to_keep = [x_key, hue_key] + list(plot_cols_map.values())
+    # Select columns needed: x_key, y_cols, and hue_key (if it exists)
+    cols_to_keep = [x_key] + list(plot_cols_map.values())
+    if hue_key and hue_key in df.columns:  # Check if hue_key exists and is valid
+        cols_to_keep.append(hue_key)
+    elif hue_key:
+        print(f"Warning: Provided hue_key '{hue_key}' not found in data. Ignoring hue.")
+        hue_key = None
     plot_df = df[cols_to_keep].copy()
 
     if apply_smoothing:
@@ -373,17 +380,28 @@ def plot(
             ax = axes_flat[i]
             plot_col_name = plot_cols_map[yk]  # Get the actual column name (original or smoothed)
 
-            sns.lineplot(data=plot_df, x=x_key, y=plot_col_name, hue=hue_key, marker="o", sort=False, ax=ax)
+            sns.lineplot(
+                data=plot_df,
+                x=x_key,
+                y=plot_col_name,
+                hue=hue_key,
+                marker="o",
+                sort=False,
+                ax=ax,
+            )
 
             ax.set_title(yk)  # Subplot title
             ax.set_xlabel(xlabel if xlabel else x_key)
             ax.set_ylabel(yk)  # Use original y_key name for label
-            ax.legend().set_visible(False)
 
-            if i == 0:
+            if hue_key and handles is None and labels is None:
                 current_handles, current_labels = ax.get_legend_handles_labels()
-                if current_handles:  # Check if legend items exist
+                if current_handles:
                     handles, labels = current_handles, current_labels
+
+            # Explicitly hide the legend on the subplot *after* getting handles/labels
+            if ax.get_legend() is not None:
+                ax.get_legend().set_visible(False)
 
             # --- Improve Label Overlap (per subplot) ---
             x_values = plot_df[x_key].unique()
@@ -394,7 +412,7 @@ def plot(
                 selected_ticks = [x_values[i] for i in selected_ticks_indices]
                 ax.set_xticks(selected_ticks)
 
-            ax.tick_params(axis="x", rotation=45, labelsize="small")  # Rotate labels per subplot
+            ax.tick_params(axis="x", labelrotation=45, labelsize="small")  # Rotate labels per subplot
             plt.setp(ax.get_xticklabels(), ha="right")
 
         # Hide unused subplots
@@ -402,21 +420,32 @@ def plot(
             axes_flat[i].set_visible(False)
 
         # Add a single figure-level legend below the plots
-        if handles and labels:
+        if hue_key is not None and handles and labels:
             # Place legend below the subplots, centered horizontally
             # Adjust ncol based on number of labels for better layout
-            fig.legend(handles, labels, title=hue_key, loc='upper center',
-                       bbox_to_anchor=(0.5, 0.95), ncol=min(len(labels), 6),
-                       fontsize='medium', title_fontsize='medium')
+            fig.legend(
+                handles,
+                labels,
+                title=hue_key,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 0.95),
+                ncol=min(len(labels), 6),
+                fontsize="medium",
+                title_fontsize="medium",
+            )
 
         # Adjust layout to prevent overlap and make space for legend/title
-        # Increase bottom margin for legend, top margin for title, add spacing
-        fig.subplots_adjust(left=0.08, right=0.95, bottom=0.25, top=0.85, hspace=0.35, wspace=0.25)
+        fig.subplots_adjust(
+            left=0.08, right=0.95, bottom=0.25, top=0.85 if hue_key is not None else 0.95, hspace=0.35, wspace=0.25
+        )
 
     # --- Single Plot Logic, multiple y keys ---
     elif num_plots > 1:
         # Melt the DataFrame to long format for plotting multiple y-vars on one graph
-        id_vars = [x_key, hue_key]
+        id_vars = [x_key]
+        if hue_key is not None:
+            id_vars.append(hue_key)
+
         value_vars = [plot_cols_map[yk] for yk in valid_y_keys]  # Columns to melt (original or smoothed)
         # Map smoothed names back to original for the 'variable' column in melted data
         rename_map = {v: k for k, v in plot_cols_map.items()}
@@ -436,12 +465,9 @@ def plot(
         # --- Customization ---
         plt.title(title)
         plt.xlabel(xlabel if xlabel else x_key)
-        if num_plots > 1:
-            plt.ylabel("Value")  # Generic Y label as it represents multiple metrics
+        plt.ylabel("Value")  # Generic Y label as it represents multiple metrics
+        if hue_key is not None:
             plt.legend(title=f"{hue_key} / Metric")  # Combined legend title
-        else:
-            plt.ylabel()
-            plt.legend(title=hue_key)  # Add a legend based on the hue key
 
         # --- Improve Label Overlap (single plot) ---
         x_values = plot_df[x_key].unique()
