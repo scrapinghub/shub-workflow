@@ -364,7 +364,7 @@ def plot(
         ncols = min(math.ceil(math.sqrt(num_plots)), 4)
         nrows = math.ceil(num_plots / ncols)
 
-        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(ncols * 6, nrows * 5), squeeze=False)
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(ncols * 10, nrows * 7), squeeze=False)
         fig.suptitle(title, fontsize=16, y=0.98)  # Main title for the figure
         axes_flat = axes.flatten()
         handles, labels = None, None  # To store legend handles/labels
@@ -405,13 +405,13 @@ def plot(
         if handles and labels:
             # Place legend below the subplots, centered horizontally
             # Adjust ncol based on number of labels for better layout
-            fig.legend(handles, labels, title=hue_key, loc='lower center',
-                       bbox_to_anchor=(0.5, 0), ncol=min(len(labels), 6),
+            fig.legend(handles, labels, title=hue_key, loc='upper center',
+                       bbox_to_anchor=(0.5, 0.95), ncol=min(len(labels), 6),
                        fontsize='medium', title_fontsize='medium')
 
         # Adjust layout to prevent overlap and make space for legend/title
         # Increase bottom margin for legend, top margin for title, add spacing
-        fig.subplots_adjust(left=0.08, right=0.95, bottom=0.15, top=0.92, hspace=0.3, wspace=0.25)
+        fig.subplots_adjust(left=0.08, right=0.95, bottom=0.25, top=0.85, hspace=0.35, wspace=0.25)
 
     # --- Single Plot Logic, multiple y keys ---
     elif num_plots > 1:
@@ -508,7 +508,7 @@ def plot(
 
 
 class FilterResult(TypedDict):
-    tstamp: str
+    tstamp: datetime.datetime
     message: NotRequired[str]
     groups: Tuple[Union[str, int, float], ...]
     dict_groups: NotRequired[Dict["str", Union[str, int, float]]]
@@ -589,6 +589,7 @@ class Check(BaseScript):
                 "in same graph."
             ),
         )
+        self.argparser.add_argument("--tstamp-format", default="%Y-%m-%d %H:%M:%S", help="Default: %(default)s")
 
     def parse_args(self):
         args = super().parse_args()
@@ -607,7 +608,7 @@ class Check(BaseScript):
             msg = logline["message"]
             for pattern in self.args.log_pattern:
                 if (m := re.search(pattern, msg, flags=re.S)) is not None:
-                    yield {"tstamp": str(tstamp), "message": msg, "groups": m.groups()}
+                    yield {"tstamp": tstamp, "message": msg, "groups": m.groups()}
                     has_match = True
 
                     if self.args.first_match_only and has_match:
@@ -625,7 +626,7 @@ class Check(BaseScript):
                 key, pattern = item_field_pattern.split(":", 1)
                 value = item.get(key, "")
                 if (m := re.search(pattern, value)) is not None:
-                    yield {"tstamp": str(tstamp), "itemno": idx, "field": key, "value": value, "groups": m.groups()}
+                    yield {"tstamp": tstamp, "itemno": idx, "field": key, "value": value, "groups": m.groups()}
                     has_match = True
 
             if self.args.first_match_only and has_match:
@@ -643,7 +644,7 @@ class Check(BaseScript):
                     stats[key] = val
         if groups:
             yield {
-                "tstamp": str(tstamp),
+                "tstamp": tstamp,
                 "stats": stats,
                 "value": val,
                 "groups": tuple(groups),
@@ -739,7 +740,7 @@ class Check(BaseScript):
                     if self.args.data_headers:
                         headers = self.args.data_headers.split(",")
                         result["dict_groups"] = dict(zip(headers, result["groups"]))
-                        result["dict_groups"]["tstamp"] = result["tstamp"]
+                        result["dict_groups"]["tstamp"] = result["tstamp"].strftime(self.args.tstamp_format)
                         if self.args.plot:
                             plot_data_points.insert(0, result["dict_groups"])
                     print("Data points generated:", result.get("dict_groups") or result["groups"])
@@ -747,7 +748,7 @@ class Check(BaseScript):
                     if result.get("dict_groups"):
                         print(json.dumps(result["dict_groups"]), file=self.args.write)
                     elif result["groups"]:
-                        groups = (result["tstamp"],) + result["groups"]
+                        groups = (result["tstamp"].strftime(self.args.tstamp_format),) + result["groups"]
                         print(json.dumps(groups), file=self.args.write)
                     else:
                         print(json.dumps(result), file=self.args.write)
