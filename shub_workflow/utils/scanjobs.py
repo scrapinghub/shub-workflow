@@ -436,7 +436,7 @@ def plot(
 
         # Adjust layout to prevent overlap and make space for legend/title
         fig.subplots_adjust(
-            left=0.08, right=0.95, bottom=0.25, top=0.85 if hue_key is not None else 0.95, hspace=0.35, wspace=0.25
+            left=0.08, right=0.95, bottom=0.25, top=0.85 if hue_key is not None else 0.95, hspace=0.5, wspace=0.25
         )
 
     # --- Single Plot Logic, multiple y keys ---
@@ -460,7 +460,9 @@ def plot(
 
         plt.figure(figsize=(12, 6))
         # Use 'style' to differentiate the original y_keys, 'hue' for the original hue_key
-        ax = sns.lineplot(data=melted_df, x=x_key, y="Value", hue=hue_key, style="Metric", marker="o", sort=False)
+        ax = sns.lineplot(
+            data=melted_df, x=x_key, y="Value", hue=hue_key or "Metric", style="Metric", marker="o", sort=False
+        )
 
         # --- Customization ---
         plt.title(title)
