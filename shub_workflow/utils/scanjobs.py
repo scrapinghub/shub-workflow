@@ -1,5 +1,7 @@
 """
-Utility for scan, find and prints logs, spider arguments and items  on target spiders/scripts using regex patterns.
+Utility for scan, extract and prints logs, spider arguments and items on target spiders/scripts using regex patterns.
+It also has the capability to post process the extracted data (see --post-process option) and generate plots from them
+(see --plot option). Plotting requires pandas, seaborn and matplotlib libraries.
 
 It can generate regex pattern groups, post process them via simple post-script like language,
 and save in order to generate data tables.
@@ -142,7 +144,7 @@ import argparse
 import datetime
 import math
 from uuid import uuid4
-from typing import Iterator, Tuple, TypedDict, List, Iterable, Dict, Union
+from typing import Iterator, Tuple, TypedDict, List, Iterable, Dict, Union, Optional
 from itertools import chain
 
 import dateparser
@@ -258,17 +260,28 @@ def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[s
     return stack
 
 
+class PlotOptions(TypedDict):
+    x_key: NotRequired[str]
+    y_keys: List[str]
+    hue_key: NotRequired[str]
+    title: NotRequired[str]
+    save: NotRequired[bool]
+    max_xticks: NotRequired[int]
+    smoothing_window: NotRequired[int]
+    tile_plots: NotRequired[bool]
+
+
 def plot(
-    data_list,
-    x_key,
-    y_key,
-    hue_key=None,
-    title="Line Plot",
-    xlabel=None,
-    ylabel=None,
-    save=False,
-    max_xticks=15,
-    smoothing_window=0,
+    data_list: List[Dict[str, Union[str, int, float]]],
+    x_key: str,
+    y_keys: List[str],
+    hue_key: Optional[str] = None,
+    title: str = "Line Plot",
+    xlabel: Optional[str] = None,
+    save: bool = False,
+    max_xticks: int = 15,
+    smoothing_window: int = 0,
+    tile_plots: bool = True,
 ):
     """
     Generates a line plot with potentially multiple lines based on a hue category
@@ -277,16 +290,17 @@ def plot(
     Args:
         data_list (list): A list of dictionaries.
         x_key (str): The key in the dictionaries for the x-axis.
-        y_key (str): The key in the dictionaries for the y-axis.
+        y_keys (list): A list of keys in the dictionaries for the y-axis variables..
         hue_key (str): The key in the dictionaries to differentiate lines (create categories).
         title (str, optional): The title for the plot. Defaults to "Line Plot".
         xlabel (str, optional): The label for the x-axis. Defaults to x_key.
-        ylabel (str, optional): The label for the y-axis. Defaults to y_key.
         save (bool, optional): Save plot image.
         max_xticks (int, optional): The approximate maximum number of x-ticks to display. Defaults to 15.
         smoothing_window (int, optional): The window size for the rolling average.
                                           Smoothing is applied if window > 1.
                                           Defaults to 0 (no smoothing).
+        tile_plots (bool, optional): If True (default), creates separate subplots for each y_key.
+                                     If False, plots all y_keys on the same graph.
 
     Returns:
         None: Displays the plot using matplotlib.pyplot.show() or saves it.
@@ -302,55 +316,179 @@ def plot(
     # Convert the list of dictionaries to a Pandas DataFrame
     df = pd.DataFrame(data_list)
 
-    # --- Optional Smoothing (Implicitly controlled by smoothing_window) ---
-    # Relies on data being pre-sorted by hue_key, then x_key for meaningful rolling average
-    y_col_to_plot = y_key  # Default to original y-column
+    # Apply smoothing to each y_key column if requested, before potential melting
+    apply_smoothing = smoothing_window > 1
+    plot_cols_map = {}  # Map original y_key to the column name to plot (original or smoothed)
 
-    if smoothing_window > 1:
-        # Calculate rolling mean within each group defined by hue_key
-        smoothed_col_name = f"{y_key}_smoothed_{smoothing_window}"
-        # Group by hue_key. Assumes data within each group is sorted by x_key.
-        df[smoothed_col_name] = df.groupby(hue_key, group_keys=False)[y_key].transform(
-            lambda x: x.rolling(window=smoothing_window, min_periods=1, center=True).mean()
-        )
-        y_col_to_plot = smoothed_col_name  # Update the column to plot
-        print(f"Applied smoothing with window {smoothing_window}. Plotting '{y_col_to_plot}'.")
-        title += f" (Smoothed, Window={smoothing_window})"  # Append smoothing info to title
+    for yk in y_keys:
+        if yk not in df.columns:
+            print(f"Warning: y_key '{yk}' not found in data. Skipping.")
+            continue  # Skip this y_key if not found
+
+        if apply_smoothing:
+            smoothed_col_name = f"{yk}_smoothed_{smoothing_window}"
+            # Group by hue_key. Assumes data within each group is sorted by x_key.
+            try:
+                df[smoothed_col_name] = df.groupby(hue_key, group_keys=False)[yk].transform(
+                    lambda x: x.rolling(window=smoothing_window, min_periods=1, center=True).mean()
+                )
+                plot_cols_map[yk] = smoothed_col_name  # Use smoothed column
+                print(f"Applied smoothing (window={smoothing_window}) to '{yk}'. Plotting '{smoothed_col_name}'.")
+            except Exception as e:
+                print(f"Warning: Could not apply smoothing to '{yk}'. Using original data. Error: {e}")
+                plot_cols_map[yk] = yk  # Fallback to original if smoothing fails
+        else:
+            plot_cols_map[yk] = yk  # Use original column
+
+    # Filter y_keys to only those successfully processed (found and optionally smoothed)
+    valid_y_keys = list(plot_cols_map.keys())
+    if not valid_y_keys:
+        print("Error: No valid y_keys found or processed.")
+        return
 
     # Set the plot style (optional)
     sns.set_theme(style="whitegrid")
 
-    # Create the plot
-    plt.figure(figsize=(10, 6))  # Set figure size
+    # Determine columns needed for plotting (x, hue, and the actual y columns to use)
+    cols_to_keep = [x_key, hue_key] + list(plot_cols_map.values())
+    plot_df = df[cols_to_keep].copy()
 
-    # Generate the line plot, using 'hue' to create separate lines
-    ax = sns.lineplot(data=df, x=x_key, y=y_col_to_plot, hue=hue_key, marker="o")  # Added marker for clarity
+    if apply_smoothing:
+        title += f" (Smoothed, Window={smoothing_window})"
 
-    # --- Customization ---
-    plt.title(title)
-    plt.xlabel(xlabel if xlabel else x_key)
-    plt.ylabel(ylabel if ylabel else y_key)
-    if hue_key:
-        plt.legend(title=hue_key)  # Add a legend based on the hue key
+    num_plots = len(valid_y_keys)
 
-    # --- Improve Label Overlap ---
-    # Reduce the number of x-axis labels shown if there are too many
-    x_values = df[x_key].unique()  # Get unique x-values in sorted order
-    num_xticks = len(x_values)
+    # --- Tiled Plot Logic ---
+    if tile_plots and num_plots > 1:
+        # Calculate grid size (prefer wider than tall)
+        ncols = min(math.ceil(math.sqrt(num_plots)), 4)
+        nrows = math.ceil(num_plots / ncols)
 
-    if num_xticks > max_xticks:
-        # Calculate step size to show approximately max_xticks
-        step = math.ceil(num_xticks / max_xticks)
-        # Select ticks at calculated intervals
-        selected_ticks = x_values[::step]
-        ax.set_xticks(selected_ticks)  # Set the positions for the ticks
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(ncols * 6, nrows * 5), squeeze=False)
+        fig.suptitle(title, fontsize=16, y=0.98)  # Main title for the figure
+        axes_flat = axes.flatten()
+        handles, labels = None, None  # To store legend handles/labels
 
-    # Rotate the displayed x-axis labels for better readability
-    # Apply rotation to the labels corresponding to the selected ticks
-    plt.xticks(rotation=45, ha="right")
+        for i, yk in enumerate(valid_y_keys):
+            ax = axes_flat[i]
+            plot_col_name = plot_cols_map[yk]  # Get the actual column name (original or smoothed)
 
-    # Adjust layout to prevent labels from overlapping plot elements
-    plt.tight_layout()  # Call this *after* setting labels and titles
+            sns.lineplot(data=plot_df, x=x_key, y=plot_col_name, hue=hue_key, marker="o", sort=False, ax=ax)
+
+            ax.set_title(yk)  # Subplot title
+            ax.set_xlabel(xlabel if xlabel else x_key)
+            ax.set_ylabel(yk)  # Use original y_key name for label
+            ax.legend().set_visible(False)
+
+            if i == 0:
+                current_handles, current_labels = ax.get_legend_handles_labels()
+                if current_handles:  # Check if legend items exist
+                    handles, labels = current_handles, current_labels
+
+            # --- Improve Label Overlap (per subplot) ---
+            x_values = plot_df[x_key].unique()
+            num_xticks = len(x_values)
+            if num_xticks > max_xticks:
+                step = math.ceil(num_xticks / max_xticks)
+                selected_ticks_indices = range(0, num_xticks, step)
+                selected_ticks = [x_values[i] for i in selected_ticks_indices]
+                ax.set_xticks(selected_ticks)
+
+            ax.tick_params(axis="x", rotation=45, labelsize="small")  # Rotate labels per subplot
+            plt.setp(ax.get_xticklabels(), ha="right")
+
+        # Hide unused subplots
+        for i in range(num_plots, len(axes_flat)):
+            axes_flat[i].set_visible(False)
+
+        # Add a single figure-level legend below the plots
+        if handles and labels:
+            # Place legend below the subplots, centered horizontally
+            # Adjust ncol based on number of labels for better layout
+            fig.legend(handles, labels, title=hue_key, loc='lower center',
+                       bbox_to_anchor=(0.5, 0), ncol=min(len(labels), 6),
+                       fontsize='medium', title_fontsize='medium')
+
+        # Adjust layout to prevent overlap and make space for legend/title
+        # Increase bottom margin for legend, top margin for title, add spacing
+        fig.subplots_adjust(left=0.08, right=0.95, bottom=0.15, top=0.92, hspace=0.3, wspace=0.25)
+
+    # --- Single Plot Logic, multiple y keys ---
+    elif num_plots > 1:
+        # Melt the DataFrame to long format for plotting multiple y-vars on one graph
+        id_vars = [x_key, hue_key]
+        value_vars = [plot_cols_map[yk] for yk in valid_y_keys]  # Columns to melt (original or smoothed)
+        # Map smoothed names back to original for the 'variable' column in melted data
+        rename_map = {v: k for k, v in plot_cols_map.items()}
+
+        try:
+            melted_df = pd.melt(plot_df, id_vars=id_vars, value_vars=value_vars, var_name="Metric", value_name="Value")
+            # Rename the 'Metric' column values back to original y_key names
+            melted_df["Metric"] = melted_df["Metric"].map(rename_map)
+        except Exception as e:
+            print(f"Error during data melting: {e}. Cannot create single plot.")
+            return
+
+        plt.figure(figsize=(12, 6))
+        # Use 'style' to differentiate the original y_keys, 'hue' for the original hue_key
+        ax = sns.lineplot(data=melted_df, x=x_key, y="Value", hue=hue_key, style="Metric", marker="o", sort=False)
+
+        # --- Customization ---
+        plt.title(title)
+        plt.xlabel(xlabel if xlabel else x_key)
+        if num_plots > 1:
+            plt.ylabel("Value")  # Generic Y label as it represents multiple metrics
+            plt.legend(title=f"{hue_key} / Metric")  # Combined legend title
+        else:
+            plt.ylabel()
+            plt.legend(title=hue_key)  # Add a legend based on the hue key
+
+        # --- Improve Label Overlap (single plot) ---
+        x_values = plot_df[x_key].unique()
+        num_xticks = len(x_values)
+        if num_xticks > max_xticks:
+            step = math.ceil(num_xticks / max_xticks)
+            selected_ticks_indices = range(0, num_xticks, step)
+            selected_ticks = [x_values[i] for i in selected_ticks_indices]
+            ax.set_xticks(selected_ticks)
+
+        plt.xticks(rotation=45, ha="right")
+        plt.tight_layout()  # Adjust layout
+
+    # --- Single Plot Logic, single y key ---
+    else:
+
+        y_key = valid_y_keys[0]
+        y_col_to_plot = plot_cols_map[y_key]
+
+        plt.figure(figsize=(10, 6))  # Set figure size
+        ax = sns.lineplot(data=df, x=x_key, y=y_col_to_plot, hue=hue_key, marker="o")
+
+        # --- Customization ---
+        plt.title(title)
+        plt.xlabel(xlabel if xlabel else x_key)
+        plt.ylabel(y_key)
+        if hue_key:
+            plt.legend(title=hue_key)  # Add a legend based on the hue key
+
+        # --- Improve Label Overlap ---
+        # Reduce the number of x-axis labels shown if there are too many
+        x_values = df[x_key].unique()  # Get unique x-values in sorted order
+        num_xticks = len(x_values)
+
+        if num_xticks > max_xticks:
+            # Calculate step size to show approximately max_xticks
+            step = math.ceil(num_xticks / max_xticks)
+            # Select ticks at calculated intervals
+            selected_ticks = x_values[::step]
+            ax.set_xticks(selected_ticks)  # Set the positions for the ticks
+
+        # Rotate the displayed x-axis labels for better readability
+        # Apply rotation to the labels corresponding to the selected ticks
+        plt.xticks(rotation=45, ha="right")
+
+        # Adjust layout to prevent labels from overlapping plot elements
+        plt.tight_layout()  # Call this *after* setting labels and titles
 
     # --- Display / Save ---
     if hasattr(sys, "ps1") or "ipykernel" in sys.modules or "spyder" in sys.modules:
@@ -444,8 +582,11 @@ class Check(BaseScript):
             "--plot",
             help=(
                 "If provided, generate a plot with the provided parameters. Format: "
-                "X=<x key>,Y=<y key>,hue=<hue key>,title=<title>,save,xticks=<num>,smooth=<num>"
-                "Only Y is required. X defaults to time stamp. save is a flag. If included, save plot image."
+                "X=<x key>,Y=<y keys>,hue=<hue key>,title=<title>,save,xticks=<num>,smooth=<num>,no_tiles "
+                "Only Y is required. It can be a single y key, or multiple separated by /."
+                "X defaults to time stamp. save and no_tiles are flags, True if included, False "
+                "otherwise. If save is provided, save plot image. If no_tiles is provided, plot all y_keys"
+                "in same graph."
             ),
         )
 
@@ -526,17 +667,19 @@ class Check(BaseScript):
             end_limit = dt.timestamp()
 
         plot_data_points: List[Dict[str, Union[str, int, float]]] = []
-        plot_options: Dict[str, Union[bool, str, int]] = {}
+        plot_options: PlotOptions = {"y_keys": []}
         if self.args.plot:
             for option in self.args.plot.split(","):
                 if option == "save":
                     plot_options["save"] = True
+                elif option == "no_tiles":
+                    plot_options["tile_plots"] = False
                 else:
                     key, val = option.split("=")
                     if key == "X":
                         plot_options["x_key"] = val
                     elif key == "Y":
-                        plot_options["y_key"] = val
+                        plot_options["y_keys"] = val.split("/")
                     elif key == "hue":
                         plot_options["hue_key"] = val
                     elif key == "title":
@@ -545,7 +688,7 @@ class Check(BaseScript):
                         plot_options["max_xticks"] = int(val)
                     elif key == "smooth":
                         plot_options["smoothing_window"] = int(val)
-            assert "y_key" in plot_options, "Y option is required for --plot."
+            assert plot_options["y_keys"], "Y option is required for --plot."
             plot_options.setdefault("x_key", "tstamp")
 
         limit = (end_limit - self.args.limit_secs) * 1000
