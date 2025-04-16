@@ -117,21 +117,38 @@ Examples
 postscript instructions supported:
 ----------------------------------
 
-1. operations:
-
-add, sub, mul, div
+1. Binary operations. In all cases, pops both numbers and push the result to stack
+    add - sum last two numbers in stack
+    sub - substract the last two numbers in stack
+    mul - multiply the last two numbers in stack
+    div - divide the last two numbers in stack
 
 2. stack manipulation and counting:
 
-dup, pop, roll, exch count
+    dup - pushes the last element of the stack, so it becomes duplicated on the stack.
+    pop - pops out the last element in stack
+    roll - pops out last two elements in the stack (x, y), which are the parameters, and rolls the last x
+           elements of the remaining stack, in the direction indicated by y: to the right if y = 1, to the left
+           if y = -1
+    exch - exchange possitions of the last two elements in the stack
+    count - computes the size of the stack, and push the result into the stack
 
 3. flow manipulation:
 
-repeat
+    repeat -
 
 4. conversion:
 
-cvi
+    cvi - pops out the last element of the stack, converts to integer, and pushes it back to stack.
+
+5. special:
+
+    hold - this instruction is not postscript and instead is used to conserve the stack between extractions for
+           the same job. So if for example you are extraction logs and stats, without hold the same post processing
+           string will be applied (or tried to) on each extracted set separately. The hold instruction is consumed
+           within the scan of a single job, and pushes the result of an extraction into the stack with no further
+           post processing, so it will be processed along the next extraction in the same job.
+
 
 ======================================================================
 """
@@ -601,7 +618,11 @@ class Check(BaseScript):
             type=argparse.FileType("w"),
             help="If given, write the captured patterns into the provided json list file, along with dates.",
         )
-        self.argparser.add_argument("--post-process", "-p", help="postscript like instructions to process groups.")
+        self.argparser.add_argument(
+            "--post-process",
+            "-p",
+            help="postscript like instructions to process groups.",
+        )
         self.argparser.add_argument(
             "--data-headers",
             help="If provided, instead of generating a list per datapoint, it generates a dict. Comma separated list.",
@@ -614,7 +635,8 @@ class Check(BaseScript):
                 "Only Y is required. It can be a single y key, or multiple separated by /."
                 "X defaults to time stamp. save and no_tiles are flags, True if included, False "
                 "otherwise. If save is provided, save plot image. If no_tiles is provided, plot all y_keys"
-                "in same graph."
+                "in same graph.\n"
+                "Requires --data-headers in order to name extracted data points."
             ),
         )
         self.argparser.add_argument("--tstamp-format", default="%Y-%m-%d %H:%M:%S", help="Default: %(default)s")
@@ -742,6 +764,10 @@ class Check(BaseScript):
             elif self.args.spider_argument_pattern:
                 continue
 
+            post_process_instructions: Optional[List[str]] = (
+                self.args.post_process.split() if self.args.post_process is not None else None
+            )
+            post_process_stack: List[Union[str, int, float]] = []
             for result in chain(
                 self.filter_log_pattern(jdict, job, tstamp),
                 self.filter_item_field_pattern(jdict, job, tstamp),
@@ -762,9 +788,17 @@ class Check(BaseScript):
                     print("Matching stats:", result["stats"])
                     has_match = True
                 if result["groups"]:
-                    if self.args.post_process:
-                        print("Data points extracted:", result["groups"])
-                        result["groups"] = tuple(post_process(result["groups"] + tuple(self.args.post_process.split())))
+                    if post_process_instructions is not None:
+                        hold = False
+                        if post_process_instructions and post_process_instructions[0] == "hold":
+                            post_process_instructions.pop(0)
+                            hold = True
+                        print("Data points extracted:", result["groups"], "Holded" if hold else "")
+                        post_process_stack.extend(result["groups"])
+                        if hold:
+                            continue
+                        post_process_stack.extend(post_process_instructions)
+                        result["groups"] = tuple(post_process(post_process_stack))
                     if self.args.data_headers:
                         headers = self.args.data_headers.split(",")
                         result["dict_groups"] = dict(zip(headers, result["groups"]))
