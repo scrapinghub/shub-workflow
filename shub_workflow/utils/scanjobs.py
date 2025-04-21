@@ -337,6 +337,8 @@ def plot(
     apply_smoothing = smoothing_window > 1
     plot_cols_map = {}  # Map original y_key to the column name to plot (original or smoothed)
 
+    y_keys = [k for k in y_keys if k != x_key and k != hue_key]
+
     for yk in y_keys:
         if yk not in df.columns:
             print(f"Warning: y_key '{yk}' not found in data. Skipping.")
@@ -625,14 +627,18 @@ class Check(BaseScript):
         )
         self.argparser.add_argument(
             "--data-headers",
-            help="If provided, instead of generating a list per datapoint, it generates a dict. Comma separated list.",
+            help=("If provided, instead of generating a list per datapoint, it generates a dict. Comma separated list."
+                  "If 'auto' is provided, try to generate headers automatically. This requires alternating text and"
+                  "value being extracted.")
         )
         self.argparser.add_argument(
             "--plot",
             help=(
                 "If provided, generate a plot with the provided parameters. Format: "
-                "X=<x key>,Y=<y keys>,hue=<hue key>,title=<title>,save,xticks=<num>,smooth=<num>,no_tiles "
-                "Only Y is required. It can be a single y key, or multiple separated by /."
+                "X=<x key>,Y=<y keys>,hue=<hue key>,title=<title>,save,xticks=<num>,smooth=<num>,no_tiles\n"
+                "title is required. "
+                "Y can be a single y key, or multiple separated by /. If not provided, will use all extracted headers "
+                "except the ones defined in X and/or hue."
                 "X defaults to time stamp. save and no_tiles are flags, True if included, False "
                 "otherwise. If save is provided, save plot image. If no_tiles is provided, plot all y_keys"
                 "in same graph.\n"
@@ -739,7 +745,7 @@ class Check(BaseScript):
                         plot_options["max_xticks"] = int(val)
                     elif key == "smooth":
                         plot_options["smoothing_window"] = int(val)
-            assert plot_options["y_keys"], "Y option is required for --plot."
+            assert "title" in plot_options, "title is required for plot."
             plot_options.setdefault("x_key", "tstamp")
 
         limit = (end_limit - self.args.limit_secs) * 1000
@@ -800,11 +806,24 @@ class Check(BaseScript):
                         post_process_stack.extend(post_process_instructions)
                         result["groups"] = tuple(post_process(post_process_stack))
                     if self.args.data_headers:
-                        headers = self.args.data_headers.split(",")
-                        result["dict_groups"] = dict(zip(headers, result["groups"]))
+                        if self.args.data_headers == "auto":
+                            list_iterator = iter(result["groups"])
+                            result["dict_groups"] = dict(zip(*[list_iterator] * 2))
+                            headers = sorted(result["dict_groups"].keys())
+                        else:
+                            headers = self.args.data_headers.split(",")
+                            result["dict_groups"] = dict(zip(headers, result["groups"]))
+                        for k, v in list(result["dict_groups"].items()):
+                            if isinstance(v, str):
+                                try:
+                                    result["dict_groups"][k] = float(v)
+                                except ValueError:
+                                    pass
                         result["dict_groups"]["tstamp"] = result["tstamp"].strftime(self.args.tstamp_format)
                         if self.args.plot:
                             plot_data_points.insert(0, result["dict_groups"])
+                            if not plot_options["y_keys"]:
+                                plot_options["y_keys"] = headers
                     print("Data points generated:", result.get("dict_groups") or result["groups"])
                 if self.args.write:
                     if result.get("dict_groups"):
