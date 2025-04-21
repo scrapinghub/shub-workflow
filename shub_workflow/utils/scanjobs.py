@@ -692,18 +692,21 @@ class Check(BaseScript):
             self.argparser.error("You must provide at least one pattern. (use either -l, -a , -f or -s)")
         return args
 
-    def filter_log_pattern(self, jdict: JobDict, job: Job, tstamp: datetime.datetime) -> Iterator[FilterResult]:
+    def filter_log_pattern(self, jdict: JobDict, job: Job, limit: int) -> Iterator[FilterResult]:
         if not self.args.log_pattern:
             return
         has_match = False
         for idx, logline in enumerate(job.logs.iter()):
             if self.args.max_items_per_job and idx == self.args.max_items_per_job:
                 break
-
+            if logline["time"] < limit:
+                continue
+            log_time = logline["time"] / 1000
             msg = logline["message"]
+
             for pattern in self.args.log_pattern:
                 if (m := re.search(pattern, msg, flags=re.S)) is not None:
-                    log_time = logline["time"] / 1000
+
                     yield {
                         "tstamp": datetime.datetime.fromtimestamp(log_time),
                         "message": msg,
@@ -832,7 +835,7 @@ class Check(BaseScript):
             )
             post_process_stack: List[Union[str, int, float]] = []
             for result in chain(
-                self.filter_log_pattern(jdict, job, tstamp),
+                self.filter_log_pattern(jdict, job, limit),
                 self.filter_item_field_pattern(jdict, job, tstamp),
                 self.filter_stats_pattern(jdict, job, tstamp),
             ):
