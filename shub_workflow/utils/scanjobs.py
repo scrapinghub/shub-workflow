@@ -286,6 +286,8 @@ class PlotOptions(TypedDict):
     max_xticks: NotRequired[int]
     smoothing_window: NotRequired[int]
     tile_plots: NotRequired[bool]
+    num_bins: NotRequired[int]
+    agg_func: NotRequired[str]
 
 
 def plot(
@@ -299,6 +301,8 @@ def plot(
     max_xticks: int = 15,
     smoothing_window: int = 0,
     tile_plots: bool = True,
+    num_bins: int = 0,
+    agg_func: str = "mean",
 ):
     """
     Generates a line plot with potentially multiple lines based on a hue category
@@ -318,7 +322,12 @@ def plot(
                                           Defaults to 0 (no smoothing).
         tile_plots (bool, optional): If True (default), creates separate subplots for each y_key.
                                      If False, plots all y_keys on the same graph.
-
+        num_bins (int, optional): If > 0, divides the x_key range into this many bins
+                                  and aggregates y_keys within each bin. Requires numeric/datetime x_key.
+                                  Defaults to 0 (no binning).
+        agg_func (str or function, optional): Aggregation function to use when binning.
+                                              Examples: 'mean', 'median', 'sum', 'count', 'std' (see pandas
+                                              agg() method). Defaults to 'mean'.
     Returns:
         None: Displays the plot using matplotlib.pyplot.show() or saves it.
     """
@@ -337,12 +346,16 @@ def plot(
     if hue_key and hue_key in df.columns:
         sort_keys.append(hue_key)
 
+    x_is_datetime = False
     # Attempt to convert x_key to datetime if possible for proper sorting
     try:
         # Use errors='coerce' to handle non-convertible values gracefully (they become NaT)
         df[x_key] = pd.to_datetime(df[x_key], errors="coerce")
+        df = df.dropna(subset=[x_key])  # Drop rows where conversion failed
         # Optional: Handle NaT values if necessary, e.g., drop rows or fill
         # df = df.dropna(subset=[x_key])
+        if not df.empty:
+            x_is_datetime = True
     except (ValueError, TypeError, OverflowError):
         # If not datetime or conversion fails, treat as categorical or numeric
         print(f"Warning: x_key '{x_key}' could not be reliably converted to datetime. Sorting based on original type.")
@@ -368,6 +381,49 @@ def plot(
     plot_cols_map = {}  # Map original y_key to the column name to plot (original or smoothed)
 
     y_keys = [k for k in y_keys if k != x_key and k != hue_key]
+    if not y_keys:
+        print("Error: y_keys must be a non-empty list of strings.")
+        return
+
+    if num_bins > 0:
+        print(f"Applying binning: num_bins={num_bins}, agg_func='{agg_func}'")
+        # Create bins using pd.cut
+        # Use include_lowest=True to ensure min value is included
+        df["bin"], bin_edges = pd.cut(df[x_key], bins=num_bins, labels=False, retbins=True, include_lowest=True)
+
+        # Calculate bin midpoints for plotting
+        bin_midpoints = []
+        for i in range(num_bins):
+            start_edge = bin_edges[i]
+            end_edge = bin_edges[i + 1]
+            if x_is_datetime:
+                # Calculate midpoint for Timestamps using Timedelta
+                midpoint = start_edge + (end_edge - start_edge) / 2
+            else:  # Assume numeric
+                midpoint = (start_edge + end_edge) / 2
+            bin_midpoints.append(midpoint)
+
+        # Map bin index to midpoint
+        midpoint_map = {i: bin_midpoints[i] for i in range(num_bins)}
+        df["bin_midpoint"] = df["bin"].map(midpoint_map)
+
+        # Define grouping keys
+        group_keys = ["bin_midpoint"]
+        if hue_key:
+            group_keys.insert(0, hue_key)
+
+        # Define aggregation dictionary
+        agg_dict = {yk: agg_func for yk in y_keys}
+
+        # Perform aggregation
+        print(f"Aggregating by: {group_keys}")
+        agg_df = df.groupby(group_keys, observed=False).agg(agg_dict).reset_index()
+
+        # Replace df with aggregated data
+        df = agg_df
+        x_key = "bin_midpoint"  # Update x_key for plotting
+        if xlabel is None:  # Update xlabel only if user didn't provide one
+            xlabel = f"{x_key} (Binned)"
 
     for yk in y_keys:
         if yk not in df.columns:
@@ -411,6 +467,8 @@ def plot(
 
     if apply_smoothing:
         title += f" (Smoothed, Window={smoothing_window})"
+    if num_bins > 0:
+        title += f" (Binned, n={num_bins})"
 
     num_plots = len(valid_y_keys)
 
@@ -454,11 +512,14 @@ def plot(
             # --- Improve Label Overlap (per subplot) ---
             x_values = plot_df[x_key].unique()
             num_xticks = len(x_values)
-            if num_xticks > max_xticks:
+            max_xticks = max_xticks if num_bins == 0 else num_bins  # Adjust tick logic if binned
+            if num_bins == 0 and num_xticks > max_xticks:
                 step = math.ceil(num_xticks / max_xticks)
                 selected_ticks_indices = range(0, num_xticks, step)
                 selected_ticks = [x_values[i] for i in selected_ticks_indices]
                 ax.set_xticks(selected_ticks)
+            elif num_bins > 0:
+                ax.set_xticks(x_values)
 
             ax.tick_params(axis="x", labelrotation=45, labelsize="small")  # Rotate labels per subplot
             plt.setp(ax.get_xticklabels(), ha="right")
@@ -666,13 +727,16 @@ class Check(BaseScript):
             "--plot",
             help=(
                 "If provided, generate a plot with the provided parameters. Format: "
-                "X=<x key>,Y=<y keys>,hue=<hue key>,title=<title>,save,xticks=<num>,smooth=<num>,no_tiles\n"
+                "X=<x key>,Y=<y keys>,hue=<hue key>,title=<title>,save,xticks=<num>,smooth=<num>,no_tiles,"
+                "bins=<n/func>\n"
                 "title is required. "
                 "Y can be a single y key, or multiple separated by /. If not provided, will use all extracted headers "
                 "except the ones defined in X and/or hue."
                 "X defaults to time stamp. save and no_tiles are flags, True if included, False "
                 "otherwise. If save is provided, save plot image. If no_tiles is provided, plot all y_keys"
-                "in same graph.\n"
+                "in same graph. "
+                "bins get two parameters: number of bins and aggregate function (like sum, mean, std, median, etc. "
+                "See pandas agg() method)"
                 "Requires --data-headers in order to name extracted data points."
             ),
         )
@@ -792,6 +856,9 @@ class Check(BaseScript):
                         plot_options["max_xticks"] = int(val)
                     elif key == "smooth":
                         plot_options["smoothing_window"] = int(val)
+                    elif key == "bins":
+                        num_bins, plot_options["agg_func"] = val.split("/")
+                        plot_options["num_bins"] = int(num_bins)
             assert "title" in plot_options, "title is required for plot."
             plot_options.setdefault("x_key", "tstamp")
 
