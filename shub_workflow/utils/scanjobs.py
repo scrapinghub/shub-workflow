@@ -627,9 +627,11 @@ class Check(BaseScript):
         )
         self.argparser.add_argument(
             "--data-headers",
-            help=("If provided, instead of generating a list per datapoint, it generates a dict. Comma separated list."
-                  "If 'auto' is provided, try to generate headers automatically. This requires alternating text and"
-                  "value being extracted.")
+            help=(
+                "If provided, instead of generating a list per datapoint, it generates a dict. Comma separated list."
+                "If 'auto' is provided, try to generate headers automatically. This requires alternating text and"
+                "value being extracted."
+            ),
         )
         self.argparser.add_argument(
             "--plot",
@@ -646,6 +648,9 @@ class Check(BaseScript):
             ),
         )
         self.argparser.add_argument("--tstamp-format", default="%Y-%m-%d %H:%M:%S", help="Default: %(default)s")
+        self.argparser.add_argument(
+            "--has-tag", action="append", help="Only select jobs with the given tag. Can be multiple."
+        )
 
     def parse_args(self):
         args = super().parse_args()
@@ -751,7 +756,8 @@ class Check(BaseScript):
         limit = (end_limit - self.args.limit_secs) * 1000
         jobcount = 0
         for jdict in self.get_jobs(
-            spider=self.args.spider, meta=["spider_args", "finished_time", "scrapystats"], state=["finished"]
+            spider=self.args.spider, meta=["spider_args", "finished_time", "scrapystats"], state=["finished"],
+            has_tag=self.args.has_tag
         ):
             if "finished_time" in jdict and jdict["finished_time"] / 1000 > end_limit:
                 continue
