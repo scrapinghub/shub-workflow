@@ -333,6 +333,36 @@ def plot(
     # Convert the list of dictionaries to a Pandas DataFrame
     df = pd.DataFrame(data_list)
 
+    sort_keys = []
+    if hue_key and hue_key in df.columns:
+        sort_keys.append(hue_key)
+
+    # Attempt to convert x_key to datetime if possible for proper sorting
+    try:
+        # Use errors='coerce' to handle non-convertible values gracefully (they become NaT)
+        df[x_key] = pd.to_datetime(df[x_key], errors="coerce")
+        # Optional: Handle NaT values if necessary, e.g., drop rows or fill
+        # df = df.dropna(subset=[x_key])
+    except (ValueError, TypeError, OverflowError):
+        # If not datetime or conversion fails, treat as categorical or numeric
+        print(f"Warning: x_key '{x_key}' could not be reliably converted to datetime. Sorting based on original type.")
+        # Pass # No conversion needed, sort will use existing type
+
+    sort_keys.append(x_key)
+
+    try:
+        print(f"Sorting DataFrame by: {sort_keys}")
+        # Drop rows where x_key became NaT during conversion attempt
+        if pd.api.types.is_datetime64_any_dtype(df[x_key]):
+            df = df.dropna(subset=[x_key])
+        df = df.sort_values(by=sort_keys).reset_index(drop=True)  # Reset index after sort
+    except KeyError as e:
+        print(f"Error sorting DataFrame: Could not find key {e}. Check x_key and hue_key.")
+        return  # Cannot proceed without sorting
+    except Exception as e:
+        print(f"An unexpected error occurred during sorting: {e}")
+        return  # Cannot proceed without sorting
+
     # Apply smoothing to each y_key column if requested, before potential melting
     apply_smoothing = smoothing_window > 1
     plot_cols_map = {}  # Map original y_key to the column name to plot (original or smoothed)
@@ -405,7 +435,6 @@ def plot(
                 y=plot_col_name,
                 hue=hue_key,
                 marker="o",
-                sort=False,
                 ax=ax,
             )
 
