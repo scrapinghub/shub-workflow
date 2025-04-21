@@ -651,6 +651,11 @@ class Check(BaseScript):
         self.argparser.add_argument(
             "--has-tag", action="append", help="Only select jobs with the given tag. Can be multiple."
         )
+        self.argparser.add_argument(
+            "--include-running-jobs",
+            action="store_true",
+            help="Also scan running jobs. By default only scans finished jobs",
+        )
 
     def parse_args(self):
         args = super().parse_args()
@@ -669,7 +674,12 @@ class Check(BaseScript):
             msg = logline["message"]
             for pattern in self.args.log_pattern:
                 if (m := re.search(pattern, msg, flags=re.S)) is not None:
-                    yield {"tstamp": tstamp, "message": msg, "groups": m.groups()}
+                    log_time = logline["time"] / 1000
+                    yield {
+                        "tstamp": datetime.datetime.fromtimestamp(log_time),
+                        "message": msg,
+                        "groups": m.groups(),
+                    }
                     has_match = True
 
                     if self.args.first_match_only and has_match:
@@ -755,17 +765,29 @@ class Check(BaseScript):
 
         limit = (end_limit - self.args.limit_secs) * 1000
         jobcount = 0
+        all_headers = set()
         for jdict in self.get_jobs(
-            spider=self.args.spider, meta=["spider_args", "finished_time", "scrapystats"], state=["finished"],
-            has_tag=self.args.has_tag
+            spider=self.args.spider,
+            meta=["spider_args", "finished_time", "scrapystats"],
+            state=["finished", "running"] if self.args.include_running_jobs else ["finished"],
+            has_tag=self.args.has_tag,
         ):
             if "finished_time" in jdict and jdict["finished_time"] / 1000 > end_limit:
                 continue
 
+            if "finished_time" in jdict and jdict["finished_time"] < limit:
+                print(f"Reached limit of {self.args.limit_secs} seconds.")
+                print("Total jobs scanned:", jobcount)
+                break
+
             jobcount += 1
             keyprinted = False
             job = self.get_job(jdict["key"])
-            tstamp = datetime.datetime.fromtimestamp(jdict["finished_time"] / 1000)
+            if "finished_time" in jdict:
+                job_tstamp = jdict["finished_time"]
+            else:
+                job_tstamp = int(end_limit * 1000)
+            tstamp = datetime.datetime.fromtimestamp(job_tstamp / 1000)
             has_match = False
 
             if self.filter_spider_argument(jdict, tstamp, jobcount):
@@ -829,7 +851,7 @@ class Check(BaseScript):
                         if self.args.plot:
                             plot_data_points.insert(0, result["dict_groups"])
                             if not plot_options["y_keys"]:
-                                plot_options["y_keys"] = headers
+                                all_headers.update(headers)
                     print("Data points generated:", result.get("dict_groups") or result["groups"])
                 if self.args.write:
                     if result.get("dict_groups"):
@@ -847,14 +869,13 @@ class Check(BaseScript):
 
             if jobcount % self.args.print_progress_each == 0:
                 print(f"Jobs scanned: {jobcount}")
-                tstamp = datetime.datetime.fromtimestamp(jdict["finished_time"] / 1000)
+                tstamp = datetime.datetime.fromtimestamp(job_tstamp / 1000)
                 print(f"Timestamp reached: {tstamp}")
-            if jdict["finished_time"] < limit:
-                print(f"Reached limit of {self.args.limit_secs} seconds.")
-                print("Total jobs scanned:", jobcount)
-                break
 
         if self.args.plot:
+            if not plot_options["y_keys"]:
+                plot_options["y_keys"] = sorted(all_headers)
+            print("Generating plots...")
             plot(plot_data_points, **plot_options)
 
 
