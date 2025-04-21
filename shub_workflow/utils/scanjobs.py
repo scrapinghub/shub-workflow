@@ -710,7 +710,7 @@ class Check(BaseScript):
                     yield {
                         "tstamp": datetime.datetime.fromtimestamp(log_time),
                         "message": msg,
-                        "groups": m.groups(),
+                        "groups": m.groups() or (1,),
                     }
                     has_match = True
 
