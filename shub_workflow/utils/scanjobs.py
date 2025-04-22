@@ -873,6 +873,8 @@ class Check(BaseScript):
                     elif key == "bins":
                         num_bins, plot_options["agg_func"] = val.split("/")
                         plot_options["num_bins"] = int(num_bins)
+                    else:
+                        self.argparser.error(f"Wrong plot parameter '{key}'")
             assert "title" in plot_options, "title is required for plot."
             plot_options.setdefault("x_key", "tstamp")
 
