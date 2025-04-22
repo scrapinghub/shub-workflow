@@ -170,6 +170,12 @@ from scrapinghub.client.jobs import Job
 from shub_workflow.script import BaseScript, JobDict
 
 
+def json_serializer(obj):
+    if isinstance(obj, datetime.datetime):
+        return str(obj)
+    raise TypeError(f"Type {type(obj)} not serializable")
+
+
 def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[str, int, float]]:
     """
     >>> post_process(["stringA", 3, 4, "dup"])
@@ -967,7 +973,7 @@ class Check(BaseScript):
                         groups = (result["tstamp"].strftime(self.args.tstamp_format),) + result["groups"]
                         print(json.dumps(groups), file=self.args.write)
                     else:
-                        print(json.dumps(result), file=self.args.write)
+                        print(json.dumps(result, default=json_serializer), file=self.args.write)
                 elif not self.args.plot:
                     input("Press Enter to continue...\n")
 
