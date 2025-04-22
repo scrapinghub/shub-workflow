@@ -749,6 +749,14 @@ class Check(BaseScript):
             action="store_true",
             help="Also scan running jobs. By default only scans finished jobs",
         )
+        self.argparser.add_argument(
+            "--count",
+            action="store_true",
+            help=(
+                "If provided, log matches will generate 1 so they can be aggregated as a counter, for example "
+                "in order to use with plot option 'bin=<n>/sum'. (see --plot)"
+            ),
+        )
 
     def parse_args(self):
         args = super().parse_args()
@@ -769,12 +777,12 @@ class Check(BaseScript):
             msg = logline["message"]
 
             for pattern in self.args.log_pattern:
-                if (m := re.search(pattern, msg, flags=re.S)) is not None:
+                if msg and (m := re.search(pattern, msg, flags=re.S)) is not None:
 
                     yield {
                         "tstamp": datetime.datetime.fromtimestamp(log_time),
                         "message": msg,
-                        "groups": m.groups() or (1,),
+                        "groups": (1,) if self.args.count else m.groups(),
                     }
                     has_match = True
 
