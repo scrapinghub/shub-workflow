@@ -22,7 +22,7 @@ In addition, you can search for log and/or item patterns with no specific job ar
 
 The only required constraint is the target spider/script name (so it is the command line required argument)
 
-By default, the scan period is the las 1 day. See --limit-secs option.
+By default, the scan period is the las 1 day. See --period option.
 
 By default, each time a new match is found, it is printed in the console and the search pauses waiting for
 pressing Enter. This mode is useful for visual inspection. This behavior can be modified via the --write
@@ -692,10 +692,13 @@ class Check(BaseScript):
             action="append",
             default=[],
         )
-        self.argparser.add_argument("--max-timestamp", help="In any format that dateparser can recognize.")
         self.argparser.add_argument(
-            "--limit-secs", type=int, default=86400, help="dont't go further than given seconds in past"
+            "--period", "-p", type=int, default=86400, help="Time window period in seconds. Default: %(default)s"
         )
+        self.argparser.add_argument("--end-time", "-e", help=(
+            "End side of the time window. By default it is just now. "
+            "In any format that dateparser can recognize."
+        ))
         self.argparser.add_argument(
             "--first-match-only",
             help="Print only first match and continue with next job.",
@@ -717,8 +720,8 @@ class Check(BaseScript):
             help="If given, write the captured patterns into the provided json list file, along with dates.",
         )
         self.argparser.add_argument(
-            "--post-process",
-            "-p",
+            "--post-process-code",
+            "-c",
             help="postscript like instructions to process groups.",
         )
         self.argparser.add_argument(
@@ -845,7 +848,7 @@ class Check(BaseScript):
     def run(self):
 
         end_limit = time.time()
-        if self.args.max_timestamp is not None and (dt := dateparser.parse(self.args.max_timestamp)) is not None:
+        if self.args.end_time is not None and (dt := dateparser.parse(self.args.end_time)) is not None:
             end_limit = dt.timestamp()
 
         plot_data_points: List[Dict[str, Union[str, int, float]]] = []
@@ -878,7 +881,7 @@ class Check(BaseScript):
             assert "title" in plot_options, "title is required for plot."
             plot_options.setdefault("x_key", "tstamp")
 
-        limit = (end_limit - self.args.limit_secs) * 1000
+        limit = (end_limit - self.args.period) * 1000
         jobcount = 0
         all_headers = set()
         for jdict in self.get_jobs(
@@ -891,7 +894,7 @@ class Check(BaseScript):
                 continue
 
             if "finished_time" in jdict and jdict["finished_time"] < limit:
-                print(f"Reached limit of {self.args.limit_secs} seconds.")
+                print(f"Reached limit of {self.args.period} seconds.")
                 print("Total jobs scanned:", jobcount)
                 break
 
@@ -914,7 +917,7 @@ class Check(BaseScript):
                 continue
 
             post_process_instructions: Optional[List[str]] = (
-                self.args.post_process.split() if self.args.post_process is not None else None
+                self.args.post_process_code.split() if self.args.post_process_code is not None else None
             )
             post_process_stack: List[Union[str, int, float]] = []
             for result in chain(
