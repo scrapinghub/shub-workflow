@@ -338,12 +338,51 @@ def plot(
         None: Displays the plot using matplotlib.pyplot.show() or saves it.
     """
     try:
+        import numpy as np
         import pandas as pd
         import seaborn as sns
         import matplotlib.pyplot as plt
     except ImportError as e:
         print(f"Plotting requires library {e.name}")
         return
+
+    def _format_xticks(ax, x_values, max_xticks, is_binned, x_is_datetime):
+        """Internal helper function to set and format x-axis ticks."""
+        from matplotlib.dates import DateFormatter
+
+        num_unique_x = len(x_values)
+        selected_ticks = x_values  # Default to all unique values
+        tick_labels = selected_ticks  # Default labels match ticks
+
+        # Determine ticks to show
+        if not is_binned and num_unique_x > max_xticks:  # Reduce ticks only if not binned
+            step = math.ceil(num_unique_x / max_xticks)
+            step = max(1, step)
+            selected_ticks_indices = range(0, num_unique_x, step)
+            selected_ticks = [x_values[i] for i in selected_ticks_indices]
+            tick_labels = selected_ticks  # Update labels to match selected ticks
+        # If binned, selected_ticks remains all unique bin midpoints
+
+        # Set the calculated ticks positions
+        ax.set_xticks(selected_ticks)
+
+        # Format labels if datetime
+        if x_is_datetime:
+            try:
+                # Use DateFormatter for specific format (up to seconds)
+                date_format = DateFormatter("%Y-%m-%d %H:%M:%S")
+                ax.xaxis.set_major_formatter(date_format)
+                print("HOHO", date_format)
+                # Apply rotation and alignment AFTER setting formatter
+                plt.setp(ax.get_xticklabels(), rotation=45, ha="right", size="small")
+            except Exception as e_fmt:
+                print(f"Warning: Could not apply DateFormatter for labels: {e_fmt}")
+                # Fallback: Simple string conversion with rotation
+                ax.set_xticklabels([str(label) for label in tick_labels], rotation=45, ha="right", size="small")
+        else:  # Numeric ticks
+            # Simple string conversion with rotation
+            print("HEHE")
+            ax.set_xticklabels([str(label) for label in tick_labels], rotation=45, ha="right", size="small")
 
     # Convert the list of dictionaries to a Pandas DataFrame
     df = pd.DataFrame(data_list)
@@ -515,20 +554,13 @@ def plot(
             if ax.get_legend() is not None:
                 ax.get_legend().set_visible(False)
 
-            # --- Improve Label Overlap (per subplot) ---
-            x_values = plot_df[x_key].unique()
-            num_xticks = len(x_values)
-            max_xticks = max_xticks if num_bins == 0 else num_bins  # Adjust tick logic if binned
-            if num_bins == 0 and num_xticks > max_xticks:
-                step = math.ceil(num_xticks / max_xticks)
-                selected_ticks_indices = range(0, num_xticks, step)
-                selected_ticks = [x_values[i] for i in selected_ticks_indices]
-                ax.set_xticks(selected_ticks)
-            elif num_bins > 0:
-                ax.set_xticks(x_values)
-
-            ax.tick_params(axis="x", labelrotation=45, labelsize="small")  # Rotate labels per subplot
-            plt.setp(ax.get_xticklabels(), ha="right")
+            _format_xticks(
+                ax=ax,
+                x_values=np.sort(plot_df[x_key].unique()),
+                max_xticks=max_xticks,
+                is_binned=num_bins > 0,
+                x_is_datetime=x_is_datetime,
+            )
 
         # Hide unused subplots
         for i in range(num_plots, len(axes_flat)):
@@ -586,16 +618,14 @@ def plot(
         if hue_key is not None:
             plt.legend(title=f"{hue_key} / Metric")  # Combined legend title
 
-        # --- Improve Label Overlap (single plot) ---
-        x_values = plot_df[x_key].unique()
-        num_xticks = len(x_values)
-        if num_xticks > max_xticks:
-            step = math.ceil(num_xticks / max_xticks)
-            selected_ticks_indices = range(0, num_xticks, step)
-            selected_ticks = [x_values[i] for i in selected_ticks_indices]
-            ax.set_xticks(selected_ticks)
+        _format_xticks(
+            ax=ax,
+            x_values=np.sort(plot_df[x_key].unique()),
+            max_xticks=max_xticks,
+            is_binned=num_bins > 0,
+            x_is_datetime=x_is_datetime,
+        )
 
-        plt.xticks(rotation=45, ha="right")
         plt.tight_layout()  # Adjust layout
 
     # --- Single Plot Logic, single y key ---
@@ -614,21 +644,13 @@ def plot(
         if hue_key:
             plt.legend(title=hue_key)  # Add a legend based on the hue key
 
-        # --- Improve Label Overlap ---
-        # Reduce the number of x-axis labels shown if there are too many
-        x_values = df[x_key].unique()  # Get unique x-values in sorted order
-        num_xticks = len(x_values)
-
-        if num_xticks > max_xticks:
-            # Calculate step size to show approximately max_xticks
-            step = math.ceil(num_xticks / max_xticks)
-            # Select ticks at calculated intervals
-            selected_ticks = x_values[::step]
-            ax.set_xticks(selected_ticks)  # Set the positions for the ticks
-
-        # Rotate the displayed x-axis labels for better readability
-        # Apply rotation to the labels corresponding to the selected ticks
-        plt.xticks(rotation=45, ha="right")
+        _format_xticks(
+            ax=ax,
+            x_values=np.sort(plot_df[x_key].unique()),
+            max_xticks=max_xticks,
+            is_binned=num_bins > 0,
+            x_is_datetime=x_is_datetime,
+        )
 
         # Adjust layout to prevent labels from overlapping plot elements
         plt.tight_layout()  # Call this *after* setting labels and titles
@@ -695,10 +717,14 @@ class Check(BaseScript):
         self.argparser.add_argument(
             "--period", "-p", type=int, default=86400, help="Time window period in seconds. Default: %(default)s"
         )
-        self.argparser.add_argument("--end-time", "-e", help=(
-            "End side of the time window. By default it is just now. "
-            "In any format that dateparser can recognize."
-        ))
+        self.argparser.add_argument(
+            "--end-time",
+            "-e",
+            help=(
+                "End side of the time window. By default it is just now. "
+                "In any format that dateparser can recognize."
+            ),
+        )
         self.argparser.add_argument(
             "--first-match-only",
             help="Print only first match and continue with next job.",
