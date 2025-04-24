@@ -157,6 +157,7 @@ import re
 import sys
 import time
 import json
+import logging
 import argparse
 import datetime
 import math
@@ -168,6 +169,9 @@ import dateparser
 from typing_extensions import NotRequired
 from scrapinghub.client.jobs import Job
 from shub_workflow.script import BaseScript, JobDict
+
+
+LOG = logging.getLogger(__name__)
 
 
 def json_serializer(obj):
@@ -687,6 +691,10 @@ class Check(BaseScript):
 
     description = __doc__
 
+    def __init__(self):
+        super().__init__()
+        self.captured_stats_keys: List[str] = []
+
     def add_argparser_options(self):
         super().add_argparser_options()
         self.argparser.add_argument("spider")
@@ -846,16 +854,23 @@ class Check(BaseScript):
         if not self.args.stat_pattern:
             return
         groups: List[str] = []
-        stats: Dict[str, Union[str, int, float]] = {}
+        collected_stats: Dict[str, Union[str, int, float]] = {}
+        scrapystats = {k: 0 for k in self.captured_stats_keys}
+        # this ensures correct defaults when for example post processing expects a specific amount of data and
+        # stats miss some of them
+        for key, val in jdict["scrapystats"].items():
+            scrapystats[key] = val
         for stat_pattern in self.args.stat_pattern:
-            for key, val in jdict["scrapystats"].items():
+            for key, val in scrapystats.items():
                 if m := re.search(stat_pattern, key):
                     groups.extend(m.groups() + (str(val),))
-                    stats[key] = val
+                    collected_stats[key] = val
+        if collected_stats:
+            self.captured_stats_keys = [k for k in collected_stats.keys()]  # keep order
         if groups:
             yield {
                 "tstamp": tstamp,
-                "stats": stats,
+                "stats": collected_stats,
                 "value": val,
                 "groups": tuple(groups),
             }
@@ -976,7 +991,11 @@ class Check(BaseScript):
                         if hold:
                             continue
                         post_process_stack.extend(post_process_instructions)
-                        result["groups"] = tuple(post_process(post_process_stack))
+                        try:
+                            result["groups"] = tuple(post_process(post_process_stack))
+                        except ZeroDivisionError:
+                            LOG.warning(f"Ignoring data {result['groups']}: post processing raised ZeroDivisionError.")
+                            continue
                     if self.args.data_headers:
                         if self.args.data_headers == "auto":
                             list_iterator = iter(result["groups"])
