@@ -1,6 +1,7 @@
 """
 Implements common methods for ScrapyCloud scripts.
 """
+
 import os
 import abc
 import json
@@ -165,7 +166,9 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
         ...
 
     @abc.abstractmethod
-    def schedule_script(self, cmd: List[str], tags=None, project_id=None, units=None, meta=None) -> Optional[JobKey]:
+    def schedule_script(
+        self, cmd: List[str], tags=None, project_id=None, units=None, meta=None
+    ) -> Optional[JobKey]:
         ...
 
     @abc.abstractmethod
@@ -315,7 +318,10 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         self._own_project_id = self._own_project_id or self.project_id
 
         if self.project_required and not self.project_id:
-            self.argparser.error("Project id not provided.")
+            self.argparser.error(
+                "Project id not provided. Either provide one (via --project-id) or disable "
+                "by setting project_required attribute to False."
+            )
         logger.info(f"Running on project {self.project_id}")
 
         return args
@@ -614,7 +620,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         if shkey is not None:
             return requests.get(
                 f"https://app.zyte.com/api/settings/get.json?project={self._own_project_id}",
-                auth=HTTPBasicAuth(shkey, "")
+                auth=HTTPBasicAuth(shkey, ""),
             ).json()["project_settings"]
         return {}
 
