@@ -1024,6 +1024,9 @@ class Check(BaseScript):
                         except ZeroDivisionError:
                             LOG.warning(f"Ignoring data {result['groups']}: post processing raised ZeroDivisionError.")
                             continue
+                        except Exception as e:
+                            LOG.warning(f"Ignoring data {result['groups']}: post processing raised {e!r}.")
+                            continue
                     if self.args.data_headers:
                         if self.args.data_headers == "auto":
                             list_iterator = iter(result["groups"])
