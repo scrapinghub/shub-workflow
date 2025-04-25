@@ -862,19 +862,24 @@ class Check(BaseScript):
         if not self.args.stat_pattern:
             return
         groups: List[str] = []
-        collected_stats: Dict[str, Union[str, int, float]] = {}
         scrapystats = {k: 0 for k in self.captured_stats_keys}
         # this ensures correct defaults when for example post processing expects a specific amount of data and
         # stats miss some of them
         for key, val in jdict["scrapystats"].items():
             scrapystats[key] = val
+        ordered_scrapy_stats = {}
+        for key in sorted(scrapystats.keys()):
+            ordered_scrapy_stats[key] = scrapystats[key]
+
+        collected_stats: Dict[str, Union[str, int, float]] = {}
         for stat_pattern in self.args.stat_pattern:
-            for key, val in scrapystats.items():
+            for key, val in ordered_scrapy_stats.items():
                 if m := re.search(stat_pattern, key):
                     groups.extend(m.groups() + (str(val),))
                     collected_stats[key] = val
         if collected_stats:
-            self.captured_stats_keys = [k for k in collected_stats.keys()]  # keep order
+            self.captured_stats_keys = list(collected_stats.keys())
+
         if groups:
             yield {
                 "tstamp": tstamp,
