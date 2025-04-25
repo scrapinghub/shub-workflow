@@ -313,6 +313,7 @@ def plot(
     tile_plots: bool = True,
     num_bins: int = 0,
     agg_func: str = "mean",
+    theme: str = "darkgrid",
 ):
     """
     Generates a line plot with potentially multiple lines based on a hue category
@@ -338,6 +339,7 @@ def plot(
         agg_func (str or function, optional): Aggregation function to use when binning.
                                               Examples: 'mean', 'median', 'sum', 'count', 'std' (see pandas
                                               agg() method). Defaults to 'mean'.
+        theme (str, optional): Seaborn theme. See seaborn documentation for options. Default: 'darkgrid'.
     Returns:
         None: Displays the plot using matplotlib.pyplot.show() or saves it.
     """
@@ -504,7 +506,7 @@ def plot(
         return
 
     # Set the plot style (optional)
-    sns.set_theme(style="whitegrid")
+    sns.set_theme(style=theme)
     # Select columns needed: x_key, y_cols, and hue_key (if it exists)
     cols_to_keep = [x_key] + list(plot_cols_map.values())
     if hue_key and hue_key in df.columns:  # Check if hue_key exists and is valid
