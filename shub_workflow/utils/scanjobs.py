@@ -1,36 +1,25 @@
 """
-Utility for scan, extract and prints logs, spider arguments and items on target spiders/scripts using regex patterns.
-It also has the capability to post process the extracted data (see --post-process option) and generate plots from them
-(see --plot option). Plotting requires pandas, seaborn and matplotlib libraries.
+Utility for scan, extract and prints logs, spider arguments, stats and items on target spiders/scripts using regex
+patterns. It also has the capability to post process the extracted data (see --post-process option) and generate plots
+from them (see --plot option). Plotting requires pandas, seaborn and matplotlib libraries.
 
 It can generate regex pattern groups, post process them via simple post-script like language,
-and save in order to generate data tables.
+save in order to generate data tables and generate plots.
 
-The filter logic is as follows:
-
-    (spider arg pattern 1 OR spider arg pattern 2 OR ...) AND
-    (log pattern 1 OR log pattern 2 OR ... OR item field pattern 1 OR item field pattern 2 OR ...)
-
-but the script can also be used to just find jobs based on spider arguments, without need to scan logs or items.
-In this case the filter logic is just:
-
-    (spider arg pattern 1 OR spider arg pattern 2 OR ...)
-
-In addition, you can search for log and/or item patterns with no specific job argument constraint:
-
-    (log pattern 1 OR log pattern 2 OR ... OR item field pattern 1 OR item field pattern 2 OR ...)
-
-The only required constraint is the target spider/script name (so it is the command line required argument)
+If you use --spider-argument-pattern, matches from provided logs, stats and items patterns are limited to those jobs
+that matches any of the provided spider argument patterns.
 
 By default, the scan period is the las 1 day. See --period option.
 
 By default, each time a new match is found, it is printed in the console and the search pauses waiting for
 pressing Enter. This mode is useful for visual inspection. This behavior can be modified via the --write
-option, which is useful for generating big amount of data for further analysis or generating data tables (in
+option or the --plot option.
+
+--write is useful for generating big amount of data for further analysis or generating data tables (in
 combination with regex groups and stat values). With this option, data is written into a json list file, each line
 being the data extracted from a single match.
 
-As usual in shub-workflows when you run them in your console, you need to include the --project-id in order
+As usual in shub-workflows when you run them outside SC, you need to include the --project-id in order
 to set the correct target project where to find the jobs.
 
 Examples
@@ -149,7 +138,6 @@ postscript instructions supported:
            within the scan of a single job, and pushes the result of an extraction into the stack with no further
            post processing, so it will be processed along the next extraction in the same job.
 
-
 ======================================================================
 """
 
@@ -166,6 +154,7 @@ from typing import Iterator, Tuple, TypedDict, List, Iterable, Dict, Union, Opti
 from itertools import chain
 
 import dateparser
+import jmespath
 from typing_extensions import NotRequired
 from scrapinghub.client.jobs import Job
 from shub_workflow.script import BaseScript, JobDict
@@ -711,7 +700,10 @@ class Check(BaseScript):
         self.argparser.add_argument(
             "--item-field-pattern",
             "-f",
-            help="Item field pattern (in format field:value). Can be multiple.",
+            help=(
+                "Item field pattern (in format jmespath_search_string:value). Can be multiple. If value is empty "
+                "string, just matches existence of the searched field."
+            ),
             action="append",
             default=[],
         )
@@ -832,19 +824,29 @@ class Check(BaseScript):
                     if self.args.first_match_only and has_match:
                         break
 
-    def filter_item_field_pattern(self, jdict: JobDict, job: Job, tstamp: datetime.datetime) -> Iterator[FilterResult]:
+    def filter_item_field_pattern(self, jdict: JobDict, job: Job, limit: int) -> Iterator[FilterResult]:
         if not self.args.item_field_pattern:
             return
         has_match = False
-        for idx, item in enumerate(job.items.iter()):
+        for idx, item in enumerate(job.items.iter(meta=["_ts"], startts=int(limit))):
             if self.args.max_items_per_job and idx == self.args.max_items_per_job:
                 break
 
+            item_time = item["_ts"] / 1000
             for item_field_pattern in self.args.item_field_pattern:
-                key, pattern = item_field_pattern.split(":", 1)
-                value = item.get(key, "")
-                if (m := re.search(pattern, value)) is not None:
-                    yield {"tstamp": tstamp, "itemno": idx, "field": key, "value": value, "groups": m.groups()}
+                jpath, pattern = item_field_pattern.split(":", 1)
+                value = jmespath.search(jpath, item)
+                if value is None:
+                    continue
+                m = None
+                if not pattern and value or (m := re.search(pattern, value)) is not None:
+                    yield {
+                        "tstamp": datetime.datetime.fromtimestamp(item_time),
+                        "itemno": idx,
+                        "field": jpath,
+                        "value": value,
+                        "groups": m.groups() if m is not None else (value,),
+                    }
                     has_match = True
 
             if self.args.first_match_only and has_match:
@@ -963,7 +965,7 @@ class Check(BaseScript):
             post_process_stack: List[Union[str, int, float]] = []
             for result in chain(
                 self.filter_log_pattern(jdict, job, limit),
-                self.filter_item_field_pattern(jdict, job, tstamp),
+                self.filter_item_field_pattern(jdict, job, limit),
                 self.filter_stats_pattern(jdict, job, tstamp),
             ):
                 if not keyprinted:
@@ -1038,8 +1040,11 @@ class Check(BaseScript):
         if self.args.plot:
             if not plot_options["y_keys"]:
                 plot_options["y_keys"] = sorted(all_headers)
-            print("Generating plots...")
-            plot(plot_data_points, **plot_options)
+            if not plot_data_points:
+                print("No data to plot.")
+            else:
+                print("Generating plots...")
+                plot(plot_data_points, **plot_options)
 
 
 if __name__ == "__main__":

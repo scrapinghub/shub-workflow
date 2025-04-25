@@ -24,6 +24,7 @@ setup(
         "typing-extensions",
         "scrapy",
         "prettytable",
+        "jmespath",
     ),
     extras_require = {
         "with-s3-tools": ["s3fs>=0.4.0"],
