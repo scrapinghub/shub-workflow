@@ -378,7 +378,6 @@ def plot(
                 # Use DateFormatter for specific format (up to seconds)
                 date_format = DateFormatter("%Y-%m-%d %H:%M:%S")
                 ax.xaxis.set_major_formatter(date_format)
-                print("HOHO", date_format)
                 # Apply rotation and alignment AFTER setting formatter
                 plt.setp(ax.get_xticklabels(), rotation=45, ha="right", size="small")
             except Exception as e_fmt:
@@ -387,7 +386,6 @@ def plot(
                 ax.set_xticklabels([str(label) for label in tick_labels], rotation=45, ha="right", size="small")
         else:  # Numeric ticks
             # Simple string conversion with rotation
-            print("HEHE")
             ax.set_xticklabels([str(label) for label in tick_labels], rotation=45, ha="right", size="small")
 
     # Convert the list of dictionaries to a Pandas DataFrame
