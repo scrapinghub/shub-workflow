@@ -792,6 +792,12 @@ class Check(BaseScript):
                 "in order to use with plot option 'bin=<n>/sum'. (see --plot)"
             ),
         )
+        self.argparser.add_argument(
+            "--read",
+            "-r",
+            type=argparse.FileType("r"),
+            help="If provided, read plot data from given file (previously generated with -w), instead of scanning jobs."
+        )
 
     def parse_args(self):
         args = super().parse_args()
@@ -924,6 +930,26 @@ class Check(BaseScript):
             assert "title" in plot_options, "title is required for plot."
             plot_options.setdefault("x_key", "tstamp")
 
+        all_headers = set()
+        if self.args.read:
+            for line in self.args.read:
+                record = json.loads(line)
+                all_headers.update(record.keys())
+                plot_data_points.append(record)
+            all_headers.discard("tstamp")
+        else:
+            all_headers = self.scan_jobs(end_limit, plot_data_points)
+
+        if self.args.plot:
+            if not plot_options["y_keys"]:
+                plot_options["y_keys"] = sorted(all_headers)
+            if not plot_data_points:
+                print("No data to plot.")
+            else:
+                print("Generating plots...")
+                plot(plot_data_points, **plot_options)
+
+    def scan_jobs(self, end_limit, plot_data_points: List[Dict[str, Union[str, int, float]]]):
         limit = (end_limit - self.args.period) * 1000
         jobcount = 0
         all_headers = set()
@@ -1015,8 +1041,7 @@ class Check(BaseScript):
                         result["dict_groups"]["tstamp"] = result["tstamp"].strftime(self.args.tstamp_format)
                         if self.args.plot:
                             plot_data_points.insert(0, result["dict_groups"])
-                            if not plot_options["y_keys"]:
-                                all_headers.update(headers)
+                            all_headers.update(headers)
                     print("Data points generated:", result.get("dict_groups") or result["groups"])
                 if self.args.write:
                     if result.get("dict_groups"):
@@ -1037,14 +1062,7 @@ class Check(BaseScript):
                 tstamp = datetime.datetime.fromtimestamp(job_tstamp / 1000)
                 print(f"Timestamp reached: {tstamp}")
 
-        if self.args.plot:
-            if not plot_options["y_keys"]:
-                plot_options["y_keys"] = sorted(all_headers)
-            if not plot_data_points:
-                print("No data to plot.")
-            else:
-                print("Generating plots...")
-                plot(plot_data_points, **plot_options)
+        return all_headers
 
 
 if __name__ == "__main__":
