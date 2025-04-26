@@ -796,7 +796,20 @@ class Check(BaseScript):
             "--read",
             "-r",
             type=argparse.FileType("r"),
-            help="If provided, read plot data from given file (previously generated with -w), instead of scanning jobs."
+            help=(
+                "If provided, read plot data from given file (previously generated with -w), "
+                "instead of scanning jobs."
+            ),
+        )
+        self.argparser.add_argument(
+            "--safe-default-stat",
+            "-d",
+            action="append",
+            default=[],
+            help=(
+                "The provided stat can be safely added as default on every stats where it is missing. "
+                "Can be given multiple times."
+            ),
         )
 
     def parse_args(self):
@@ -862,7 +875,9 @@ class Check(BaseScript):
         if not self.args.stat_pattern:
             return
         groups: List[str] = []
-        scrapystats = {k: 0 for k in self.captured_stats_keys}
+        if not self.captured_stats_keys:
+            self.captured_stats_keys = self.args.safe_default_stat.copy()
+        scrapystats = {k: 0 for k in self.captured_stats_keys if k in self.args.safe_default_stat}
         # this ensures correct defaults when for example post processing expects a specific amount of data and
         # stats miss some of them
         for key, val in jdict["scrapystats"].items():
