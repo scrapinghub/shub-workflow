@@ -288,6 +288,7 @@ class PlotOptions(TypedDict):
     tile_plots: NotRequired[bool]
     num_bins: NotRequired[int]
     agg_func: NotRequired[str]
+    timezone: NotRequired[str]
 
 
 def plot(
@@ -304,6 +305,7 @@ def plot(
     num_bins: int = 0,
     agg_func: str = "mean",
     theme: str = "darkgrid",
+    timezone: Optional[str] = None,
 ):
     """
     Generates a line plot with potentially multiple lines based on a hue category
@@ -330,6 +332,7 @@ def plot(
                                               Examples: 'mean', 'median', 'sum', 'count', 'std' (see pandas
                                               agg() method). Defaults to 'mean'.
         theme (str, optional): Seaborn theme. See seaborn documentation for options. Default: 'darkgrid'.
+        timezone (str, optional): A timezone spec. It is added on the x label if x label are timestamps.
     Returns:
         None: Displays the plot using matplotlib.pyplot.show() or saves it.
     """
@@ -460,9 +463,9 @@ def plot(
 
         # Replace df with aggregated data
         df = agg_df
-        x_key = "bin_midpoint"  # Update x_key for plotting
         if xlabel is None:  # Update xlabel only if user didn't provide one
             xlabel = f"{x_key} (Binned)"
+        x_key = "bin_midpoint"
 
     for yk in y_keys:
         if yk not in df.columns:
@@ -511,6 +514,10 @@ def plot(
 
     num_plots = len(valid_y_keys)
 
+    xlabel = xlabel or x_key
+    if x_is_datetime and timezone:
+        xlabel = f"{xlabel} ({timezone})"
+
     # --- Tiled Plot Logic ---
     if tile_plots and num_plots > 1:
         # Calculate grid size (prefer wider than tall)
@@ -536,7 +543,7 @@ def plot(
             )
 
             ax.set_title(yk)  # Subplot title
-            ax.set_xlabel(xlabel if xlabel else x_key)
+            ax.set_xlabel(xlabel)
             ax.set_ylabel(yk)  # Use original y_key name for label
 
             if hue_key and handles is None and labels is None:
@@ -607,7 +614,7 @@ def plot(
 
         # --- Customization ---
         plt.title(title)
-        plt.xlabel(xlabel if xlabel else x_key)
+        plt.xlabel(xlabel)
         plt.ylabel("Value")  # Generic Y label as it represents multiple metrics
         if hue_key is not None:
             plt.legend(title=f"{hue_key} / Metric")  # Combined legend title
@@ -633,7 +640,7 @@ def plot(
 
         # --- Customization ---
         plt.title(title)
-        plt.xlabel(xlabel if xlabel else x_key)
+        plt.xlabel(xlabel)
         plt.ylabel(y_key)
         if hue_key:
             plt.legend(title=hue_key)  # Add a legend based on the hue key
@@ -975,6 +982,7 @@ class Check(BaseScript):
             if not plot_data_points:
                 print("No data to plot.")
             else:
+                plot_options["timezone"] = self.args.zone_info
                 print("Generating plots...")
                 plot(plot_data_points, **plot_options)
 
