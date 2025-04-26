@@ -148,6 +148,7 @@ import json
 import logging
 import argparse
 import datetime
+import zoneinfo
 import math
 from uuid import uuid4
 from typing import Iterator, Tuple, TypedDict, List, Iterable, Dict, Union, Optional
@@ -775,7 +776,6 @@ class Check(BaseScript):
                 "Requires --data-headers in order to name extracted data points."
             ),
         )
-        self.argparser.add_argument("--tstamp-format", default="%Y-%m-%d %H:%M:%S", help="Default: %(default)s")
         self.argparser.add_argument(
             "--has-tag", action="append", help="Only select jobs with the given tag. Can be multiple."
         )
@@ -809,6 +809,15 @@ class Check(BaseScript):
             help=(
                 "The provided stat can be safely added as default on every stats where it is missing. "
                 "Can be given multiple times."
+            ),
+        )
+        self.argparser.add_argument("--tstamp-format", default="%Y-%m-%d %H:%M:%S", help="Default: %(default)s")
+        self.argparser.add_argument(
+            "--zone-info",
+            "-z",
+            help=(
+                "Ensure output timestamps are on the provided zone info. Must be a string supported by zoneinfo "
+                "library"
             ),
         )
 
@@ -880,7 +889,7 @@ class Check(BaseScript):
         scrapystats = {k: 0 for k in self.captured_stats_keys if k in self.args.safe_default_stat}
         # this ensures correct defaults when for example post processing expects a specific amount of data and
         # stats miss some of them
-        for key, val in jdict["scrapystats"].items():
+        for key, val in jdict.get("scrapystats", {}).items():
             scrapystats[key] = val
         ordered_scrapy_stats = {}
         for key in sorted(scrapystats.keys()):
@@ -968,6 +977,11 @@ class Check(BaseScript):
             else:
                 print("Generating plots...")
                 plot(plot_data_points, **plot_options)
+
+    def _convert_timestamp(self, timestamp: datetime.datetime) -> str:
+        if self.args.zone_info:
+            timestamp = timestamp.astimezone(zoneinfo.ZoneInfo(self.args.zone_info))
+        return timestamp.strftime(self.args.tstamp_format)
 
     def scan_jobs(self, end_limit, plot_data_points: List[Dict[str, Union[str, int, float]]]):
         limit = (end_limit - self.args.period) * 1000
@@ -1061,7 +1075,7 @@ class Check(BaseScript):
                                     result["dict_groups"][k] = float(v)
                                 except ValueError:
                                     pass
-                        result["dict_groups"]["tstamp"] = result["tstamp"].strftime(self.args.tstamp_format)
+                        result["dict_groups"]["tstamp"] = self._convert_timestamp(result["tstamp"])
                         if self.args.plot:
                             plot_data_points.insert(0, result["dict_groups"])
                             all_headers.update(headers)
@@ -1070,7 +1084,7 @@ class Check(BaseScript):
                     if result.get("dict_groups"):
                         print(json.dumps(result["dict_groups"]), file=self.args.write)
                     elif result["groups"]:
-                        groups = (result["tstamp"].strftime(self.args.tstamp_format),) + result["groups"]
+                        groups = (self._convert_timestamp(result["tstamp"]),) + result["groups"]
                         print(json.dumps(groups), file=self.args.write)
                     else:
                         print(json.dumps(result, default=json_serializer), file=self.args.write)
