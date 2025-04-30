@@ -3,6 +3,7 @@ Implements common methods for ScrapyCloud scripts.
 """
 
 import os
+import sys
 import abc
 import json
 import asyncio
@@ -10,7 +11,7 @@ import logging
 import time
 from functools import partial
 import subprocess
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser as PythonArgumentParser, Namespace
 from typing import (
     List,
     NewType,
@@ -26,6 +27,7 @@ from typing import (
     Protocol,
     Type,
     Set,
+    IO,
 )
 from pprint import pformat
 from typing_extensions import TypedDict, NotRequired
@@ -75,6 +77,40 @@ class JobDict(TypedDict):
     pages: NotRequired[int]
 
 
+class ArgumentParser(PythonArgumentParser):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.raise_parse_error = True
+        self.programs: Dict[str, Dict[str, Any]] = {}
+
+    def parse_args_no_error(self, args=None, namespace=None):
+        self.raise_parse_error = False
+        ns = super().parse_args(args, namespace)
+        self.raise_parse_error = True
+        return ns
+
+    def error(self, message: str):
+        if self.raise_parse_error:
+            return super().error(message)
+
+    def exit(self, *args, **kwargs):
+        if self.raise_parse_error:
+            return super().exit(*args, **kwargs)
+
+    def print_usage(self, file: Optional[IO[str]] = None):
+        if not self.programs:
+            super().print_usage()
+
+    def set_programs(self, programs: Dict[str, Dict[str, Any]]):
+        self.programs = programs
+
+    def print_help(self, file: Optional[IO[str]] = None):
+        if self.raise_parse_error:
+            super().print_help(file)
+            print(f"Programs available: \n{pformat(self.programs)}", file=sys.stderr)
+
+
 class ArgumentParserScriptProtocol(Protocol):
 
     args: Namespace
@@ -94,8 +130,18 @@ class ArgumentParserScriptProtocol(Protocol):
 
 
 class ArgumentParserScript(ArgumentParserScriptProtocol):
+
+    PROGRAMS: Dict[str, Dict[str, Any]] = {}
+
     def __init__(self):
         self.args: Namespace = self.parse_args()
+
+    def add_argparser_options(self):
+        self.argparser.add_argument(
+            "--program",
+            "-g",
+            help="Use command line program shortcut with the given alias."
+        )
 
     @property
     def description(self) -> str:
@@ -104,7 +150,17 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
     def parse_args(self) -> Namespace:
         self.argparser = ArgumentParser(self.description)
         self.add_argparser_options()
-        args = self.argparser.parse_args()
+        self.argparser.set_programs(self.PROGRAMS)
+        args = self.argparser.parse_args_no_error()
+        if args.program:
+            if args.program in self.PROGRAMS:
+                args = self.argparser.parse_args(self.PROGRAMS[args.program]["command_line"])
+            else:
+                self.argparser.error(
+                    f"Program {args.program} is not defined. \nPrograms available: {pformat(self.PROGRAMS)}"
+                )
+        else:
+            args = self.argparser.parse_args()
         return args
 
 
@@ -279,6 +335,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         self.add_job_tags(tags=tags)
 
     def add_argparser_options(self):
+        super().add_argparser_options()
         self.argparser.add_argument(
             "--project-id",
             help="Either numeric id, or entry keyword in scrapinghub.yml. Overrides target project id.",
