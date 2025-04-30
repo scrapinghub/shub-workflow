@@ -152,3 +152,4 @@ Minor version changes:
 - 1.14.18 monitor: allow to scan multiple SC projects
 - 1.14.19 monitor: compute response status ratios
 - 1.14.20 Added tool for finding/analyzing jobs stats/logs/args/items
+- 1.14.21 Allow to pre set command line programs
