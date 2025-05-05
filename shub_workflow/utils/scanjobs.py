@@ -684,7 +684,7 @@ class FilterResult(TypedDict):
     value: NotRequired[str]
 
 
-class Check(BaseScript):
+class ScanJobs(BaseScript):
 
     description = __doc__
 
@@ -1111,4 +1111,4 @@ class Check(BaseScript):
 
 
 if __name__ == "__main__":
-    Check().run()
+    ScanJobs().run()
