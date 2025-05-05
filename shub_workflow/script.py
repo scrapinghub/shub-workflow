@@ -118,15 +118,15 @@ class ArgumentParserScriptProtocol(Protocol):
 
     @abc.abstractmethod
     def add_argparser_options(self):
-        ...
+        """"""
 
     @abc.abstractmethod
     def parse_args(self) -> Namespace:
-        ...
+        """"""
 
     @abc.abstractmethod
     def run(self):
-        ...
+        """"""
 
 
 class ArgumentParserScript(ArgumentParserScriptProtocol):
@@ -137,10 +137,9 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
         self.args: Namespace = self.parse_args()
 
     def add_argparser_options(self):
+        self.argparser.add_argument("--program", "-g", help="Use command line program shortcut with the given alias.")
         self.argparser.add_argument(
-            "--program",
-            "-g",
-            help="Use command line program shortcut with the given alias."
+            "--program-variables", "-v", default="{}", help="Set keyword arguments for program shortcut. A json object."
         )
 
     @property
@@ -154,7 +153,10 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
         args = self.argparser.parse_args_no_error()
         if args.program:
             if args.program in self.PROGRAMS:
-                args = self.argparser.parse_args(self.PROGRAMS[args.program]["command_line"])
+                kvars = json.loads(args.program_variables)
+                args = self.argparser.parse_args(
+                    [arg.format(**kvars) for arg in self.PROGRAMS[args.program]["command_line"]]
+                )
             else:
                 self.argparser.error(
                     f"Program {args.program} is not defined. \nPrograms available: {pformat(self.PROGRAMS)}"
@@ -195,37 +197,37 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
 
     @abc.abstractmethod
     def append_flow_tag(self, tag: str):
-        ...
+        """"""
 
     @abc.abstractmethod
     def get_project(self, project_id: Optional[Union[int, str]] = None) -> Project:
-        ...
+        """"""
 
     @abc.abstractmethod
     def get_job_metadata(self, jobkey: Optional[JobKey] = None) -> JobMeta:
-        ...
+        """"""
 
     @abc.abstractmethod
     def get_job(self, jobkey: Optional[JobKey] = None) -> Job:
-        ...
+        """"""
 
     @abc.abstractmethod
     def get_job_tags(self, jobkey: Optional[JobKey] = None) -> List[str]:
-        ...
+        """"""
 
     @abc.abstractmethod
     def get_keyvalue_job_tag(self, key: str, tags: List[str]) -> Optional[str]:
-        ...
+        """"""
 
     @abc.abstractmethod
     def add_job_tags(self, jobkey: Optional[JobKey] = None, tags: Optional[List[str]] = None):
-        ...
+        """"""
 
     @abc.abstractmethod
     def schedule_script(
         self, cmd: List[str], tags=None, project_id=None, units=None, meta=None
     ) -> Optional[JobKey]:
-        ...
+        """"""
 
     @abc.abstractmethod
     def schedule_spider(
@@ -236,47 +238,47 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
         project_id: Optional[int] = None,
         **kwargs,
     ) -> Optional[JobKey]:
-        ...
+        """"""
 
     @abc.abstractmethod
     def get_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
-        ...
+        """"""
 
     @abc.abstractmethod
     def get_jobs_with_tags(
         self, spider: str, tags: List[str], project_id: Optional[int] = None, **kwargs
     ) -> Generator[Job, None, None]:
-        ...
+        """"""
 
     @abc.abstractmethod
     def is_running(self, jobkey: JobKey) -> bool:
-        ...
+        """"""
 
     @abc.abstractmethod
     def is_finished(self, jobkey: JobKey) -> Optional[Outcome]:
-        ...
+        """"""
 
     @abc.abstractmethod
     def finish(self, jobkey: Optional[JobKey] = None, close_reason: Optional[str] = None):
-        ...
+        """"""
 
     @abc.abstractmethod
     def _make_children_tags(self, tags: Optional[List[str]]) -> Optional[List[str]]:
-        ...
+        """"""
 
     @abc.abstractmethod
     def get_canonical_spidername(self, spidername: SpiderName) -> str:
-        ...
+        """"""
 
     @abc.abstractmethod
     def get_project_running_spiders(
         self, canonical: bool = False, crawlmanagers: Tuple[str, ...] = ()
     ) -> Set[SpiderName]:
-        ...
+        """"""
 
     @abc.abstractmethod
     def get_sc_project_settings(self) -> Dict[str, Any]:
-        ...
+        """"""
 
 
 class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
@@ -689,23 +691,22 @@ class BaseLoopScriptProtocol(BaseScriptProtocol, Protocol):
         False for immediate stop of the job. For continuous looping you also need
         to set `loop_mode`
         """
-        ...
 
     @abc.abstractmethod
     def _run_loops(self) -> Generator[bool, None, None]:
-        ...
+        """"""
 
     @abc.abstractmethod
     def base_loop_tasks(self):
-        ...
+        """"""
 
     @abc.abstractmethod
     def _on_start(self):
-        ...
+        """"""
 
     @abc.abstractmethod
     def _close(self):
-        ...
+        """"""
 
 
 class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
