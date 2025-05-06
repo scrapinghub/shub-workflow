@@ -1065,10 +1065,15 @@ class ScanJobs(BaseScript):
                             result["groups"] = tuple(post_process(post_process_stack))
                         except ZeroDivisionError:
                             LOG.warning(f"Ignoring data {result['groups']}: post processing raised ZeroDivisionError.")
+                            if not self.args.plot and not self.args.write:
+                                input("Press Enter to continue...\n")
                             continue
                         except Exception as e:
                             LOG.warning(f"Ignoring data {result['groups']}: post processing raised {e!r}.")
+                            if not self.args.plot and not self.args.write:
+                                input("Press Enter to continue...\n")
                             continue
+
                     if self.args.data_headers:
                         if self.args.data_headers == "auto":
                             list_iterator = iter(result["groups"])
