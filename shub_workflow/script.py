@@ -105,10 +105,16 @@ class ArgumentParser(PythonArgumentParser):
     def set_programs(self, programs: Dict[str, Dict[str, Any]]):
         self.programs = programs
 
+    def _get_available_programs(self) -> str:
+        available = ""
+        for k, v in self.programs.items():
+            available += f"* {k}: {v['description']}\n"
+        return available
+
     def print_help(self, file: Optional[IO[str]] = None):
         if self.raise_parse_error:
             super().print_help(file)
-            print(f"Programs available: \n{pformat(self.programs)}", file=sys.stderr)
+            print(f"Programs available:\n{self._get_available_programs()}", file=sys.stderr)
 
 
 class ArgumentParserScriptProtocol(Protocol):
@@ -159,7 +165,8 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
                 )
             else:
                 self.argparser.error(
-                    f"Program {args.program} is not defined. \nPrograms available: {pformat(self.PROGRAMS)}"
+                    f"Program {args.program} is not defined.\nPrograms available:\n"
+                    f"{self.argparser._get_available_programs()}"
                 )
         else:
             args = self.argparser.parse_args()
@@ -224,9 +231,7 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
         """"""
 
     @abc.abstractmethod
-    def schedule_script(
-        self, cmd: List[str], tags=None, project_id=None, units=None, meta=None
-    ) -> Optional[JobKey]:
+    def schedule_script(self, cmd: List[str], tags=None, project_id=None, units=None, meta=None) -> Optional[JobKey]:
         """"""
 
     @abc.abstractmethod
