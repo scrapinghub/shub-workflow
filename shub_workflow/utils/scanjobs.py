@@ -130,13 +130,16 @@ postscript instructions supported:
 
     cvi - pops out the last element of the stack, converts to integer, and pushes it back to stack.
 
-5. special:
+5. special (non postcript origin):
 
-    hold - this instruction is not postscript and instead is used to conserve the stack between extractions for
-           the same job. So if for example you are extraction logs and stats, without hold the same post processing
-           string will be applied (or tried to) on each extracted set separately. The hold instruction is consumed
-           within the scan of a single job, and pushes the result of an extraction into the stack with no further
-           post processing, so it will be processed along the next extraction in the same job.
+    hold - It is used to conserve the stack between extractions for the same job. So if for example you are
+           extracting logs and stats, without hold the same post processing string will be applied (or tried to)
+           on each extracted set separately. The hold instruction is consumed within the scan of a single job,
+           and pushes the result of an extraction into the stack with no further post processing, so it will be
+           processed along the next extraction in the same job, or until not another hold found. In short,
+           it skips the post processing until next extraction, and conserves the stack.
+
+    prune - conserves only the top n elements from the stack. Receives an integer as parameter.
 
 ======================================================================
 """
@@ -198,6 +201,9 @@ def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[s
 
     >>> post_process(["123", "cvi"])
     [123]
+
+    >>> post_process(["1", "2", "3", "4", "div", "2", "prune"])
+    ['2', 0.75]
 
     >>> post_process(["3", "4", "5", "2", "{", "add", "}", "repeat"])
     [12.0]
@@ -272,6 +278,8 @@ def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[s
             stack.append(len(stack))
         elif ins == "cvi":
             stack.append(int(stack.pop()))
+        elif ins == "prune":
+            stack = stack[-int(stack.pop()):]
         else:
             stack.append(ins)
     return stack
