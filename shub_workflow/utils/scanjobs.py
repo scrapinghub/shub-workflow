@@ -732,7 +732,7 @@ class ScanJobs(BaseScript):
             default=[],
         )
         self.argparser.add_argument(
-            "--period", "-p", type=int, default=86400,
+            "--period", "-p", default=86400,
             help="Time window period in seconds or whatever string parsed by timelength library. Default: %(default)s"
         )
         self.argparser.add_argument(
