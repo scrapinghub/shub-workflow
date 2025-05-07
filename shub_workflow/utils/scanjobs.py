@@ -307,7 +307,7 @@ def plot(
     title: str = "Line Plot",
     xlabel: Optional[str] = None,
     save: bool = False,
-    max_xticks: int = 15,
+    max_xticks: int = 20,
     smoothing_window: int = 0,
     tile_plots: bool = True,
     num_bins: int = 0,
@@ -327,7 +327,7 @@ def plot(
         title (str, optional): The title for the plot. Defaults to "Line Plot".
         xlabel (str, optional): The label for the x-axis. Defaults to x_key.
         save (bool, optional): Save plot image.
-        max_xticks (int, optional): The approximate maximum number of x-ticks to display. Defaults to 15.
+        max_xticks (int, optional): The approximate maximum number of x-ticks to display. Defaults to 20.
         smoothing_window (int, optional): The window size for the rolling average.
                                           Smoothing is applied if window > 1.
                                           Defaults to 0 (no smoothing).
@@ -362,7 +362,7 @@ def plot(
         tick_labels = selected_ticks  # Default labels match ticks
 
         # Determine ticks to show
-        if not is_binned and num_unique_x > max_xticks:  # Reduce ticks only if not binned
+        if num_unique_x > max_xticks:
             step = math.ceil(num_unique_x / max_xticks)
             step = max(1, step)
             selected_ticks_indices = range(0, num_unique_x, step)
