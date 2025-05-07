@@ -145,7 +145,9 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
     def add_argparser_options(self):
         self.argparser.add_argument("--program", "-g", help="Use command line program shortcut with the given alias.")
         self.argparser.add_argument(
-            "--program-variables", "-v", default="{}", help="Set keyword arguments for program shortcut. A json object."
+            "--program-variables",
+            "-v",
+            help="Set keyword arguments for program shortcut. Format: key1:val1,key2:val2,...",
         )
 
     @property
@@ -159,7 +161,11 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
         args = self.argparser.parse_args_no_error()
         if args.program:
             if args.program in self.PROGRAMS:
-                kvars = json.loads(args.program_variables)
+                kvars: Dict[str, str] = {}
+                if args.program_variables:
+                    for keyval in args.program_variables.split(","):
+                        k, v = keyval.split(":")
+                        kvars.update({k: v})
                 args = self.argparser.parse_args(
                     [arg.format(**kvars) for arg in self.PROGRAMS[args.program]["command_line"]]
                 )
