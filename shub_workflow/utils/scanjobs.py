@@ -159,6 +159,7 @@ from itertools import chain
 
 import dateparser
 import jmespath
+from timelength import TimeLength
 from typing_extensions import NotRequired
 from scrapinghub.client.jobs import Job
 from shub_workflow.script import BaseScript, JobDict
@@ -731,7 +732,8 @@ class ScanJobs(BaseScript):
             default=[],
         )
         self.argparser.add_argument(
-            "--period", "-p", type=int, default=86400, help="Time window period in seconds. Default: %(default)s"
+            "--period", "-p", type=int, default=86400,
+            help="Time window period in seconds or whatever string parsed by timelength library. Default: %(default)s"
         )
         self.argparser.add_argument(
             "--end-time",
@@ -1000,7 +1002,8 @@ class ScanJobs(BaseScript):
         return timestamp.strftime(self.args.tstamp_format)
 
     def scan_jobs(self, end_limit, plot_data_points: List[Dict[str, Union[str, int, float]]]):
-        limit = (end_limit - self.args.period) * 1000
+        period = TimeLength(self.args.period).result.seconds
+        limit = (end_limit - period) * 1000
         jobcount = 0
         all_headers = set()
         for jdict in self.get_jobs(
@@ -1013,7 +1016,7 @@ class ScanJobs(BaseScript):
                 continue
 
             if "finished_time" in jdict and jdict["finished_time"] < limit:
-                print(f"Reached limit of {self.args.period} seconds.")
+                print(f"Reached limit of {period} seconds.")
                 print("Total jobs scanned:", jobcount)
                 break
 

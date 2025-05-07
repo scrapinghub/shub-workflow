@@ -22,6 +22,7 @@ spidermon = "*"
 sentry-sdk = "*"
 slack_sdk = "*"
 prettytable = "*"
+timelength = "*"
 
 [dev-packages]
 flake8 = "*"

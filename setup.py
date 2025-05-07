@@ -25,6 +25,7 @@ setup(
         "scrapy",
         "prettytable",
         "jmespath",
+        "timelength",
     ),
     extras_require = {
         "with-s3-tools": ["s3fs>=0.4.0"],
