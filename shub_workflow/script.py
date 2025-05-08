@@ -166,9 +166,15 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
                     for keyval in args.program_variables.split(","):
                         k, v = keyval.split(":")
                         kvars.update({k: v})
-                args = self.argparser.parse_args(
+                program_args = self.argparser.parse_args(
                     [arg.format(**kvars) for arg in self.PROGRAMS[args.program]["command_line"]]
                 )
+                for attr in dir(args):
+                    if not attr.startswith("_") and attr not in ("program", "program_variables"):
+                        value = getattr(args, attr)
+                        if value != self.argparser.get_default(attr):
+                            setattr(program_args, attr, getattr(args, attr))
+                args = program_args
             else:
                 self.argparser.error(
                     f"Program {args.program} is not defined.\nPrograms available:\n"
