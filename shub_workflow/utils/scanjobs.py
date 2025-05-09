@@ -732,8 +732,10 @@ class ScanJobs(BaseScript):
             default=[],
         )
         self.argparser.add_argument(
-            "--period", "-p", default=86400,
-            help="Time window period in seconds or whatever string parsed by timelength library. Default: %(default)s"
+            "--period",
+            "-p",
+            default=86400,
+            help="Time window period in seconds or whatever string parsed by timelength library. Default: %(default)s",
         )
         self.argparser.add_argument(
             "--end-time",
@@ -837,12 +839,11 @@ class ScanJobs(BaseScript):
                 "library"
             ),
         )
-
-    def parse_args(self):
-        args = super().parse_args()
-        if not any([args.log_pattern, args.spider_argument_pattern, args.item_field_pattern, args.stat_pattern]):
-            self.argparser.error("You must provide at least one pattern. (use either -l, -a , -f or -s)")
-        return args
+        self.argparser.add_argument(
+            "--capture-spiderargs",
+            action="store_true",
+            help="When using --data-headers, also include job spiderargs",
+        )
 
     def filter_log_pattern(self, jdict: JobDict, job: Job, limit: int) -> Iterator[FilterResult]:
         if not self.args.log_pattern:
@@ -929,7 +930,9 @@ class ScanJobs(BaseScript):
                 "groups": tuple(groups),
             }
 
-    def filter_spider_argument(self, jdict: JobDict, tstamp: datetime.datetime, jobcount: int) -> bool:
+    def filter_spider_argument(
+        self, jdict: JobDict, tstamp: datetime.datetime, jobcount: int
+    ) -> Optional[Dict[str, str]]:
         for spider_arg_pattern in self.args.spider_argument_pattern:
             key, pattern = spider_arg_pattern.split(":", 1)
             if re.search(pattern, jdict.get("spider_args", {}).get(key, "")):
@@ -937,8 +940,8 @@ class ScanJobs(BaseScript):
                 print(f"Timestamp reached: {tstamp}")
                 print(f"https://app.zyte.com/p/{jdict['key']}/stats")
                 print(jdict["spider_args"])
-                return True
-        return False
+                return jdict["spider_args"]
+        return None
 
     def run(self):
 
@@ -1030,7 +1033,8 @@ class ScanJobs(BaseScript):
             tstamp = datetime.datetime.fromtimestamp(job_tstamp / 1000)
             has_match = False
 
-            if self.filter_spider_argument(jdict, tstamp, jobcount):
+            spiderargs = self.filter_spider_argument(jdict, tstamp, jobcount)
+            if spiderargs:
                 has_match = True
                 keyprinted = True
                 if not self.args.write and not self.args.plot:
@@ -1046,11 +1050,14 @@ class ScanJobs(BaseScript):
                 self.filter_log_pattern(jdict, job, limit),
                 self.filter_item_field_pattern(jdict, job, limit),
                 self.filter_stats_pattern(jdict, job, tstamp),
+                # ensure to print matching job even if no patterns provided
+                [FilterResult(groups=(), tstamp=tstamp)],
             ):
+                job_link = f"https://app.zyte.com/p/{jdict['key']}/stats"
                 if not keyprinted:
                     print(f"Jobs scanned: {jobcount}")
                     print(f"Timestamp reached: {result['tstamp']}")
-                    print(f"https://app.zyte.com/p/{jdict['key']}/stats")
+                    print(job_link)
                     keyprinted = True
                 if "message" in result:
                     print(result["message"])
@@ -1103,16 +1110,19 @@ class ScanJobs(BaseScript):
                         if self.args.plot:
                             plot_data_points.insert(0, result["dict_groups"])
                             all_headers.update(headers)
+                        if spiderargs and self.args.capture_spiderargs:
+                            result["dict_groups"].update(spiderargs)
                     print("Data points generated:", result.get("dict_groups") or result["groups"])
+                any_pattern = self.args.log_pattern or self.args.item_field_pattern or self.args.stat_pattern
                 if self.args.write:
                     if result.get("dict_groups"):
                         print(json.dumps(result["dict_groups"]), file=self.args.write)
                     elif result["groups"]:
                         groups = (self._convert_timestamp(result["tstamp"]),) + result["groups"]
                         print(json.dumps(groups), file=self.args.write)
-                    else:
-                        print(json.dumps(result, default=json_serializer), file=self.args.write)
-                elif not self.args.plot:
+                    elif not any_pattern:
+                        print(job_link, file=self.args.write)
+                elif not self.args.plot and (result["groups"] or not any_pattern):
                     input("Press Enter to continue...\n")
 
                 if self.args.first_match_only and has_match:
