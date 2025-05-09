@@ -842,7 +842,12 @@ class ScanJobs(BaseScript):
         self.argparser.add_argument(
             "--capture-spiderargs",
             action="store_true",
-            help="When using --data-headers, also include job spiderargs",
+            help="When using --data-headers, also include job spiderargs in the captured result.",
+        )
+        self.argparser.add_argument(
+            "--capture-joblink",
+            action="store_true",
+            help="When using --data-headers, also include job link in the captured result."
         )
 
     def filter_log_pattern(self, jdict: JobDict, job: Job, limit: int) -> Iterator[FilterResult]:
@@ -1112,6 +1117,8 @@ class ScanJobs(BaseScript):
                             all_headers.update(headers)
                         if spiderargs and self.args.capture_spiderargs:
                             result["dict_groups"].update(spiderargs)
+                        if self.args.capture_joblink:
+                            result["dict_groups"]["job_link"] = job_link
                     print("Data points generated:", result.get("dict_groups") or result["groups"])
                 any_pattern = self.args.log_pattern or self.args.item_field_pattern or self.args.stat_pattern
                 if self.args.write:
