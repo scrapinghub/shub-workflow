@@ -77,12 +77,17 @@ class JobDict(TypedDict):
     pages: NotRequired[int]
 
 
+class CommandLineProgram(TypedDict):
+    description: str
+    command_line: List[str]
+
+
 class ArgumentParser(PythonArgumentParser):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.raise_parse_error = True
-        self.programs: Dict[str, Dict[str, Any]] = {}
+        self.programs: Dict[str, CommandLineProgram] = {}
 
     def parse_args_no_error(self, args=None, namespace=None):
         self.raise_parse_error = False
@@ -102,7 +107,7 @@ class ArgumentParser(PythonArgumentParser):
         if not self.programs:
             super().print_usage()
 
-    def set_programs(self, programs: Dict[str, Dict[str, Any]]):
+    def set_programs(self, programs: Dict[str, CommandLineProgram]):
         self.programs = programs
 
     def _get_available_programs(self) -> str:
@@ -137,7 +142,7 @@ class ArgumentParserScriptProtocol(Protocol):
 
 class ArgumentParserScript(ArgumentParserScriptProtocol):
 
-    PROGRAMS: Dict[str, Dict[str, Any]] = {}
+    PROGRAMS: Dict[str, CommandLineProgram] = {}
 
     def __init__(self):
         self.args: Namespace = self.parse_args()
