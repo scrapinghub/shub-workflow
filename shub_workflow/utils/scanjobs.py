@@ -1129,7 +1129,7 @@ class ScanJobs(BaseScript):
                         print(json.dumps(groups), file=self.args.write)
                     elif not any_pattern:
                         print(job_link, file=self.args.write)
-                elif not self.args.plot and (result["groups"] or not any_pattern):
+                elif not self.args.plot and (result["groups"] or has_match or not any_pattern):
                     input("Press Enter to continue...\n")
 
                 if self.args.first_match_only and has_match:
