@@ -298,6 +298,7 @@ class PlotOptions(TypedDict):
     num_bins: NotRequired[int]
     agg_func: NotRequired[str]
     timezone: NotRequired[str]
+    ylabel: NotRequired[str]
 
 
 def plot(
@@ -307,6 +308,7 @@ def plot(
     hue_key: Optional[str] = None,
     title: str = "Line Plot",
     xlabel: Optional[str] = None,
+    ylabel: Optional[str] = None,
     save: bool = False,
     max_xticks: int = 20,
     smoothing_window: int = 0,
@@ -327,6 +329,7 @@ def plot(
         hue_key (str, optional): The key to differentiate lines by color. Defaults to None.
         title (str, optional): The title for the plot. Defaults to "Line Plot".
         xlabel (str, optional): The label for the x-axis. Defaults to x_key.
+        ylabel (str, optional): The label for the y-axis. Defaults to y_key.
         save (bool, optional): Save plot image.
         max_xticks (int, optional): The approximate maximum number of x-ticks to display. Defaults to 20.
         smoothing_window (int, optional): The window size for the rolling average.
@@ -553,7 +556,7 @@ def plot(
 
             ax.set_title(yk)  # Subplot title
             ax.set_xlabel(xlabel)
-            ax.set_ylabel(yk)  # Use original y_key name for label
+            ax.set_ylabel(ylabel or yk)  # Use original y_key name for label
 
             if hue_key and handles is None and labels is None:
                 current_handles, current_labels = ax.get_legend_handles_labels()
@@ -650,7 +653,7 @@ def plot(
         # --- Customization ---
         plt.title(title)
         plt.xlabel(xlabel)
-        plt.ylabel(y_key)
+        plt.ylabel(ylabel or y_key)
         if hue_key:
             plt.legend(title=hue_key)  # Add a legend based on the hue key
 
@@ -782,7 +785,7 @@ class ScanJobs(BaseScript):
             "--plot",
             help=(
                 "If provided, generate a plot with the provided parameters. Format: "
-                "X=<x key>,Y=<y keys>,hue=<hue key>,title=<title>,save,xticks=<num>,smooth=<num>,no_tiles,"
+                "X=<x key>,Y=<y keys>,hue=<hue key>,title=<title>,save,xticks=<num>,smooth=<num>,no_tiles,ylabel"
                 "bins=<n/func>\n"
                 "title is required. "
                 "Y can be a single y key, or multiple separated by /. If not provided, will use all extracted headers "
@@ -979,6 +982,8 @@ class ScanJobs(BaseScript):
                     elif key == "bins":
                         num_bins, plot_options["agg_func"] = val.split("/")
                         plot_options["num_bins"] = int(num_bins)
+                    elif key == "ylabel":
+                        plot_options["ylabel"] = val
                     else:
                         self.argparser.error(f"Wrong plot parameter '{key}'")
             assert "title" in plot_options, "title is required for plot."
