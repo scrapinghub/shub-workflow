@@ -863,17 +863,18 @@ class ScanJobs(BaseScript):
             if logline["time"] < limit:
                 continue
             log_time = logline["time"] / 1000
-            msg = logline["message"]
-
-            for pattern in self.args.log_pattern:
-                if msg and (m := re.search(pattern, msg, flags=re.S)) is not None:
-
-                    yield {
-                        "tstamp": datetime.datetime.fromtimestamp(log_time),
-                        "message": msg,
-                        "groups": (1,) if self.args.count else m.groups(),
-                    }
-                    has_match = True
+            if msg := logline["message"]:
+                for pattern in self.args.log_pattern:
+                    groups: Tuple[str, ...] = ()
+                    for m in re.finditer(pattern, msg, flags=re.S):
+                        groups += m.groups()
+                    if groups:
+                        yield {
+                            "tstamp": datetime.datetime.fromtimestamp(log_time),
+                            "message": msg,
+                            "groups": (1,) if self.args.count else groups,
+                        }
+                        has_match = True
 
                     if self.args.first_match_only and has_match:
                         break
