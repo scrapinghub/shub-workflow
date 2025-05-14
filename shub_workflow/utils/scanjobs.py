@@ -852,6 +852,16 @@ class ScanJobs(BaseScript):
             action="store_true",
             help="When using --data-headers, also include job link in the captured result."
         )
+        self.argparser.add_argument(
+            "--separate-matches-per-target",
+            action="store_true",
+            help="Yield matches for same target (either log line or stats) separately",
+        )
+        self.argparser.add_argument(
+            "--separate-patterns-per-target",
+            action="store_true",
+            help="Yield matches for same target and pattern (either log line or stats) separately",
+        )
 
     def filter_log_pattern(self, jdict: JobDict, job: Job, limit: int) -> Iterator[FilterResult]:
         if not self.args.log_pattern:
@@ -924,10 +934,26 @@ class ScanJobs(BaseScript):
 
         collected_stats: Dict[str, Union[str, int, float]] = {}
         for stat_pattern in self.args.stat_pattern:
+            pattern_groups: List[str] = []
             for key, val in ordered_scrapy_stats.items():
                 if m := re.search(stat_pattern, key):
-                    groups.extend(m.groups() + (str(val),))
                     collected_stats[key] = val
+                    if self.args.separate_matches_per_target:
+                        yield {
+                            "tstamp": tstamp,
+                            "stats": collected_stats,
+                            "groups": m.groups() + (str(val),),
+                        }
+                    elif self.args.separate_patterns_per_target:
+                        pattern_groups.extend(m.groups() + (str(val),))
+                    else:
+                        groups.extend(m.groups() + (str(val),))
+            if pattern_groups:
+                yield {
+                    "tstamp": tstamp,
+                    "stats": collected_stats,
+                    "groups": tuple(pattern_groups),
+                }
         if collected_stats:
             self.captured_stats_keys = list(collected_stats.keys())
 
@@ -935,7 +961,6 @@ class ScanJobs(BaseScript):
             yield {
                 "tstamp": tstamp,
                 "stats": collected_stats,
-                "value": val,
                 "groups": tuple(groups),
             }
 
