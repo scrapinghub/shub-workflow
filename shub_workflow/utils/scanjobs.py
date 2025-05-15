@@ -877,14 +877,14 @@ class ScanJobs(BaseScript):
                 for pattern in self.args.log_pattern:
                     groups: Tuple[str, ...] = ()
                     for m in re.finditer(pattern, msg, flags=re.S):
+                        has_match = True
                         groups += m.groups()
-                    if groups:
+                    if groups or has_match:
                         yield {
                             "tstamp": datetime.datetime.fromtimestamp(log_time),
                             "message": msg,
                             "groups": (1,) if self.args.count else groups,
                         }
-                        has_match = True
 
                     if self.args.first_match_only and has_match:
                         break
