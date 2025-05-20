@@ -286,6 +286,94 @@ def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[s
     return stack
 
 
+def _apply_smoothing_to_df(df, y_keys_to_smooth, smoothing_window, hue_key, pd):
+    """
+    Applies rolling average smoothing to specified y_keys in the DataFrame.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame (should be sorted by hue_key then x_key).
+        y_keys_to_smooth (list): List of column names (y-keys) to smooth.
+        smoothing_window (int): The window size for the rolling average.
+        hue_key (str or None): The key used for grouping before smoothing.
+
+    Returns:
+        tuple: (pd.DataFrame, dict)
+               - The DataFrame with added smoothed columns.
+               - A plot_cols_map dictionary mapping original y_keys to the
+                 names of the columns that should be plotted (original or smoothed).
+    """
+    plot_cols_map = {}
+    df_smoothed = df.copy()  # Work on a copy to avoid modifying original df in unexpected ways if passed around
+
+    for yk in y_keys_to_smooth:
+        if yk not in df_smoothed.columns:
+            print(f"Warning: y_key '{yk}' not found in DataFrame during smoothing. Skipping.")
+            plot_cols_map[yk] = yk  # Map to original if not found, though this shouldn't happen if validated before
+            continue
+
+        smoothed_col_name = f"{yk}_smoothed_{smoothing_window}"
+        try:
+            if hue_key and hue_key in df_smoothed.columns:
+                # Ensure grouping column is suitable type
+                if not pd.api.types.is_string_dtype(df_smoothed[hue_key]) and not pd.api.types.is_categorical_dtype(
+                    df_smoothed[hue_key]
+                ):
+                    df_smoothed[hue_key] = df_smoothed[hue_key].astype(str)
+
+                df_smoothed[smoothed_col_name] = df_smoothed.groupby(hue_key, group_keys=False, observed=True)[
+                    yk
+                ].transform(lambda x: x.rolling(window=smoothing_window, min_periods=1, center=True).mean())
+            else:  # Apply rolling average to the whole column if no hue_key
+                df_smoothed[smoothed_col_name] = (
+                    df_smoothed[yk].rolling(window=smoothing_window, min_periods=1, center=True).mean()
+                )
+            plot_cols_map[yk] = smoothed_col_name
+        except Exception as e:
+            print(f"Warning: Could not apply smoothing to '{yk}'. Using original data. Error: {e}")
+            plot_cols_map[yk] = yk  # Fallback to original if smoothing fails
+            if smoothed_col_name in df_smoothed.columns:  # Clean up partially created column on error
+                df_smoothed.drop(columns=[smoothed_col_name], inplace=True)
+
+    return df_smoothed, plot_cols_map
+
+
+def _format_xticks(ax, x_values, max_xticks, is_binned, x_is_datetime, plt):
+    """Internal helper function to set and format x-axis ticks."""
+    from matplotlib.dates import DateFormatter
+
+    num_unique_x = len(x_values)
+    selected_ticks = x_values  # Default to all unique values
+    tick_labels = selected_ticks  # Default labels match ticks
+
+    # Determine ticks to show
+    if num_unique_x > max_xticks:
+        step = math.ceil(num_unique_x / max_xticks)
+        step = max(1, step)
+        selected_ticks_indices = range(0, num_unique_x, step)
+        selected_ticks = [x_values[i] for i in selected_ticks_indices]
+        tick_labels = selected_ticks  # Update labels to match selected ticks
+    # If binned, selected_ticks remains all unique bin midpoints
+
+    # Set the calculated ticks positions
+    ax.set_xticks(selected_ticks)
+
+    # Format labels if datetime
+    if x_is_datetime:
+        try:
+            # Use DateFormatter for specific format (up to seconds)
+            date_format = DateFormatter("%Y-%m-%d %H:%M:%S")
+            ax.xaxis.set_major_formatter(date_format)
+            # Apply rotation and alignment AFTER setting formatter
+            plt.setp(ax.get_xticklabels(), rotation=45, ha="right", size="small")
+        except Exception as e_fmt:
+            print(f"Warning: Could not apply DateFormatter for labels: {e_fmt}")
+            # Fallback: Simple string conversion with rotation
+            ax.set_xticklabels([str(label) for label in tick_labels], rotation=45, ha="right", size="small")
+    else:  # Numeric ticks
+        # Simple string conversion with rotation
+        ax.set_xticklabels([str(label) for label in tick_labels], rotation=45, ha="right", size="small")
+
+
 class PlotOptions(TypedDict):
     x_key: NotRequired[str]
     y_keys: List[str]
@@ -357,44 +445,10 @@ def plot(
         print(f"Plotting requires library {e.name}")
         return
 
-    def _format_xticks(ax, x_values, max_xticks, is_binned, x_is_datetime):
-        """Internal helper function to set and format x-axis ticks."""
-        from matplotlib.dates import DateFormatter
-
-        num_unique_x = len(x_values)
-        selected_ticks = x_values  # Default to all unique values
-        tick_labels = selected_ticks  # Default labels match ticks
-
-        # Determine ticks to show
-        if num_unique_x > max_xticks:
-            step = math.ceil(num_unique_x / max_xticks)
-            step = max(1, step)
-            selected_ticks_indices = range(0, num_unique_x, step)
-            selected_ticks = [x_values[i] for i in selected_ticks_indices]
-            tick_labels = selected_ticks  # Update labels to match selected ticks
-        # If binned, selected_ticks remains all unique bin midpoints
-
-        # Set the calculated ticks positions
-        ax.set_xticks(selected_ticks)
-
-        # Format labels if datetime
-        if x_is_datetime:
-            try:
-                # Use DateFormatter for specific format (up to seconds)
-                date_format = DateFormatter("%Y-%m-%d %H:%M:%S")
-                ax.xaxis.set_major_formatter(date_format)
-                # Apply rotation and alignment AFTER setting formatter
-                plt.setp(ax.get_xticklabels(), rotation=45, ha="right", size="small")
-            except Exception as e_fmt:
-                print(f"Warning: Could not apply DateFormatter for labels: {e_fmt}")
-                # Fallback: Simple string conversion with rotation
-                ax.set_xticklabels([str(label) for label in tick_labels], rotation=45, ha="right", size="small")
-        else:  # Numeric ticks
-            # Simple string conversion with rotation
-            ax.set_xticklabels([str(label) for label in tick_labels], rotation=45, ha="right", size="small")
-
     # Convert the list of dictionaries to a Pandas DataFrame
     df = pd.DataFrame(data_list)
+
+    y_keys_in_df = [yk for yk in y_keys if yk in df.columns]  # Use this for processing
 
     sort_keys = []
     if hue_key and hue_key in df.columns:
@@ -430,7 +484,6 @@ def plot(
         print(f"An unexpected error occurred during sorting: {e}")
         return  # Cannot proceed without sorting
 
-    # Apply smoothing to each y_key column if requested, before potential melting
     apply_smoothing = smoothing_window > 1
     plot_cols_map = {}  # Map original y_key to the column name to plot (original or smoothed)
 
@@ -467,7 +520,7 @@ def plot(
             group_keys.insert(0, hue_key)
 
         # Define aggregation dictionary
-        agg_dict = {yk: agg_func for yk in y_keys}
+        agg_dict = {yk: agg_func for yk in y_keys_in_df}
 
         # Perform aggregation
         print(f"Aggregating by: {group_keys}")
@@ -479,28 +532,10 @@ def plot(
             xlabel = f"{x_key} (Binned)"
         x_key = "bin_midpoint"
 
-    for yk in y_keys:
-        if yk not in df.columns:
-            print(f"Warning: y_key '{yk}' not found in data. Skipping.")
-            continue  # Skip this y_key if not found
-
-        if apply_smoothing:
-            smoothed_col_name = f"{yk}_smoothed_{smoothing_window}"
-            try:
-                if hue_key is not None:
-                    df[smoothed_col_name] = df.groupby(hue_key, group_keys=False)[yk].transform(
-                        lambda x: x.rolling(window=smoothing_window, min_periods=1, center=True).mean()
-                    )
-                else:
-                    df[smoothed_col_name] = df[yk].rolling(window=smoothing_window, min_periods=1, center=True).mean()
-
-                plot_cols_map[yk] = smoothed_col_name  # Use smoothed column
-                print(f"Applied smoothing (window={smoothing_window}) to '{yk}'. Plotting '{smoothed_col_name}'.")
-            except Exception as e:
-                print(f"Warning: Could not apply smoothing to '{yk}'. Using original data. Error: {e}")
-                plot_cols_map[yk] = yk  # Fallback to original if smoothing fails
-        else:
-            plot_cols_map[yk] = yk  # Use original column
+    plot_cols_map = {yk: yk for yk in y_keys_in_df}  # Initialize map with original y-keys (or aggregated ones)
+    if apply_smoothing:
+        print(f"Applying smoothing with window {smoothing_window}.")
+        df, plot_cols_map = _apply_smoothing_to_df(df, y_keys_in_df, smoothing_window, hue_key, pd)
 
     # Filter y_keys to only those successfully processed (found and optionally smoothed)
     valid_y_keys = list(plot_cols_map.keys())
@@ -573,6 +608,7 @@ def plot(
                 max_xticks=max_xticks,
                 is_binned=num_bins > 0,
                 x_is_datetime=x_is_datetime,
+                plt=plt,
             )
 
         # Hide unused subplots
@@ -637,6 +673,7 @@ def plot(
             max_xticks=max_xticks,
             is_binned=num_bins > 0,
             x_is_datetime=x_is_datetime,
+            plt=plt,
         )
 
         plt.tight_layout()  # Adjust layout
@@ -663,6 +700,7 @@ def plot(
             max_xticks=max_xticks,
             is_binned=num_bins > 0,
             x_is_datetime=x_is_datetime,
+            plt=plt,
         )
 
         # Adjust layout to prevent labels from overlapping plot elements
@@ -850,7 +888,7 @@ class ScanJobs(BaseScript):
         self.argparser.add_argument(
             "--capture-joblink",
             action="store_true",
-            help="When using --data-headers, also include job link in the captured result."
+            help="When using --data-headers, also include job link in the captured result.",
         )
         self.argparser.add_argument(
             "--separate-matches-per-target",
