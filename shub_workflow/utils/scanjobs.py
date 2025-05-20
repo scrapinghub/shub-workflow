@@ -337,28 +337,50 @@ def _apply_smoothing_to_df(df, y_keys_to_smooth, smoothing_window, hue_key, pd):
     return df_smoothed, plot_cols_map
 
 
-def _format_xticks(ax, x_values, max_xticks, is_binned, x_is_datetime, plt):
-    """Internal helper function to set and format x-axis ticks."""
+def _format_xticks(ax, x_values, max_xticks, is_binned, x_is_datetime, np, pd, plt):
+    """
+    Internal helper function to set and format x-axis ticks.
+    Ensures uniform tick distribution if not binned and many data points.
+    """
     from matplotlib.dates import DateFormatter
 
-    num_unique_x = len(x_values)
-    selected_ticks = x_values  # Default to all unique values
-    tick_labels = selected_ticks  # Default labels match ticks
+    if len(x_values) == 0:  # Handle empty case
+        ax.set_xticks([])
+        return
 
-    # Determine ticks to show
-    if num_unique_x > max_xticks:
-        step = math.ceil(num_unique_x / max_xticks)
-        step = max(1, step)
-        selected_ticks_indices = range(0, num_unique_x, step)
-        selected_ticks = [x_values[i] for i in selected_ticks_indices]
-        tick_labels = selected_ticks  # Update labels to match selected ticks
-    # If binned, selected_ticks remains all unique bin midpoints
+    selected_ticks = []
 
-    # Set the calculated ticks positions
+    if is_binned:
+        # For binned data, x_values are the bin midpoints.
+        # These are already representative of uniform intervals.
+        selected_ticks = x_values
+        # Optional: could still thin out if num_bins > max_xticks, but for now show all.
+    else:  # Not binned
+        num_unique_x = len(x_values)
+        if num_unique_x <= max_xticks:
+            # If few unique points, use them all. x_values is already sorted unique.
+            selected_ticks = x_values
+        else:
+            # Too many unique points, create uniform ticks across the full data range.
+            min_val = x_values[0]
+            max_val = x_values[-1]
+
+            if x_is_datetime:
+                # Convert min/max datetime to numeric for linspace
+                min_num = plt.matplotlib.dates.date2num(min_val)
+                max_num = plt.matplotlib.dates.date2num(max_val)
+                # Generate evenly spaced numeric ticks
+                tick_nums = np.linspace(min_num, max_num, num=max_xticks)
+                # Convert numeric ticks back to datetime objects
+                selected_ticks = plt.matplotlib.dates.num2date(tick_nums)
+            else:
+                # Generate evenly spaced numeric ticks
+                selected_ticks = np.linspace(min_val, max_val, num=max_xticks)
+
     ax.set_xticks(selected_ticks)
 
-    # Format labels if datetime
-    if x_is_datetime:
+    # Format labels for the selected_ticks
+    if x_is_datetime:  # Check type of selected_ticks
         try:
             # Use DateFormatter for specific format (up to seconds)
             date_format = DateFormatter("%Y-%m-%d %H:%M:%S")
@@ -368,10 +390,27 @@ def _format_xticks(ax, x_values, max_xticks, is_binned, x_is_datetime, plt):
         except Exception as e_fmt:
             print(f"Warning: Could not apply DateFormatter for labels: {e_fmt}")
             # Fallback: Simple string conversion with rotation
-            ax.set_xticklabels([str(label) for label in tick_labels], rotation=45, ha="right", size="small")
-    else:  # Numeric ticks
+            ax.set_xticklabels(
+                [
+                    str(
+                        pd.Timestamp(label).strftime("%Y-%m-%d %H:%M:%S")
+                        if isinstance(label, (pd.Timestamp, np.datetime64))
+                        else str(label)
+                    )
+                    for label in selected_ticks
+                ],
+                rotation=45,
+                ha="right",
+                size="small",
+            )
+    else:  # Numeric or other types
         # Simple string conversion with rotation
-        ax.set_xticklabels([str(label) for label in tick_labels], rotation=45, ha="right", size="small")
+        ax.set_xticklabels(
+            [f"{label:.2f}" if isinstance(label, float) else str(label) for label in selected_ticks],
+            rotation=45,
+            ha="right",
+            size="small",
+        )
 
 
 class PlotOptions(TypedDict):
@@ -608,6 +647,8 @@ def plot(
                 max_xticks=max_xticks,
                 is_binned=num_bins > 0,
                 x_is_datetime=x_is_datetime,
+                np=np,
+                pd=pd,
                 plt=plt,
             )
 
@@ -673,6 +714,8 @@ def plot(
             max_xticks=max_xticks,
             is_binned=num_bins > 0,
             x_is_datetime=x_is_datetime,
+            np=np,
+            pd=pd,
             plt=plt,
         )
 
@@ -700,6 +743,8 @@ def plot(
             max_xticks=max_xticks,
             is_binned=num_bins > 0,
             x_is_datetime=x_is_datetime,
+            np=np,
+            pd=pd,
             plt=plt,
         )
 
