@@ -946,10 +946,16 @@ class ScanJobs(BaseScript):
             help="Yield matches for same target and pattern (either log line or stats) separately",
         )
 
+    def parse_args(self) -> argparse.Namespace:
+        args = super().parse_args()
+        if args.plot and not args.data_headers:
+            self.argparser.error("You must use --data-headers along with --plot")
+        return args
+
     def filter_log_pattern(self, jdict: JobDict, job: Job, limit: int) -> Iterator[FilterResult]:
         if not self.args.log_pattern:
             return
-        has_match = False
+        job_has_match = False
         for idx, logline in enumerate(job.logs.iter()):
             if self.args.max_items_per_job and idx == self.args.max_items_per_job:
                 break
@@ -958,18 +964,20 @@ class ScanJobs(BaseScript):
             log_time = logline["time"] / 1000
             if msg := logline["message"]:
                 for pattern in self.args.log_pattern:
+                    pattern_has_match = False
                     groups: Tuple[str, ...] = ()
                     for m in re.finditer(pattern, msg, flags=re.S):
-                        has_match = True
+                        job_has_match = True
+                        pattern_has_match = True
                         groups += m.groups()
-                    if groups or has_match:
+                    if groups or pattern_has_match:
                         yield {
                             "tstamp": datetime.datetime.fromtimestamp(log_time),
                             "message": msg,
                             "groups": (1,) if self.args.count else groups,
                         }
 
-                    if self.args.first_match_only and has_match:
+                    if self.args.first_match_only and job_has_match:
                         break
 
     def filter_item_field_pattern(self, jdict: JobDict, job: Job, limit: int) -> Iterator[FilterResult]:
