@@ -1,53 +1,63 @@
-A set of tools for controlling processing workflow with spiders and script running in scrapinghub ScrapyCloud.
 
-# Installation
+# Project Overview
+A Set of Tools for Processing Workflows in ScrapyCloud
 
+## Prerequisites
+This project is built using Python. Before getting started, ensure you have the following installed:
+- Python 
+- Pip 
+
+## Installation Steps:
+Choose one of the following options to install the project:
+
+### Option 1: Manual Installation
+Run the following command to install:
 ```
 pip install shub-workflow
 ```
 
-If you want to support s3 tools:
-
+To include support for S3 tools:
 ```
 pip install shub-workflow[with-s3-tools]
 ```
 
-For google cloud storage tools support:
-
+To include support for Google Cloud Storage tools:
 ```
 pip install shub-workflow[with-gcs-tools]
 ```
 
-# Usage
-
-Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for documentation. You can also see code tests for lots of examples of usage.
-
-# Note
-
-The requirements for this library are defined in setup.py as usual. The Pipfile files in the repository don't define dependencies. It is only used
-for setting up a development environment for shub-workflow library development and testing.
-
-
-# For developers
-
-For installing a development environment for shub-workflow, the package comes with Pipfile and Pipfile.lock files. So, clone or fork the repository and do:
-
+### Verification
+To verify successful installation, run:
 ```
-> pipenv install --dev
-> cp pre-commit .git/hooks/
+python -m shub_workflow --help
 ```
 
-for installing the environment, and:
+### For Developers
+To set up a development environment:
+1. Clone or fork the repository.
+2. Install dependencies:
+   ```
+   pipenv install --dev
+   ```
+3. Set up the pre-commit hook:
+   ```
+   cp pre-commit .git/hooks/
+   ```
 
+To initiate the environment:
 ```
-> pipenv shell
+pipenv shell
 ```
 
-for initiating it.
-
-There is a script, lint.sh, that you can run everytime you need from the repo root folder, but it is also executed each time you do `git commit` (provided
-you installed the pre-commit hook during the installation step described above). It checks code pep8 and typing integrity, via flake8 and mypy.
-
+To lint the code, use the `lint.sh` script from the repository root:
 ```
-> ./lint.sh
+./lint.sh
 ```
+
+This script runs code checks for PEP8 compliance (via flake8) and typing integrity (via mypy). It is also executed on each `git commit` if the pre-commit hook is installed.
+
+## External Documents
+Refer to the [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for comprehensive documentation, including usage examples.
+
+## Notes
+The requirements for this library are defined in `setup.py`. The `Pipfile` and `Pipfile.lock` are for setting up the development environment only and do not define runtime dependencies.
