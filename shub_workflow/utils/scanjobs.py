@@ -356,26 +356,21 @@ def _format_xticks(ax, x_values, max_xticks, is_binned, x_is_datetime, np, pd, p
         selected_ticks = x_values
         # Optional: could still thin out if num_bins > max_xticks, but for now show all.
     else:  # Not binned
-        num_unique_x = len(x_values)
-        if num_unique_x <= max_xticks:
-            # If few unique points, use them all. x_values is already sorted unique.
-            selected_ticks = x_values
-        else:
-            # Too many unique points, create uniform ticks across the full data range.
-            min_val = x_values[0]
-            max_val = x_values[-1]
+        # Create uniform ticks across the full data range.
+        min_val = x_values[0]
+        max_val = x_values[-1]
 
-            if x_is_datetime:
-                # Convert min/max datetime to numeric for linspace
-                min_num = plt.matplotlib.dates.date2num(min_val)
-                max_num = plt.matplotlib.dates.date2num(max_val)
-                # Generate evenly spaced numeric ticks
-                tick_nums = np.linspace(min_num, max_num, num=max_xticks)
-                # Convert numeric ticks back to datetime objects
-                selected_ticks = plt.matplotlib.dates.num2date(tick_nums)
-            else:
-                # Generate evenly spaced numeric ticks
-                selected_ticks = np.linspace(min_val, max_val, num=max_xticks)
+        if x_is_datetime:
+            # Convert min/max datetime to numeric for linspace
+            min_num = plt.matplotlib.dates.date2num(min_val)
+            max_num = plt.matplotlib.dates.date2num(max_val)
+            # Generate evenly spaced numeric ticks
+            tick_nums = np.linspace(min_num, max_num, num=max_xticks)
+            # Convert numeric ticks back to datetime objects
+            selected_ticks = plt.matplotlib.dates.num2date(tick_nums)
+        else:
+            # Generate evenly spaced numeric ticks
+            selected_ticks = np.linspace(min_val, max_val, num=max_xticks)
 
     ax.set_xticks(selected_ticks)
 
