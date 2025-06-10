@@ -1138,7 +1138,7 @@ class ScanJobs(BaseScript):
         all_headers = set()
         for jdict in self.get_jobs(
             spider=self.args.spider,
-            meta=["spider_args", "finished_time", "scrapystats"],
+            meta=["spider_args", "finished_time", "scrapystats", "running_time"],
             state=["finished", "running"] if self.args.include_running_jobs else ["finished"],
             has_tag=self.args.has_tag,
         ):
@@ -1155,8 +1155,10 @@ class ScanJobs(BaseScript):
             job = self.get_job(jdict["key"])
             if "finished_time" in jdict:
                 job_tstamp = jdict["finished_time"]
+            elif "running_time" in jdict:
+                job_tstamp = int((jdict["running_time"] + int(end_limit * 1000)) / 2)
             else:
-                job_tstamp = int(end_limit * 1000)
+                continue
             tstamp = datetime.datetime.fromtimestamp(job_tstamp / 1000)
             has_match = False
 
