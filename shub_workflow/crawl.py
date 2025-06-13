@@ -166,9 +166,19 @@ class CrawlManager(SpiderStatsAggregatorMixin, WorkFlowManager, CrawlManagerProt
 
                 scrapystats = self.get_metadata_key(metadata, "scrapystats")
                 self.aggregate_spider_stats(JobDict(spider=spider, key=jobkey, scrapystats=scrapystats))
+            else:
+                self.running_job_hook(jobkey)
         _LOG.info(f"There are {len(self._running_job_keys)} jobs still running.")
 
         return outcomes
+
+    def running_job_hook(self, jobkey: JobKey):
+        """
+        Allows to add some reaction on each running job. Here we only pass jobkey, as it is more
+        economical than getting metadata, and not needed unless you want to implement the hook.
+        Just use in your implementation, something like
+        metadata = self.get_job_metadata(jobkey)
+        """
 
     def finished_metadata_hook(self, jobkey: JobKey, metadata: JobMeta):
         """
