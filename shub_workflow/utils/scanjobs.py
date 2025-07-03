@@ -468,6 +468,51 @@ def _format_xticks(ax, x_values, max_xticks, is_binned, x_is_datetime, np, pd, p
         )
 
 
+def _apply_difference_to_df(df, y_keys_original, hue_key, current_plot_cols_map, pd):
+    """
+    Applies the difference transformation (value - previous value) to specified y_keys.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame (should be sorted by hue_key then x_key).
+        y_keys_original (list): List of original y-key names.
+        hue_key (str or None): The key used for grouping before differencing.
+        current_plot_cols_map (dict): Current mapping of original y_keys to their column names in df.
+
+    Returns:
+        tuple: (pd.DataFrame, dict)
+               - The DataFrame with added differenced columns.
+               - An updated plot_cols_map dictionary.
+    """
+    df_diff = df.copy()
+    new_plot_cols_map = current_plot_cols_map.copy()
+
+    for yk_original in y_keys_original:
+        col_to_diff = new_plot_cols_map.get(yk_original, yk_original)  # Get current column name
+        if col_to_diff not in df_diff.columns:
+            print(
+                f"Warning: Column '{col_to_diff}' for original y_key '{yk_original}' not found "
+                "for differencing. Skipping."
+            )
+            continue
+
+        diff_col_name = f"{col_to_diff}_diff"
+        try:
+            if hue_key and hue_key in df_diff.columns:
+                # Apply diff within each group
+                df_diff[diff_col_name] = df_diff.groupby(hue_key, group_keys=False, observed=True)[col_to_diff].diff()
+            else:
+                # Apply diff to the whole column
+                df_diff[diff_col_name] = df_diff[col_to_diff].diff()
+            new_plot_cols_map[yk_original] = diff_col_name  # Update map to point to diff column
+        except Exception as e:
+            print(f"Warning: Could not apply differencing to '{yk_original}'. Using original data. Error: {e}")
+            new_plot_cols_map[yk_original] = col_to_diff
+            if diff_col_name in df_diff.columns:
+                df_diff.drop(columns=[diff_col_name], inplace=True)
+
+    return df_diff, new_plot_cols_map
+
+
 class PlotOptions(TypedDict):
     x_key: NotRequired[str]
     y_keys: List[str]
@@ -481,6 +526,7 @@ class PlotOptions(TypedDict):
     agg_func: NotRequired[str]
     timezone: NotRequired[str]
     ylabel: NotRequired[str]
+    apply_diff: NotRequired[bool]
 
 
 def plot(
@@ -497,6 +543,7 @@ def plot(
     tile_plots: bool = True,
     num_bins: int = 0,
     agg_func: str = "mean",
+    apply_diff: bool = False,
     theme: str = "darkgrid",
     timezone: Optional[str] = None,
 ):
@@ -525,8 +572,11 @@ def plot(
         agg_func (str or function, optional): Aggregation function to use when binning.
                                               Examples: 'mean', 'median', 'sum', 'count', 'std' (see pandas
                                               agg() method). Defaults to 'mean'.
+        apply_diff (bool, optional): If True, calculates the difference between consecutive y_key values.
+                                     Defaults to False. Applied after binning and smoothing.
         theme (str, optional): Seaborn theme. See seaborn documentation for options. Default: 'darkgrid'.
         timezone (str, optional): A timezone spec. It is added on the x label if x label are timestamps.
+
     Returns:
         None: Displays the plot using matplotlib.pyplot.show() or saves it.
     """
@@ -597,6 +647,10 @@ def plot(
         print(f"Applying smoothing with window {smoothing_window}.")
         df, plot_cols_map = _apply_smoothing_to_df(df, y_keys_in_df, smoothing_window, hue_key, pd)
 
+    if apply_diff:
+        print("Applying difference transformation.")
+        df, plot_cols_map = _apply_difference_to_df(df, y_keys_in_df, hue_key, plot_cols_map, pd)
+
     # Filter y_keys to only those successfully processed (found and optionally smoothed)
     valid_y_keys = list(plot_cols_map.keys())
     if not valid_y_keys:
@@ -618,6 +672,8 @@ def plot(
         title += f" (Smoothed, Window={smoothing_window})"
     if num_bins > 0:
         title += f" (Binned, n={num_bins})"
+    if apply_diff:
+        title += " (Differenced)"
 
     num_plots = len(valid_y_keys)
 
@@ -1103,6 +1159,8 @@ class ScanJobs(BaseScript):
                     plot_options["save"] = True
                 elif option == "no_tiles":
                     plot_options["tile_plots"] = False
+                elif option == "tdiff":
+                    plot_options["apply_diff"] = True
                 else:
                     key, val = option.split("=")
                     if key == "X":
