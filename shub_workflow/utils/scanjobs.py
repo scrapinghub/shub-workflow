@@ -286,6 +286,66 @@ def post_process(instructions: Iterable[Union[str, int, float]]) -> List[Union[s
     return stack
 
 
+def _apply_binning_to_df(df, x_key, y_keys_to_agg, num_bins, agg_func, hue_key, x_is_datetime, xlabel, pd):
+    """
+    Applies binning and aggregation to the DataFrame based on x_key.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame.
+        x_key (str): The column name for the x-axis.
+        y_keys_to_agg (list): List of column names (y-keys) to aggregate.
+        num_bins (int): Number of bins for x-axis aggregation.
+        agg_func (str or function): Aggregation function.
+        hue_key (str or None): The key used for grouping (optional).
+        x_is_datetime (bool): True if x_key is datetime.
+        xlabel (str): The default xlabel value to use if not provided by user.
+
+    Returns:
+        tuple: (pd.DataFrame, str, str)
+               - The DataFrame after binning and aggregation.
+               - The new x_key for plotting (bin_midpoint).
+               - The new xlabel for plotting.
+               - Raises Exception if binning fails.
+    """
+    # Create bins using pd.cut
+    # Use include_lowest=True to ensure min value is included
+    df["bin"], bin_edges = pd.cut(df[x_key], bins=num_bins, labels=False, retbins=True, include_lowest=True)
+
+    # Calculate bin midpoints for plotting
+    bin_midpoints = []
+    for i in range(num_bins):
+        start_edge = bin_edges[i]
+        end_edge = bin_edges[i + 1]
+        if x_is_datetime:
+            # Calculate midpoint for Timestamps using Timedelta
+            midpoint = start_edge + (end_edge - start_edge) / 2
+        else:  # Assume numeric
+            midpoint = (start_edge + end_edge) / 2
+        bin_midpoints.append(midpoint)
+
+    # Map bin index to midpoint
+    midpoint_map = {i: bin_midpoints[i] for i in range(num_bins)}
+    df["bin_midpoint"] = df["bin"].map(midpoint_map)
+
+    # Define grouping keys
+    group_keys = ["bin_midpoint"]
+    if hue_key:
+        group_keys.insert(0, hue_key)
+
+    # Define aggregation dictionary
+    agg_dict = {yk: agg_func for yk in y_keys_to_agg}
+
+    # Perform aggregation
+    print(f"Aggregating by: {group_keys}")
+    agg_df = df.groupby(group_keys, observed=False).agg(agg_dict).reset_index()
+
+    # Replace df with aggregated data
+    if xlabel is None:  # Update xlabel only if user didn't provide one
+        xlabel = f"{x_key} (Binned)"
+    x_key = "bin_midpoint"
+    return agg_df, x_key, xlabel
+
+
 def _apply_smoothing_to_df(df, y_keys_to_smooth, smoothing_window, hue_key, pd):
     """
     Applies rolling average smoothing to specified y_keys in the DataFrame.
@@ -528,43 +588,9 @@ def plot(
 
     if num_bins > 0:
         print(f"Applying binning: num_bins={num_bins}, agg_func='{agg_func}'")
-        # Create bins using pd.cut
-        # Use include_lowest=True to ensure min value is included
-        df["bin"], bin_edges = pd.cut(df[x_key], bins=num_bins, labels=False, retbins=True, include_lowest=True)
-
-        # Calculate bin midpoints for plotting
-        bin_midpoints = []
-        for i in range(num_bins):
-            start_edge = bin_edges[i]
-            end_edge = bin_edges[i + 1]
-            if x_is_datetime:
-                # Calculate midpoint for Timestamps using Timedelta
-                midpoint = start_edge + (end_edge - start_edge) / 2
-            else:  # Assume numeric
-                midpoint = (start_edge + end_edge) / 2
-            bin_midpoints.append(midpoint)
-
-        # Map bin index to midpoint
-        midpoint_map = {i: bin_midpoints[i] for i in range(num_bins)}
-        df["bin_midpoint"] = df["bin"].map(midpoint_map)
-
-        # Define grouping keys
-        group_keys = ["bin_midpoint"]
-        if hue_key:
-            group_keys.insert(0, hue_key)
-
-        # Define aggregation dictionary
-        agg_dict = {yk: agg_func for yk in y_keys_in_df}
-
-        # Perform aggregation
-        print(f"Aggregating by: {group_keys}")
-        agg_df = df.groupby(group_keys, observed=False).agg(agg_dict).reset_index()
-
-        # Replace df with aggregated data
-        df = agg_df
-        if xlabel is None:  # Update xlabel only if user didn't provide one
-            xlabel = f"{x_key} (Binned)"
-        x_key = "bin_midpoint"
+        df, x_key, xlabel = _apply_binning_to_df(
+            df, x_key, y_keys_in_df, num_bins, agg_func, hue_key, x_is_datetime, xlabel, pd
+        )
 
     plot_cols_map = {yk: yk for yk in y_keys_in_df}  # Initialize map with original y-keys (or aggregated ones)
     if apply_smoothing:
