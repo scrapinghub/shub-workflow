@@ -866,7 +866,7 @@ class ScanJobs(BaseScript):
 
     def add_argparser_options(self):
         super().add_argparser_options()
-        self.argparser.add_argument("spider")
+        self.argparser.add_argument("spider", help="Target spider or script. If '*' is used, match everything.")
         self.argparser.add_argument(
             "--log-pattern", "-l", help="Log pattern. Can be multiple.", action="append", default=[]
         )
@@ -1022,11 +1022,21 @@ class ScanJobs(BaseScript):
             action="store_true",
             help="Yield matches for same target and pattern (either log line or stats) separately",
         )
+        self.argparser.add_argument(
+            "--scripts-only", action="store_true",
+            help="When used with wildcard '*' passed as argument, only match scripts."
+        )
+        self.argparser.add_argument(
+            "--spiders-only", action="store_true",
+            help="When used with wildcard '*' passed as argument, only match spiders."
+        )
 
     def parse_args(self) -> argparse.Namespace:
         args = super().parse_args()
         if args.plot and not args.data_headers:
             self.argparser.error("You must use --data-headers along with --plot")
+        if (args.spiders_only or args.scripts_only) and args.spider != "*":
+            self.argparser.error("--spiders-only and --scripts-only can only be used when argument is '*'")
         return args
 
     def filter_log_pattern(self, jdict: JobDict, job: Job, limit: int) -> Iterator[FilterResult]:
@@ -1216,11 +1226,16 @@ class ScanJobs(BaseScript):
         jobcount = 0
         all_headers = set()
         for jdict in self.get_jobs(
-            spider=self.args.spider,
-            meta=["spider_args", "finished_time", "scrapystats", "running_time"],
+            spider=None if self.args.spider == "*" else self.args.spider,
+            meta=["spider_args", "finished_time", "scrapystats", "running_time", "spider"],
             state=["finished", "running"] if self.args.include_running_jobs else ["finished"],
             has_tag=self.args.has_tag,
         ):
+            if self.args.spiders_only and jdict["spider"].startswith("py:"):
+                continue
+            if self.args.scripts_only and not jdict["spider"].startswith("py:"):
+                continue
+
             if "finished_time" in jdict and jdict["finished_time"] / 1000 > end_limit:
                 continue
 
