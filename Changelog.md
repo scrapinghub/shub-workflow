@@ -155,3 +155,5 @@ Minor version changes:
 - 1.14.21 Allow to pre set command line programs
 - 1.14.22 Added crawlmanager running jobs hook
 - 1.14.23 Added differentiation plot mode in scanjobs.py utility
+- 1.14.24 scanjobs: allow to use wildcard as argument, add command line flags to select only spiders or only scripts,
+  allow to match jobs by tag patterns, added option for continue scanning without expecting user input
