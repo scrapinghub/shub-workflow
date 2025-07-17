@@ -895,6 +895,12 @@ class ScanJobs(BaseScript):
             default=[],
         )
         self.argparser.add_argument(
+            "--tag-pattern",
+            help="Only match given tag pattern. Can be multiple.",
+            action="append",
+            default=[],
+        )
+        self.argparser.add_argument(
             "--period",
             "-p",
             default=86400,
@@ -1225,9 +1231,18 @@ class ScanJobs(BaseScript):
         limit = (end_limit - period) * 1000
         jobcount = 0
         all_headers = set()
+        meta = ["finished_time", "running_time"]
+        if self.args.spider_argument_pattern:
+            meta.append("spider_args")
+        if self.args.stat_pattern:
+            meta.append("scrapystats")
+        if (self.args.spiders_only or self.args.scripts_only):
+            meta.append("spider")
+        if self.args.tag_pattern:
+            meta.append("tags")
         for jdict in self.get_jobs(
             spider=None if self.args.spider == "*" else self.args.spider,
-            meta=["spider_args", "finished_time", "scrapystats", "running_time", "spider"],
+            meta=meta,
             state=["finished", "running"] if self.args.include_running_jobs else ["finished"],
             has_tag=self.args.has_tag,
         ):
@@ -1235,6 +1250,14 @@ class ScanJobs(BaseScript):
                 continue
             if self.args.scripts_only and not jdict["spider"].startswith("py:"):
                 continue
+            if self.args.tag_pattern:
+                tag_match = False
+                for tag in jdict["tags"]:
+                    if any(re.search(tag_re, tag) for tag_re in self.args.tag_pattern):
+                        tag_match = True
+                        break
+                if not tag_match:
+                    continue
 
             if "finished_time" in jdict and jdict["finished_time"] / 1000 > end_limit:
                 continue
