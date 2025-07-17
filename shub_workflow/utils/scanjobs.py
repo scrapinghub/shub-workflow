@@ -1245,22 +1245,25 @@ class ScanJobs(BaseScript):
             meta.append("scrapystats")
         if (self.args.spiders_only or self.args.scripts_only):
             meta.append("spider")
+        tag_patterns = []
         if self.args.tag_pattern:
             meta.append("tags")
+            tag_patterns = [re.compile(tag_re) for tag_re in self.args.tag_pattern]
         for jdict in self.get_jobs(
             spider=None if self.args.spider == "*" else self.args.spider,
             meta=meta,
             state=["finished", "running"] if self.args.include_running_jobs else ["finished"],
             has_tag=self.args.has_tag,
         ):
+            jobcount += 1
             if self.args.spiders_only and jdict["spider"].startswith("py:"):
                 continue
             if self.args.scripts_only and not jdict["spider"].startswith("py:"):
                 continue
-            if self.args.tag_pattern:
+            if tag_patterns:
                 tag_match = False
                 for tag in jdict["tags"]:
-                    if any(re.search(tag_re, tag) for tag_re in self.args.tag_pattern):
+                    if any(re.search(treg, tag) for treg in tag_patterns):
                         tag_match = True
                         break
                 if not tag_match:
@@ -1274,7 +1277,6 @@ class ScanJobs(BaseScript):
                 print("Total jobs scanned:", jobcount)
                 break
 
-            jobcount += 1
             keyprinted = False
             job = self.get_job(jdict["key"])
             if "finished_time" in jdict:
@@ -1377,7 +1379,8 @@ class ScanJobs(BaseScript):
                         print(json.dumps(groups), file=self.args.write)
                     elif not any_pattern:
                         print(job_link, file=self.args.write)
-                elif not self.args.plot and (result["groups"] or has_match or not any_pattern):
+                elif not self.args.plot and (result["groups"] or has_match or not any_pattern) and not \
+                        self.args.no_user_enter:
                     input("Press Enter to continue...\n")
 
                 if self.args.first_match_only and has_match:
