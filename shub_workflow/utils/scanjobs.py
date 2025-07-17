@@ -1036,6 +1036,13 @@ class ScanJobs(BaseScript):
             "--spiders-only", action="store_true",
             help="When used with wildcard '*' passed as argument, only match spiders."
         )
+        self.argparser.add_argument(
+            "--no-user-enter", action="store_true",
+            help=(
+                "Don't wait for user to press enter to continue on each match. This is the default "
+                "when using --write or --plot."
+            )
+        )
 
     def parse_args(self) -> argparse.Namespace:
         args = super().parse_args()
@@ -1283,7 +1290,7 @@ class ScanJobs(BaseScript):
             if spiderargs:
                 has_match = True
                 keyprinted = True
-                if not self.args.write and not self.args.plot:
+                if not self.args.write and not self.args.plot and not self.args.no_user_enter:
                     input("Press Enter to continue...\n")
             elif self.args.spider_argument_pattern:
                 continue
@@ -1329,12 +1336,12 @@ class ScanJobs(BaseScript):
                             result["groups"] = tuple(post_process(post_process_stack))
                         except ZeroDivisionError:
                             LOG.warning(f"Ignoring data {result['groups']}: post processing raised ZeroDivisionError.")
-                            if not self.args.plot and not self.args.write:
+                            if not self.args.plot and not self.args.write and not self.args.no_user_enter:
                                 input("Press Enter to continue...\n")
                             continue
                         except Exception as e:
                             LOG.warning(f"Ignoring data {result['groups']}: post processing raised {e!r}.")
-                            if not self.args.plot and not self.args.write:
+                            if not self.args.plot and not self.args.write and not self.args.no_user_enter:
                                 input("Press Enter to continue...\n")
                             continue
 
