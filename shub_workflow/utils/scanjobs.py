@@ -527,6 +527,7 @@ class PlotOptions(TypedDict):
     timezone: NotRequired[str]
     ylabel: NotRequired[str]
     apply_diff: NotRequired[bool]
+    tile_key: NotRequired[str]
 
 
 def plot(
@@ -546,6 +547,7 @@ def plot(
     apply_diff: bool = False,
     theme: str = "darkgrid",
     timezone: Optional[str] = None,
+    tile_key: Optional[str] = None,
 ):
     """
     Generates a line plot with potentially multiple lines based on a hue category
@@ -576,7 +578,8 @@ def plot(
                                      Defaults to False. Applied after binning and smoothing.
         theme (str, optional): Seaborn theme. See seaborn documentation for options. Default: 'darkgrid'.
         timezone (str, optional): A timezone spec. It is added on the x label if x label are timestamps.
-
+        tile_key (str, optional): If provided, creates separate tiled plots for each unique value
+                                  in this column. This overrides `tile_plots=True` for y_key-based tiling.
     Returns:
         None: Displays the plot using matplotlib.pyplot.show() or saves it.
     """
@@ -591,12 +594,19 @@ def plot(
 
     # Convert the list of dictionaries to a Pandas DataFrame
     df = pd.DataFrame(data_list)
+    if tile_key:
+        df = df.dropna(subset=[tile_key])
+    if hue_key:
+        df = df.dropna(subset=[hue_key])
+    df = df.dropna(axis=1, how='all')
 
-    y_keys_in_df = [yk for yk in y_keys if yk in df.columns]  # Use this for processing
+    y_keys_in_df = [yk for yk in y_keys if yk in df.columns and yk != tile_key]  # Use this for processing
 
     sort_keys = []
     if hue_key and hue_key in df.columns:
         sort_keys.append(hue_key)
+    if tile_key:
+        sort_keys.append(tile_key)
 
     x_is_datetime = False
     # Attempt to convert x_key to datetime if possible for proper sorting
@@ -604,8 +614,6 @@ def plot(
         # Use errors='coerce' to handle non-convertible values gracefully (they become NaT)
         df[x_key] = pd.to_datetime(df[x_key], errors="coerce")
         df = df.dropna(subset=[x_key])  # Drop rows where conversion failed
-        # Optional: Handle NaT values if necessary, e.g., drop rows or fill
-        # df = df.dropna(subset=[x_key])
         if not df.empty:
             x_is_datetime = True
     except (ValueError, TypeError, OverflowError):
@@ -666,6 +674,9 @@ def plot(
     elif hue_key:
         print(f"Warning: Provided hue_key '{hue_key}' not found in data. Ignoring hue.")
         hue_key = None
+    if tile_key and tile_key in df.columns:
+        cols_to_keep.append(tile_key)
+    df = df.dropna(axis=1, how='all')
     plot_df = df[cols_to_keep].copy()
 
     if apply_smoothing:
@@ -681,8 +692,96 @@ def plot(
     if x_is_datetime and timezone:
         xlabel = f"{xlabel} ({timezone})"
 
-    # --- Tiled Plot Logic ---
-    if tile_plots and num_plots > 1:
+    # --- Tiling by tile_key Logic ---
+    if tile_key and tile_key in plot_df.columns:
+        unique_tile_values = np.sort(plot_df[tile_key].unique())  # Get unique values for tiling
+
+        num_plots = len(unique_tile_values)
+        print(f"Tiling by '{tile_key}'. Found {num_plots} unique tiles.")
+
+        ncols = min(math.ceil(math.sqrt(num_plots)), 4)
+        nrows = math.ceil(num_plots / ncols)
+
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(ncols * 10, nrows * 7), squeeze=False)
+        fig.suptitle(title, fontsize=16, y=0.98)
+        axes_flat = axes.flatten()
+
+        # Collect legend handles and labels across all subplots
+        all_handles = []
+        all_labels = []
+
+        for i, yk in enumerate(unique_tile_values):
+            ax = axes_flat[i]
+
+            tile_data = plot_df[plot_df[tile_key] == yk].copy()
+
+            # Melt data for multiple y_keys on one tile
+            id_vars_tile = [x_key]
+            if hue_key:
+                id_vars_tile.append(hue_key)
+
+            value_vars_tile_actual = [plot_cols_map[yk] for yk in valid_y_keys]
+            rename_map_for_metric_tile = {plot_cols_map[yk]: yk for yk in valid_y_keys}
+
+            melted_tile_df = pd.melt(
+                tile_data,
+                id_vars=id_vars_tile,
+                value_vars=value_vars_tile_actual,
+                var_name="Metric_actual",
+                value_name="Value",
+            )
+            melted_tile_df["Metric"] = melted_tile_df["Metric_actual"].map(rename_map_for_metric_tile)
+
+            sns.lineplot(
+                data=melted_tile_df,
+                x=x_key,
+                y="Value",
+                hue=hue_key if hue_key else None,
+                style="Metric" if len(valid_y_keys) > 1 else None,
+                marker="o",
+                ax=ax,
+            )
+            ax.set_title(yk)  # Subplot title
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel or "Value" if not apply_diff else "Difference in Value")
+
+            # Collect handles/labels for figure-level legend
+            h, lab = ax.get_legend_handles_labels()
+            # Modify labels to include both hue and metric if both are used
+            if hue_key and "Metric" in melted_tile_df.columns:
+                # Reconstruct labels like "Hue_Val / Metric_Val"
+                for label_idx, original_label in enumerate(lab):
+                    if original_label == hue_key:  # This is the legend title, skip
+                        continue
+                    # Find the corresponding hue and style values for this legend entry
+                    # This is a bit tricky; often it's better to manually create proxy artists
+                    # or ensure seaborn's legend creation matches your desired combined labels.
+                    # For simplicity, let's assume labels are ordered as hue1-metric1, hue1-metric2, hue2-metric1...
+                    # or just hue1, hue2, metric1, metric2 etc.
+                    # For now, we'll just append them as is, which might not be perfectly combined.
+                    # pass  # Will collect later from ax.get_legend_handles_labels()
+
+            if h and lab:
+                # Append only unique handles/labels to avoid duplicates in figure legend
+                for handle, label in zip(h, lab):
+                    if label not in all_labels:
+                        all_handles.append(handle)
+                        all_labels.append(label)
+
+        # Hide unused subplots
+        for i in range(num_plots, len(axes_flat)):
+            axes_flat[i].set_visible(False)
+
+        fig.subplots_adjust(
+            left=0.08,
+            right=0.95,
+            bottom=0.15,
+            top=0.85 if (all_handles and all_labels) else 0.95,
+            hspace=0.5,
+            wspace=0.25,
+        )
+    # --- Tiling by y_key Logic ---
+    elif tile_plots and num_plots > 1:
         # Calculate grid size (prefer wider than tall)
         ncols = min(math.ceil(math.sqrt(num_plots)), 4)
         nrows = math.ceil(num_plots / ncols)
@@ -707,7 +806,7 @@ def plot(
 
             ax.set_title(yk)  # Subplot title
             ax.set_xlabel(xlabel)
-            ax.set_ylabel(ylabel or yk)  # Use original y_key name for label
+            ax.set_ylabel(ylabel or plot_col_name)
 
             if hue_key and handles is None and labels is None:
                 current_handles, current_labels = ax.get_legend_handles_labels()
@@ -1029,19 +1128,22 @@ class ScanJobs(BaseScript):
             help="Yield matches for same target and pattern (either log line or stats) separately",
         )
         self.argparser.add_argument(
-            "--scripts-only", action="store_true",
-            help="When used with wildcard '*' passed as argument, only match scripts."
+            "--scripts-only",
+            action="store_true",
+            help="When used with wildcard '*' passed as argument, only match scripts.",
         )
         self.argparser.add_argument(
-            "--spiders-only", action="store_true",
-            help="When used with wildcard '*' passed as argument, only match spiders."
+            "--spiders-only",
+            action="store_true",
+            help="When used with wildcard '*' passed as argument, only match spiders.",
         )
         self.argparser.add_argument(
-            "--no-user-enter", action="store_true",
+            "--no-user-enter",
+            action="store_true",
             help=(
                 "Don't wait for user to press enter to continue on each match. This is the default "
                 "when using --write or --plot."
-            )
+            ),
         )
 
     def parse_args(self) -> argparse.Namespace:
@@ -1203,6 +1305,8 @@ class ScanJobs(BaseScript):
                         plot_options["num_bins"] = int(num_bins)
                     elif key == "ylabel":
                         plot_options["ylabel"] = val
+                    elif key == "tile_key":
+                        plot_options["tile_key"] = val
                     else:
                         self.argparser.error(f"Wrong plot parameter '{key}'")
             assert "title" in plot_options, "title is required for plot."
@@ -1243,7 +1347,7 @@ class ScanJobs(BaseScript):
             meta.append("spider_args")
         if self.args.stat_pattern:
             meta.append("scrapystats")
-        if (self.args.spiders_only or self.args.scripts_only):
+        if self.args.spiders_only or self.args.scripts_only:
             meta.append("spider")
         tag_patterns = []
         if self.args.tag_pattern:
@@ -1379,8 +1483,11 @@ class ScanJobs(BaseScript):
                         print(json.dumps(groups), file=self.args.write)
                     elif not any_pattern:
                         print(job_link, file=self.args.write)
-                elif not self.args.plot and (result["groups"] or has_match or not any_pattern) and not \
-                        self.args.no_user_enter:
+                elif (
+                    not self.args.plot
+                    and (result["groups"] or has_match or not any_pattern)
+                    and not self.args.no_user_enter
+                ):
                     input("Press Enter to continue...\n")
 
                 if self.args.first_match_only and has_match:
