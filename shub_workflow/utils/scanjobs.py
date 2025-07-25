@@ -768,6 +768,17 @@ def plot(
                         all_handles.append(handle)
                         all_labels.append(label)
 
+            _format_xticks(
+                ax=ax,
+                x_values=np.sort(plot_df[x_key].unique()),
+                max_xticks=max_xticks,
+                is_binned=num_bins > 0,
+                x_is_datetime=x_is_datetime,
+                np=np,
+                pd=pd,
+                plt=plt,
+            )
+
         # Hide unused subplots
         for i in range(num_plots, len(axes_flat)):
             axes_flat[i].set_visible(False)
