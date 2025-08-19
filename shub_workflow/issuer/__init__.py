@@ -8,7 +8,7 @@ import hashlib
 import logging
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
-from typing import List, Optional, Dict, Set, NewType, Tuple, Iterable, Any, Generic, TypeVar, TypedDict
+from typing import List, Optional, Dict, Set, NewType, Tuple, Iterable, Any, Generic, TypeVar, TypedDict, Union
 
 import dateparser
 from typing_extensions import NotRequired
@@ -86,10 +86,10 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE]):
         )
         if self.dedupe:
             LOGGER.info(f"Max capacity: {self.MAX_ITEMS}")
-        self.items_queue: Dict[Slot | None, Dict[Source, Dict[ItemId, ITEMTYPE]]] = defaultdict(
+        self.items_queue: Dict[Union[Slot, None], Dict[Source, Dict[ItemId, ITEMTYPE]]] = defaultdict(
             lambda: defaultdict(dict)
         )
-        self.pending_inputs_to_remove: Dict[InputSource, Set[Tuple[Slot | None, Source]]] = defaultdict(set)
+        self.pending_inputs_to_remove: Dict[InputSource, Set[Tuple[Union[Slot, None], Source]]] = defaultdict(set)
         self.processed_count = 0
         self.dupescounters: Dict[str, int] = Counter()
         self.totalcounters: Dict[str, int] = Counter()
@@ -127,7 +127,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE]):
 
         self.processed_count += 1
 
-    def get_output_slot_for_item(self, item: ITEMTYPE) -> Slot | None:
+    def get_output_slot_for_item(self, item: ITEMTYPE) -> Union[Slot, None]:
         return (
             Slot(str(hash_mod(item["id"], self.parallel_outputs)))
             if self.output_slot is None and self.parallel_outputs > 1
@@ -146,12 +146,12 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE]):
         if len(self.items_queue[slot][item["source"]]) >= filesize:
             self.send_file(slot, item["source"])
 
-    def enqueue_item(self, item: ITEMTYPE, slot: Slot | None):
+    def enqueue_item(self, item: ITEMTYPE, slot: Union[Slot, None]):
         input_source: InputSource = item["input_source"]
         self.add_item_to_queue(item, slot)
         self.pending_inputs_to_remove[input_source].add((slot, item["source"]))
 
-    def add_item_to_queue(self, item: ITEMTYPE, slot: Slot | None):
+    def add_item_to_queue(self, item: ITEMTYPE, slot: Union[Slot, None]):
         if item["id"] not in self.items_queue[slot][item["source"]] or "search_keywords" not in item:
             self.items_queue[slot][item["source"]][item["id"]] = item
         else:
@@ -167,7 +167,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE]):
         LOGGER.info(f"Wrote {count} records to {destfile}")
         return count
 
-    def send_file(self, output_slot: Slot | None, source: Source):
+    def send_file(self, output_slot: Union[Slot, None], source: Source):
         destname = datetime.utcnow().strftime("%Y%m%dT%H%M%S.%f")
         if self.input_slot is not None:
             destname = f"{destname}_{self.input_slot}"
@@ -289,7 +289,7 @@ class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE]):
 
     # The folder where to move processed input files.
     # If None (default), input files will be removed instead.
-    processed_folder: None | str = None
+    processed_folder: Union[None, str] = None
     LOAD_DELIVERED_IDS_DAYS: int
 
     def get_new_inputs(self) -> Iterable[Tuple[InputSource, Tuple[Any, ...]]]:
