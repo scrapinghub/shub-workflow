@@ -158,3 +158,4 @@ Minor version changes:
 - 1.14.24 scanjobs: allow to use wildcard as argument, add command line flags to select only spiders or only scripts,
   allow to match jobs by tag patterns, added option for continue scanning without expecting user input
 - 1.14.25 scanjobs: allow to tile plots according to a specific key
+- 1.14.26 Added new Issuer class (will soon deprecate deliver script)
