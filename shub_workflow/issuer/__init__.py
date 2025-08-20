@@ -13,7 +13,7 @@ from typing import List, Optional, Dict, Set, NewType, Tuple, Iterable, Any, Gen
 import dateparser
 from typing_extensions import NotRequired
 from bloom_filter2 import BloomFilter
-from shub_workflow.script import BaseLoopScript, SpiderName
+from shub_workflow.script import BaseLoopScript, SpiderName, JobKey
 from shub_workflow.utils.dupefilter import DupesFilterProtocol
 
 
@@ -355,3 +355,50 @@ class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE]):
                                 count += 1
                         self.fshelper.rm_file(basename)
         LOGGER.info(f"Loaded {count} seen ids.")
+
+
+class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE]):
+
+    CONSUMED_TAG = "CONSUMED=True"
+
+    def __init__(self):
+        super().__init__()
+        self._target_type: Union[str, None] = None
+        self._target_name: Union[str, None] = None
+
+    def add_argparser_options(self):
+        super().add_argparser_options()
+        self.argparser.add_argument(
+            "target",
+            help="Which spiders to target. In format <type>:<name>, where type can be spider, canonical or class."
+        )
+
+    def parse_args(self):
+        args = super().parse_args()
+        try:
+            self._target_type, self._target_name = self.args.target.split(":")
+        except ValueError:
+            self.argparser.error("Wrong target format.")
+        assert self._target_type in ("spider", "canonical", "class"), f"Invalid target type: {self._target_type}"
+        return args
+
+    def get_new_inputs(self) -> Iterable[Tuple[InputSource, Tuple[Any, ...]]]:
+        for spidername in self.spider_loader.list():
+            canonical_name = self.get_canonical_spidername(SpiderName(spidername))
+            spidercls = self.spider_loader.load(spidername)
+            if self._target_type == "spider" and spidername == self._target_name or \
+                    self._target_type == "canonical" and canonical_name == self._target_name or \
+                    self._target_type == "class" and self._target_name in [c.__name__ for c in spidercls.mro()]:
+                for jdict in self.get_jobs(
+                    spider=spidername, state=["finished"], meta=["spider_args"], lacks_tag=self.CONSUMED_TAG
+                ):
+                    yield InputSource(jdict["key"]), (jdict, spidername, canonical_name, spidercls)
+
+    def remove_inputs(self, jobkeys: List[InputSource]):
+        count = 0
+        for count, jk in enumerate(jobkeys, start=1):
+            self.add_job_tags(JobKey(jk), [self.CONSUMED_TAG])
+            self.stats.inc_value("inputs/tagged")
+            if count % 100 == 0:
+                LOGGER.info(f"Tagged {count} input jobs.")
+        LOGGER.info(f"Tagged a total of {count} input jobs.")
