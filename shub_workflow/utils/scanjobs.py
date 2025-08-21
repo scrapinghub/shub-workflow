@@ -1461,6 +1461,7 @@ class ScanJobs(BaseScript):
                             if not self.args.plot and not self.args.write and not self.args.no_user_enter:
                                 input("Press Enter to continue...\n")
                             continue
+                        post_process_stack = []
 
                     if self.args.data_headers:
                         if self.args.data_headers == "auto":
