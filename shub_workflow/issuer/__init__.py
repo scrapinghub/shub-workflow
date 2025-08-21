@@ -376,7 +376,7 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE]):
     def parse_args(self):
         args = super().parse_args()
         try:
-            self._target_type, self._target_name = self.args.target.split(":")
+            self._target_type, self._target_name = args.target.split(":")
         except ValueError:
             self.argparser.error("Wrong target format.")
         assert self._target_type in ("spider", "canonical", "class"), f"Invalid target type: {self._target_type}"
