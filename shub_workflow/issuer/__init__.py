@@ -362,9 +362,9 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE]):
     CONSUMED_TAG = "CONSUMED=True"
 
     def __init__(self):
-        super().__init__()
         self._target_type: Union[str, None] = None
         self._target_name: Union[str, None] = None
+        super().__init__()
 
     def add_argparser_options(self):
         super().add_argparser_options()
