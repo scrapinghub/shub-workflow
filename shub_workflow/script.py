@@ -289,7 +289,7 @@ class BaseScriptProtocol(ArgumentParserScriptProtocol, SCProjectClassProtocol, P
         """"""
 
     @abc.abstractmethod
-    def get_canonical_spidername(self, spidername: SpiderName) -> str:
+    def get_canonical_spidername(self, spidername: SpiderName) -> SpiderName:
         """"""
 
     @abc.abstractmethod
