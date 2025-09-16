@@ -8,12 +8,14 @@ import hashlib
 import logging
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
-from typing import List, Optional, Dict, Set, NewType, Tuple, Iterable, Any, Generic, TypeVar, TypedDict, Union
+from typing import List, Optional, Dict, Set, NewType, Tuple, Iterable, Any, Generic, TypeVar, TypedDict, Union, Type
 
 import dateparser
 from typing_extensions import NotRequired
 from bloom_filter2 import BloomFilter
-from shub_workflow.script import BaseLoopScript, SpiderName, JobKey
+from scrapy import Spider
+
+from shub_workflow.script import BaseLoopScript, SpiderName, JobKey, JobDict
 from shub_workflow.utils.dupefilter import DupesFilterProtocol
 
 
@@ -58,6 +60,7 @@ class IssuerItem(TypedDict):
 
 
 ITEMTYPE = TypeVar("ITEMTYPE", bound=IssuerItem)
+PROCESS_INPUT_ARGS_TYPE = TypeVar("PROCESS_INPUT_ARGS_TYPE", bound=Tuple[Any, ...])
 
 
 class MyJsonEncoder(json.JSONEncoder):
@@ -67,7 +70,7 @@ class MyJsonEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-class IssuerScript(BaseLoopScript, Generic[ITEMTYPE]):
+class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     MAX_ITEMS: int = 200_000_000
     ERRORS_RATE: float = 1e-8
     default_filesize: int = 10_000
@@ -198,18 +201,20 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE]):
         self.remove_inputs(to_remove)
 
     @abc.abstractmethod
-    def get_new_inputs(self) -> Iterable[Tuple[InputSource, Tuple[Any, ...]]]:
+    def get_new_inputs(self) -> Iterable[Tuple[InputSource, PROCESS_INPUT_ARGS_TYPE]]:
         """
         - Implement here the logic to generate all inputs.
-        - Returns an iterable of 2-tuples, containing the source itself and a tuple of positional arguments
+        - Returns an iterable of 2-tuples, each one containing the source itself and a tuple of positional arguments
           in order to be passed to process_input (can be empty).
         """
 
     @abc.abstractmethod
-    def process_input(self, inputsrc: InputSource, *args) -> bool:
+    def process_input(self, inputsrc: InputSource, args: PROCESS_INPUT_ARGS_TYPE) -> bool:
         """
         iterate over items in the input and call self.process_item() for each one.
-        Returns True if the input has been succesfully processed
+        Returns True if the input has been succesfully processed.
+
+        *args received will depend on the specific implementation of get_new_inputs(), that is PROCESS_INPUT_ARGS_TYPE.
         """
 
     def _issuer_workflow_loop(self) -> int:
@@ -220,7 +225,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE]):
         """
         new_inputs_count = 0
         for inputsrc, args in self.get_new_inputs():
-            if self.process_input(inputsrc, *args):
+            if self.process_input(inputsrc, args):
                 new_inputs_count += 1
             if inputsrc not in self.pending_inputs_to_remove:  # input with no new items
                 self.remove_inputs([inputsrc])
@@ -282,7 +287,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE]):
         ...
 
 
-class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE]):
+class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE, Tuple[()]]):
 
     # The folder where to find the input files.
     input_folder: str
@@ -292,7 +297,7 @@ class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE]):
     processed_folder: Union[None, str] = None
     LOAD_DELIVERED_IDS_DAYS: int
 
-    def get_new_inputs(self) -> Iterable[Tuple[InputSource, Tuple[Any, ...]]]:
+    def get_new_inputs(self) -> Iterable[Tuple[InputSource, Tuple[()]]]:
         if self.input_slot is not None:
             fprefix = os.path.join(self.input_folder, f"{self.input_slot}_")
         else:
@@ -303,7 +308,7 @@ class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE]):
                 continue
             yield fname, ()
 
-    def process_input(self, fname: InputSource, *args) -> bool:
+    def process_input(self, fname: InputSource, args) -> bool:
         self.fshelper.download_file(fname, "itemsin.jl.gz")
         with gzip.open("itemsin.jl.gz", "rt") as fz:
             count = 0
@@ -357,7 +362,7 @@ class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE]):
         LOGGER.info(f"Loaded {count} seen ids.")
 
 
-class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE]):
+class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]]):
 
     CONSUMED_TAG = "CONSUMED=True"
 
@@ -382,7 +387,7 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE]):
         assert self._target_type in ("spider", "canonical", "class"), f"Invalid target type: {self._target_type}"
         return args
 
-    def get_new_inputs(self) -> Iterable[Tuple[InputSource, Tuple[Any, ...]]]:
+    def get_new_inputs(self) -> Iterable[Tuple[InputSource, Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]]]:
         for spidername in self.spider_loader.list():
             canonical_name = self.get_canonical_spidername(SpiderName(spidername))
             spidercls = self.spider_loader.load(spidername)
@@ -392,7 +397,7 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE]):
                 for jdict in self.get_jobs(
                     spider=spidername, state=["finished"], meta=["spider_args"], lacks_tag=self.CONSUMED_TAG
                 ):
-                    yield InputSource(jdict["key"]), (jdict, spidername, canonical_name, spidercls)
+                    yield InputSource(jdict["key"]), (jdict, SpiderName(spidername), canonical_name, spidercls)
 
     def remove_inputs(self, jobkeys: List[InputSource]):
         count = 0
