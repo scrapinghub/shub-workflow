@@ -44,14 +44,14 @@ REAL_TIME_FILESIZE: int = 10000
 TSTAMP_RE = re.compile(r"_\d{8}T\d{6}")
 
 ItemId = NewType("ItemId", str)
-Source = NewType("Source", str)
+Source = NewType("Source", SpiderName)
 InputSource = NewType("InputSource", str)
 
 
 class IssuerItem(TypedDict):
     # unique id
     id: ItemId
-    # source crawler site
+    # source crawler name or canonical name
     source: Source
     # from where we are reading the item (i.e. job key or input file name)
     input_source: InputSource
@@ -107,14 +107,21 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
             help=f"Output file size in urls. Default: {self.default_filesize}",
         )
 
+    @abc.abstractmethod
+    def build_item_id(self, item: ITEMTYPE) -> ItemId:
+        """
+        Create item id from its fields
+        """
+
     def process_item(self, item: ITEMTYPE, input_source: InputSource):
         """
         It must be called from process_input() (which you need to implement) for each item retrieved.
         """
         item["input_source"] = input_source
-        canonical_name = item["id"].split(":", 1)[0]
+        canonical_name = item["source"]
 
         self.totalcounters[canonical_name] += 1
+        item["id"] = self.build_item_id(item)
 
         if item["id"] in self.seen:
             self.stats.inc_value("urls/dupes")
@@ -214,7 +221,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         iterate over items in the input and call self.process_item() for each one.
         Returns True if the input has been succesfully processed.
 
-        *args received will depend on the specific implementation of get_new_inputs(), that is PROCESS_INPUT_ARGS_TYPE.
+        args received will depend on the specific implementation of get_new_inputs(), that is PROCESS_INPUT_ARGS_TYPE.
         """
 
     def _issuer_workflow_loop(self) -> int:
@@ -407,3 +414,14 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
             if count % 100 == 0:
                 LOGGER.info(f"Tagged {count} input jobs.")
         LOGGER.info(f"Tagged a total of {count} input jobs.")
+
+    def process_input(self, jkey: InputSource, args: Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]):
+        LOGGER.info(f"Reading job {jkey}...")
+        spider_job = self.get_job(JobKey(jkey))
+        for item in spider_job.items.iter():
+            try:
+                self.process_item(item, jkey)
+            except Exception as e:
+                LOGGER.error("Error processing item: %s", e)
+                continue
+        return True
