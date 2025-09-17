@@ -308,7 +308,7 @@ class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE, Tuple[()]]):
                 continue
             yield fname, ()
 
-    def process_input(self, fname: InputSource, args) -> bool:
+    def process_input(self, fname: InputSource, args: Tuple[()]) -> bool:
         self.fshelper.download_file(fname, "itemsin.jl.gz")
         with gzip.open("itemsin.jl.gz", "rt") as fz:
             count = 0
