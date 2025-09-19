@@ -404,6 +404,8 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
                 for jdict in self.get_jobs(
                     spider=spidername, state=["finished"], meta=["spider_args"], lacks_tag=self.CONSUMED_TAG
                 ):
+                    if jdict["key"] in self.pending_inputs_to_remove:
+                        continue
                     yield InputSource(jdict["key"]), (jdict, SpiderName(spidername), canonical_name, spidercls)
 
     def remove_inputs(self, jobkeys: List[InputSource]):
