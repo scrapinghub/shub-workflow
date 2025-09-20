@@ -83,6 +83,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     max_inputs_per_loop = -1
 
     def __init__(self):
+        assert hasattr(self, "output_folder"), "'output_folder' attribute is required."
         super().__init__()
         self.seen: DupesFilterProtocol = BloomFilter(
             max_elements=self.MAX_ITEMS, error_rate=self.ERRORS_RATE, filename=("livedup.bloom", -1)
