@@ -26,37 +26,40 @@ def set_credential_file_environ(module, resource, check_exists=True):
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credfile
 
 
-def upload_file(src_path: str, dest_path: str):
+def upload_file(src_path: str, dest_path: str, **kwargs):
     storage_client = storage.Client()
     m = _GS_FOLDER_RE.match(dest_path)
     if m is None:
         raise ValueError(f"Invalid destination {dest_path}")
     bucket_name, destination_blob_name = m.groups()
-    bucket = storage_client.bucket(bucket_name)
+    bucket_kwargs = kwargs.pop("bucket_kwargs", {})
+    bucket = storage_client.bucket(bucket_name, **bucket_kwargs)
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_filename(src_path, retry=storage.retry.DEFAULT_RETRY)
     _LOGGER.info(f"File {src_path} uploaded to {dest_path}.")
 
 
-def list_path(path: str) -> Generator[str, None, None]:
+def list_path(path: str, **kwargs) -> Generator[str, None, None]:
     storage_client = storage.Client()
     m = _GS_FOLDER_RE.match(path)
     if m is None:
         raise ValueError(f"Invalid path {path} for GCS.")
     bucket_name, blob_prefix = m.groups()
-    bucket = storage_client.bucket(bucket_name)
+    bucket_kwargs = kwargs.pop("bucket_kwargs", {})
+    bucket = storage_client.bucket(bucket_name, **bucket_kwargs)
 
     for blob in bucket.list_blobs(prefix=blob_prefix, retry=storage.retry.DEFAULT_RETRY):
         yield f"gs://{bucket_name}/{blob.name}"
 
 
-def list_folder(path: str) -> List[str]:
+def list_folder(path: str, **kwargs) -> List[str]:
     storage_client = storage.Client()
     m = _GS_FOLDER_RE.match(path)
     if m is None:
         raise ValueError(f"Invalid path {path} for GCS.")
     bucket_name, blob_prefix = m.groups()
-    bucket = storage_client.bucket(bucket_name)
+    bucket_kwargs = kwargs.pop("bucket_kwargs", {})
+    bucket = storage_client.bucket(bucket_name, **bucket_kwargs)
 
     start_offset = ""
     new_results = True
@@ -81,34 +84,36 @@ def list_folder(path: str) -> List[str]:
     return result
 
 
-def download_file(path: str, dest: str):
+def download_file(path: str, dest: str, **kwargs):
     storage_client = storage.Client()
     m = _GS_FOLDER_RE.match(path)
     if m:
         bucket_name, blob_name = m.groups()
     else:
         raise ValueError(f"Invalid path {path} for GCS.")
-    bucket = storage_client.bucket(bucket_name)
+    bucket_kwargs = kwargs.pop("bucket_kwargs", {})
+    bucket = storage_client.bucket(bucket_name, **bucket_kwargs)
     blob = bucket.blob(blob_name)
     with open(dest, "wb") as w:
         blob.download_to_file(w, retry=storage.retry.DEFAULT_RETRY)
     _LOGGER.info(f"File {path} downloaded to {dest}.")
 
 
-def rm_file(path: str):
+def rm_file(path: str, **kwargs):
     storage_client = storage.Client()
     m = _GS_FOLDER_RE.match(path)
     if m:
         bucket_name, blob_name = m.groups()
     else:
         raise ValueError(f"Invalid path {path} for GCS.")
-    bucket = storage_client.bucket(bucket_name)
+    bucket_kwargs = kwargs.pop("bucket_kwargs", {})
+    bucket = storage_client.bucket(bucket_name, **bucket_kwargs)
     blob = bucket.blob(blob_name)
     blob.delete(retry=storage.retry.DEFAULT_RETRY)
     _LOGGER.info(f"Deleted {path}.")
 
 
-def mv_file(src: str, dest: str):
+def mv_file(src: str, dest: str, **kwargs):
     storage_client = storage.Client()
     m = _GS_FOLDER_RE.match(src)
     assert m is not None, "Source must be in the format gs://<bucket>/<blob>"
@@ -120,12 +125,13 @@ def mv_file(src: str, dest: str):
 
     assert src_bucket_name == dest_bucket_name, "Source and destination bucket must be the same."
 
-    bucket = storage_client.bucket(src_bucket_name)
+    bucket_kwargs = kwargs.pop("bucket_kwargs", {})
+    bucket = storage_client.bucket(src_bucket_name, **bucket_kwargs)
     bucket.rename_blob(bucket.blob(src_blob_name), dest_blob_name)
     _LOGGER.info(f"Moved {src} to {dest}")
 
 
-def cp_file(src: str, dest: str):
+def cp_file(src: str, dest: str, **kwargs):
     storage_client = storage.Client()
     m = _GS_FOLDER_RE.match(src)
     assert m is not None, "Source must be in the format gs://<bucket>/<blob>"
@@ -137,29 +143,32 @@ def cp_file(src: str, dest: str):
 
     assert src_bucket_name == dest_bucket_name, "Source and destination bucket must be the same."
 
-    bucket = storage_client.bucket(src_bucket_name)
-    dest_bucket = storage_client.bucket(dest_bucket_name)
+    bucket_kwargs = kwargs.pop("bucket_kwargs", {})
+    bucket = storage_client.bucket(src_bucket_name, **bucket_kwargs)
+    dest_bucket = storage_client.bucket(dest_bucket_name, **bucket_kwargs)
     bucket.copy_blob(bucket.blob(src_blob_name), dest_bucket, dest_blob_name)
     _LOGGER.info(f"Copied {src} to {dest}")
 
 
-def exists(src: str) -> bool:
+def exists(src: str, **kwargs) -> bool:
     storage_client = storage.Client()
     m = _GS_FOLDER_RE.match(src)
     assert m is not None, "Source must be in the format gs://<bucket>/<blob>"
     src_bucket_name, src_blob_name = m.groups()
 
-    bucket = storage_client.bucket(src_bucket_name)
+    bucket_kwargs = kwargs.pop("bucket_kwargs", {})
+    bucket = storage_client.bucket(src_bucket_name, **bucket_kwargs)
     return bucket.blob(src_blob_name).exists()
 
 
-def get_object(src: str):
+def get_object(src: str, **kwargs):
     storage_client = storage.Client()
     m = _GS_FOLDER_RE.match(src)
     assert m is not None, "Source must be in the format gs://<bucket>/<blob>"
     src_bucket_name, src_blob_name = m.groups()
 
-    bucket = storage_client.bucket(src_bucket_name)
+    bucket_kwargs = kwargs.pop("bucket_kwargs", {})
+    bucket = storage_client.bucket(src_bucket_name, **bucket_kwargs)
     return bucket.blob(src_blob_name)
 
 

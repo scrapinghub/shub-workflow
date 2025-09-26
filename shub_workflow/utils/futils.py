@@ -299,7 +299,7 @@ def list_folder(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -
         except FileNotFoundError:
             listing = []
     elif check_gcs_path(path):
-        listing = list(gcstorage.list_folder(path))
+        listing = list(gcstorage.list_folder(path, **kwargs))
     else:
         if path.strip().endswith("/"):
             path = path[:-1]
@@ -458,7 +458,10 @@ class S3Helper:
         aws_external_id=None,
         expiration_margin_minutes=10,
         op_kwargs_by_method_name=None,
+        **kwargs
     ):
+        self.bucket_kwargs = kwargs.pop("bucket_kwargs", {})
+        print("HIHI", self.bucket_kwargs)
         self.s3_session_factory = None
         self.credentials = {"aws_key": aws_key, "aws_secret": aws_secret}
         if aws_role is not None and aws_external_id is not None:
@@ -478,6 +481,9 @@ class S3Helper:
                 self.credentials = self.s3_session_factory.get_credentials()
             if op_kwargs:
                 kwargs.update({"op_kwargs": op_kwargs})
+            if self.bucket_kwargs:
+                kwargs["bucket_kwargs"] = self.bucket_kwargs
+            print("HEHE", kwargs)
             kwargs.update(self.credentials)
             return method(*args, **kwargs)
 

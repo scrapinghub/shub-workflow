@@ -333,7 +333,10 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         stats_collector_class = self.project_settings["STATS_CLASS"]
         logger.debug(f"Stats collection class: {stats_collector_class}")
         self.stats = load_object(stats_collector_class)(self._pseudo_crawler)
-        self.fshelper = FSHelper()
+        self.fshelper = self.init_fshelper()
+
+    def init_fshelper(self):
+        return FSHelper()
 
     def append_flow_tag(self, tag: str):
         """
