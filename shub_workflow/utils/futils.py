@@ -141,7 +141,7 @@ def get_file(path, *args, aws_key=None, aws_secret=None, aws_token=None, **kwarg
 def get_object(path, *args, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
     fp = None
     if check_gcs_path(path):
-        fp = gcstorage.get_object(path)
+        fp = gcstorage.get_object(path, **kwargs)
     return fp
 
 
@@ -164,7 +164,7 @@ def download_file(path, dest=None, aws_key=None, aws_secret=None, aws_token=None
                 if size < DOWNLOAD_CHUNK_SIZE:
                     break
     elif check_gcs_path(path):
-        gcstorage.download_file(path, dest)
+        gcstorage.download_file(path, dest, **kwargs)
     else:
         raise ValueError(f"Not supported file system fpr path {path}")
 
@@ -186,7 +186,7 @@ def upload_file(path, dest, aws_key=None, aws_secret=None, aws_token=None, **kwa
         bucket.upload_file(path, keyname, ExtraArgs=op_kwargs)
         logger.info(f"Uploaded {path} to {dest}.")
     elif check_gcs_path(dest):
-        gcstorage.upload_file(path, dest)
+        gcstorage.upload_file(path, dest, **kwargs)
     else:
         raise ValueError("Not a supported cloud.")
 
@@ -215,11 +215,11 @@ def cp_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, 
     elif check_s3_path(dest_path):
         upload_file(src_path, dest_path, aws_key, aws_secret, aws_token, **kwargs)
     elif check_gcs_path(src_path) and check_gcs_path(dest_path):
-        gcstorage.cp_file(src_path, dest_path)
+        gcstorage.cp_file(src_path, dest_path, **kwargs)
     elif check_gcs_path(src_path):
-        gcstorage.download_file(src_path, dest_path)
+        gcstorage.download_file(src_path, dest_path, **kwargs)
     elif check_gcs_path(dest_path):
-        gcstorage.upload_file(src_path, dest_path)
+        gcstorage.upload_file(src_path, dest_path, **kwargs)
     else:
         dname = dirname(dest_path)
         if dname:
@@ -240,12 +240,12 @@ def mv_file(src_path, dest_path, aws_key=None, aws_secret=None, aws_token=None, 
         upload_file(src_path, dest_path, aws_key, aws_secret, aws_token, **kwargs)
         rm_file(src_path)
     elif check_gcs_path(src_path) and check_gcs_path(dest_path):
-        gcstorage.mv_file(src_path, dest_path)
+        gcstorage.mv_file(src_path, dest_path, **kwargs)
     elif check_gcs_path(src_path):
-        gcstorage.download_file(src_path, dest_path)
+        gcstorage.download_file(src_path, dest_path, **kwargs)
         gcstorage.rm_file(src_path)
     elif check_gcs_path(dest_path):
-        gcstorage.upload_file(src_path, dest_path)
+        gcstorage.upload_file(src_path, dest_path, **kwargs)
         rm_file(src_path)
     else:
         dname = dirname(dest_path)
@@ -262,7 +262,7 @@ def rm_file(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         fs.rm(s3_path(path), **op_kwargs)
     elif check_gcs_path(path):
-        gcstorage.rm_file(path)
+        gcstorage.rm_file(path, **kwargs)
     else:
         remove(path)
 
@@ -276,7 +276,7 @@ def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> 
         for result in bucket.objects.filter(Prefix=path):
             yield f"s3://{bucket.name}/{result.key}"
     elif check_gcs_path(path):
-        yield from gcstorage.list_path(path)
+        yield from gcstorage.list_path(path, **kwargs)
     else:
         listing = []
         if path.strip().endswith("/"):
@@ -350,7 +350,7 @@ def exists(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs):
         fs = S3FileSystem(**s3_credentials(aws_key, aws_secret, aws_token, region), **kwargs)
         return fs.exists(path)
     if check_gcs_path(path):
-        return gcstorage.exists(path)
+        return gcstorage.exists(path, **kwargs)
     return os_exists(path)
 
 
@@ -461,7 +461,6 @@ class S3Helper:
         **kwargs
     ):
         self.bucket_kwargs = kwargs.pop("bucket_kwargs", {})
-        print("HIHI", self.bucket_kwargs)
         self.s3_session_factory = None
         self.credentials = {"aws_key": aws_key, "aws_secret": aws_secret}
         if aws_role is not None and aws_external_id is not None:
@@ -483,7 +482,6 @@ class S3Helper:
                 kwargs.update({"op_kwargs": op_kwargs})
             if self.bucket_kwargs:
                 kwargs["bucket_kwargs"] = self.bucket_kwargs
-            print("HEHE", kwargs)
             kwargs.update(self.credentials)
             return method(*args, **kwargs)
 
