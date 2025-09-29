@@ -173,4 +173,6 @@ def get_object(src: str, **kwargs):
 
 
 def get_file(src: str, *args, **kwargs):
-    return get_object(src).open(*args, **kwargs)
+    kwargs_without_bucket_kwargs = kwargs.copy()
+    kwargs_without_bucket_kwargs.pop("bucket_kwargs", None)
+    return get_object(src, **kwargs).open(*args, **kwargs_without_bucket_kwargs)
