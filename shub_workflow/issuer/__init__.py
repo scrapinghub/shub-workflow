@@ -421,7 +421,7 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
                 LOGGER.info(f"Tagged {count} input jobs.")
         LOGGER.info(f"Tagged a total of {count} input jobs.")
 
-    def process_input(self, jkey: InputSource, args: Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]):
+    def process_input(self, jkey: InputSource, args: Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]) -> bool:
         LOGGER.info(f"Reading job {jkey}...")
         spider_job = self.get_job(JobKey(jkey))
         for item in spider_job.items.iter():
