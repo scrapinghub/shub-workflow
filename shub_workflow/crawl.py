@@ -89,6 +89,9 @@ class CrawlManager(SpiderStatsAggregatorMixin, WorkFlowManager, CrawlManagerProt
 
     spider: Optional[SpiderName] = None
 
+    # If False, don't check running jobs state in reverse order
+    running_jobs_reverse_check = True
+
     def __init__(self):
         super().__init__()
 
@@ -146,9 +149,9 @@ class CrawlManager(SpiderStatsAggregatorMixin, WorkFlowManager, CrawlManagerProt
 
     def check_running_jobs(self) -> Dict[JobKey, Outcome]:
         outcomes = {}
-        running_job_keys = list(self._running_job_keys)
+        running_job_keys = sorted(self._running_job_keys, reverse=self.running_jobs_reverse_check)
         while running_job_keys:
-            jobkey = running_job_keys.pop()
+            jobkey = running_job_keys.pop(0)
             if (outcome := self.is_finished(jobkey)) is not None:
 
                 metadata = self.get_job_metadata(jobkey)
