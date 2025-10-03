@@ -90,7 +90,7 @@ class CrawlManager(SpiderStatsAggregatorMixin, WorkFlowManager, CrawlManagerProt
     spider: Optional[SpiderName] = None
 
     # If False, don't check running jobs state in reverse order
-    running_jobs_reverse_check = True
+    running_jobs_reverse_check = False
 
     def __init__(self):
         super().__init__()
