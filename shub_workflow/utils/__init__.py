@@ -35,18 +35,24 @@ def resolve_project_id(project_id=None) -> int:
     """
     if project_id:
         try:
-            return int(project_id)
+            retval = int(project_id)
+            logger.info(f"Project id {retval} is explicit.")
+            return retval
         except ValueError:
             pass
     else:
         # read from environment only if not explicitly provided
         if os.environ.get("PROJECT_ID") is not None:
-            return int(os.environ["PROJECT_ID"])
+            retval = int(os.environ["PROJECT_ID"])
+            logger.info(f"Project id {retval} resolved from PROJECT_ID environment variable.")
+            return retval
 
         # for ScrapyCloud jobs:
         jobkey = resolve_shub_jobkey()
         if jobkey:
-            return int(jobkey.split("/")[0])
+            retval = int(jobkey.split("/")[0])
+            logger.info(f"Project id {retval} resolved from jobkey.")
+            return retval
 
     # read from scrapinghub.yml
     try:
@@ -55,7 +61,9 @@ def resolve_project_id(project_id=None) -> int:
         cfg = load_shub_config()
         try:
             project_id = project_id or "default"
-            return int(cfg.get_project_id(project_id))
+            retval = int(cfg.get_project_id(project_id))
+            logger.info(f"Project id {retval} resolved from scrapinghub.yml {project_id} entry.")
+            return retval
         except Exception:
             logger.error(f"Project entry '{project_id}' not found in scrapinghub.yml.")
     except ImportError:
