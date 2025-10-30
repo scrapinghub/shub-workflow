@@ -81,6 +81,11 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     dedupe = True
     min_wait_time_secs_to_flush_stopped_spiders: int = 0
     max_inputs_per_loop = -1
+    # how many days back in time is the limit of output and other downstream files to read for filling
+    # the deduplication cache. If not set, the deduplication performed will be limited to the cache
+    # in memory during the live of the job. True deduplicator application requires this to be set.
+    # You must also call load_last_outputs() on __init__() with the proper arguments for your application.
+    LOAD_DELIVERED_IDS_DAYS: int
 
     def __init__(self):
         super().__init__()
@@ -97,6 +102,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         self.dupescounters: Dict[str, int] = Counter()
         self.totalcounters: Dict[str, int] = Counter()
         self.running_spiders_check_time: Dict[Source, int] = {}
+        self.__loaded_delivered: bool = False
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -240,9 +246,50 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
                 break
         return new_inputs_count
 
+    def load_last_outputs(self, output_folders: Tuple[str, ...], prefix: str = "", basename_re: Optional[str] = None):
+        """
+        Load ids from the last LOAD_DELIVERED_IDS_DAYS days
+        output_folders: a tuple containing all output folders from where to read the output files. Typically
+                        it is only the issuer output folder, but in some applications with additional post
+                        processing components (other issuers downstream), it can also be the output of them.
+        prefix: only select files with the given prefix inside the target folders.
+        basename_re: only select file names that matches the given regular expression.
+        """
+        dtnow = datetime.utcnow()
+        count = 0
+        for output_folder in output_folders:
+            output_folder = os.path.join(output_folder, prefix)
+            LOGGER.info(f"Reading output folder {output_folder!r}...")
+            for fname in self.fshelper.list_path(output_folder):
+                basename = os.path.basename(fname)
+                if basename_re is None or re.match(basename_re, basename) is not None:
+                    if m := TSTAMP_RE.search(basename):
+                        tstamp = m.group()
+                        dt = dateparser.parse(tstamp, date_formats=("_%Y%m%dT%H%M%S",))
+                        if dt is None or dtnow - dt > timedelta(days=self.LOAD_DELIVERED_IDS_DAYS):
+                            continue
+                        try:
+                            self.fshelper.download_file(fname)
+                        except Exception:
+                            LOGGER.info(f"{fname} is not anymore there.")
+                            continue
+                        with gzip.open(basename) as r:
+                            for line in r:
+                                rec = json.loads(line)
+                                uid = rec["id"]
+                                self.stats.inc_value(f"urls/seen/{rec['source']}")
+                                self.seen.add(uid)
+                                self.stats.inc_value("urls/seen")
+                                count += 1
+                        self.fshelper.rm_file(basename)
+            self.__loaded_delivered = True
+        LOGGER.info(f"Loaded {count} seen ids.")
+
     def on_start(self):
         assert hasattr(self, "output_folder"), "'output_folder' attribute is required."
         super().on_start()
+        if hasattr(self, "LOAD_DELIVERED_IDS_DAYS") and not self.__loaded_delivered:
+            raise AssertionError("You set LOAD_DELIVERED_IDS_DAYS but load_last_outputs() was never called on init.")
 
     def workflow_loop(self) -> bool:
         new_inputs = self._issuer_workflow_loop()
@@ -306,7 +353,6 @@ class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE, Tuple[()]]):
     # The folder where to move processed input files.
     # If None (default), input files will be removed instead.
     processed_folder: Union[None, str] = None
-    LOAD_DELIVERED_IDS_DAYS: int
 
     def get_new_inputs(self) -> Iterable[Tuple[InputSource, Tuple[()]]]:
         if self.input_slot is not None:
@@ -338,44 +384,6 @@ class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE, Tuple[()]]):
             else:
                 self.fshelper.mv_file(iname, os.path.join(self.processed_folder, os.path.basename(iname)))
                 self.stats.inc_value("inputs/moved")
-
-    def load_last_outputs(self, output_folders: Tuple[str, ...], prefix: str = "", basename_re: Optional[str] = None):
-        """
-        Load ids from the last LOAD_DELIVERED_IDS_DAYS days
-        output_folders: a tuple containing all output folders from where to read the output files. Typically
-                        it is only the issuer output folder, but in some applications with additional post
-                        processing components (other issuers downstream), it can also be the output of them.
-        prefix: only select files with the given prefix inside the target folders.
-        basename_re: only select file names that matches the given regular expression.
-        """
-        dtnow = datetime.utcnow()
-        count = 0
-        for output_folder in output_folders:
-            output_folder = os.path.join(output_folder, prefix)
-            LOGGER.info(f"Reading output folder {output_folder!r}...")
-            for fname in self.fshelper.list_path(output_folder):
-                basename = os.path.basename(fname)
-                if basename_re is None or re.match(basename_re, basename) is not None:
-                    if m := TSTAMP_RE.search(basename):
-                        tstamp = m.group()
-                        dt = dateparser.parse(tstamp, date_formats=("_%Y%m%dT%H%M%S",))
-                        if dt is None or dtnow - dt > timedelta(days=self.LOAD_DELIVERED_IDS_DAYS):
-                            continue
-                        try:
-                            self.fshelper.download_file(fname)
-                        except Exception:
-                            LOGGER.info(f"{fname} is not anymore there.")
-                            continue
-                        with gzip.open(basename) as r:
-                            for line in r:
-                                rec = json.loads(line)
-                                uid = rec["id"]
-                                self.stats.inc_value(f"urls/seen/{rec['source']}")
-                                self.seen.add(uid)
-                                self.stats.inc_value("urls/seen")
-                                count += 1
-                        self.fshelper.rm_file(basename)
-        LOGGER.info(f"Loaded {count} seen ids.")
 
 
 class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]]):
