@@ -89,7 +89,12 @@ class CrawlManager(SpiderStatsAggregatorMixin, WorkFlowManager, CrawlManagerProt
 
     spider: Optional[SpiderName] = None
 
-    # If False, don't check running jobs state in reverse order
+    # If False, check running jobs from older to newer
+    # If True, check running jobs from newer to older.
+    # The check order may have some implications on some applications
+    # (for example, when analyzing running jobs for implementing
+    # throttling algorithms based on concurrency, we may want always
+    # the data from the most recent job)
     running_jobs_reverse_check = False
 
     def __init__(self):
