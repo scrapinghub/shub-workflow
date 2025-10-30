@@ -342,6 +342,11 @@ class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE, Tuple[()]]):
     def load_last_outputs(self, output_folders: Tuple[str, ...], prefix: str = "", basename_re: Optional[str] = None):
         """
         Load ids from the last LOAD_DELIVERED_IDS_DAYS days
+        output_folders: a tuple containing all output folders from where to read the output files. Typically
+                        it is only the issuer output folder, but in some applications with additional post
+                        processing components (other issuers downstream), it can also be the output of them.
+        prefix: only select files with the given prefix inside the target folders.
+        basename_re: only select file names that matches the given regular expression.
         """
         dtnow = datetime.utcnow()
         count = 0
