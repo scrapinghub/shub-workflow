@@ -145,6 +145,7 @@ postscript instructions supported:
 """
 
 import re
+import gzip
 import sys
 import time
 import json
@@ -153,8 +154,9 @@ import argparse
 import datetime
 import zoneinfo
 import math
+import random
 from uuid import uuid4
-from typing import Iterator, Tuple, TypedDict, List, Iterable, Dict, Union, Optional
+from typing import Iterator, Tuple, TypedDict, List, Iterable, Dict, Union, Optional, Any
 from itertools import chain
 
 import dateparser
@@ -162,7 +164,9 @@ import jmespath
 from timelength import TimeLength
 from typing_extensions import NotRequired
 from scrapinghub.client.jobs import Job
+
 from shub_workflow.script import BaseScript, JobDict
+from shub_workflow.issuer import MyJsonEncoder
 
 
 LOG = logging.getLogger(__name__)
@@ -973,6 +977,9 @@ class ScanJobs(BaseScript):
     def __init__(self):
         super().__init__()
         self.captured_stats_keys: List[str] = []
+        self.total_items_count: int = 0
+        self.items_sample: List[Dict[str, Any]] = []
+        self.items_samples_preselected: int = 0
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -989,7 +996,7 @@ class ScanJobs(BaseScript):
         )
         self.argparser.add_argument(
             "--item-field-pattern",
-            "-f",
+            "-i",
             help=(
                 "Item field pattern (in format jmespath_search_string:value). Can be multiple. If value is empty "
                 "string, just matches existence of the searched field."
@@ -1156,6 +1163,14 @@ class ScanJobs(BaseScript):
                 "when using --write or --plot."
             ),
         )
+        self.argparser.add_argument(
+            "--generate-items-sample",
+            type=int,
+            help=(
+                "Generate a random items sample of the given max size, from the positive items "
+                "matches (use with --item-field-pattern)"
+            ),
+        )
 
     def parse_args(self) -> argparse.Namespace:
         args = super().parse_args()
@@ -1193,6 +1208,23 @@ class ScanJobs(BaseScript):
                     if self.args.first_match_only and job_has_match:
                         break
 
+    def append_item_sample(self, item):
+        self.total_items_count += 1
+        preselected = False
+        if len(self.items_sample) < self.args.generate_items_sample:
+            self.items_sample.append(item)
+            self.items_samples_preselected += 1
+            preselected = True
+        elif (index := random.randint(0, self.total_items_count - 1)) < self.args.generate_items_sample:
+            self.items_sample = self.items_sample[:index] + [item] + self.items_sample[index + 1:]
+            self.items_samples_preselected += 1
+            preselected = True
+        if preselected and self.items_samples_preselected % 100 == 0:
+            LOG.info(
+                f"Preselected a total of {self.items_samples_preselected} "
+                f"items (total scanned: {self.total_items_count})."
+            )
+
     def filter_item_field_pattern(self, jdict: JobDict, job: Job, limit: int) -> Iterator[FilterResult]:
         if not self.args.item_field_pattern:
             return
@@ -1217,6 +1249,8 @@ class ScanJobs(BaseScript):
                         "groups": m.groups() if m is not None else (value,),
                     }
                     has_match = True
+                    if self.args.generate_items_sample:
+                        self.append_item_sample(item)
 
             if self.args.first_match_only and has_match:
                 break
@@ -1343,6 +1377,18 @@ class ScanJobs(BaseScript):
                 print("Generating plots...")
                 plot(plot_data_points, **plot_options)
 
+        if self.items_sample:
+            tstamp = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
+            filename = f"items_sample_{tstamp}.jl.gz"
+            count = 0
+            with gzip.open(filename, "wt") as fz:
+                for im in self.items_sample:
+                    fz.write(json.dumps(im, cls=MyJsonEncoder) + "\n")
+                    count += 1
+            LOG.info(
+                f"Wrote {count} records (total scanned: {self.total_items_count}) to {filename}"
+            )
+
     def _convert_timestamp(self, timestamp: datetime.datetime) -> str:
         if self.args.zone_info:
             timestamp = timestamp.astimezone(zoneinfo.ZoneInfo(self.args.zone_info))
@@ -1354,6 +1400,10 @@ class ScanJobs(BaseScript):
         jobcount = 0
         all_headers = set()
         meta = ["finished_time", "running_time"]
+        no_user_enter = (
+            self.args.write or self.args.plot or self.args.no_user_enter
+            or self.args.generate_items_sample
+        )
         if self.args.spider_argument_pattern:
             meta.append("spider_args")
         if self.args.stat_pattern:
@@ -1407,7 +1457,7 @@ class ScanJobs(BaseScript):
             if spiderargs:
                 has_match = True
                 keyprinted = True
-                if not self.args.write and not self.args.plot and not self.args.no_user_enter:
+                if not no_user_enter:
                     input("Press Enter to continue...\n")
             elif self.args.spider_argument_pattern:
                 continue
@@ -1433,7 +1483,8 @@ class ScanJobs(BaseScript):
                     print(result["message"])
                     has_match = True
                 if "itemno" in result:
-                    print(f"Item #{result['itemno']}. {result['field']}:{result['value']}")
+                    if not self.args.generate_items_sample:
+                        print(f"Item #{result['itemno']}. {result['field']}:{result['value']}")
                     has_match = True
                 if "stats" in result:
                     print("Matching stats:", result["stats"])
@@ -1453,12 +1504,12 @@ class ScanJobs(BaseScript):
                             result["groups"] = tuple(post_process(post_process_stack))
                         except ZeroDivisionError:
                             LOG.warning(f"Ignoring data {result['groups']}: post processing raised ZeroDivisionError.")
-                            if not self.args.plot and not self.args.write and not self.args.no_user_enter:
+                            if not no_user_enter:
                                 input("Press Enter to continue...\n")
                             continue
                         except Exception as e:
                             LOG.warning(f"Ignoring data {result['groups']}: post processing raised {e!r}.")
-                            if not self.args.plot and not self.args.write and not self.args.no_user_enter:
+                            if not no_user_enter:
                                 input("Press Enter to continue...\n")
                             continue
                         post_process_stack = []
@@ -1485,7 +1536,8 @@ class ScanJobs(BaseScript):
                             result["dict_groups"].update(spiderargs)
                         if self.args.capture_joblink:
                             result["dict_groups"]["job_link"] = job_link
-                    print("Data points generated:", result.get("dict_groups") or result["groups"])
+                    if not self.args.generate_items_sample:
+                        print("Data points generated:", result.get("dict_groups") or result["groups"])
                 any_pattern = self.args.log_pattern or self.args.item_field_pattern or self.args.stat_pattern
                 if self.args.write:
                     if result.get("dict_groups"):
@@ -1495,11 +1547,7 @@ class ScanJobs(BaseScript):
                         print(json.dumps(groups), file=self.args.write)
                     elif not any_pattern:
                         print(job_link, file=self.args.write)
-                elif (
-                    not self.args.plot
-                    and (result["groups"] or has_match or not any_pattern)
-                    and not self.args.no_user_enter
-                ):
+                elif not no_user_enter and (result["groups"] or has_match or not any_pattern):
                     input("Press Enter to continue...\n")
 
                 if self.args.first_match_only and has_match:
