@@ -160,3 +160,4 @@ Minor version changes:
 - 1.14.25 scanjobs: allow to tile plots according to a specific key
 - 1.14.26 Added new Issuer class (will soon deprecate deliver script)
 - 1.14.27 Crawlmanager: allow to set running jobs state check order
+- 1.14.28 scanjobs: allow to generate random sample from scanned items
