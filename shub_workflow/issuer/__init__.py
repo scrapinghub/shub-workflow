@@ -37,10 +37,6 @@ LOGGER = logging.getLogger(__name__)
 
 Slot = NewType("Slot", str)
 
-# sources in this list need to wait for crawler to be stopped, instead
-# of reaching the given filesize
-REAL_TIME_FILESIZE: int = 10000
-
 TSTAMP_RE = re.compile(r"_\d{8}T\d{6}")
 
 ItemId = NewType("ItemId", str)
@@ -104,15 +100,6 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         self.running_spiders_check_time: Dict[Source, int] = {}
         self.__loaded_delivered: bool = False
 
-    def add_argparser_options(self):
-        super().add_argparser_options()
-        self.argparser.add_argument(
-            "--filesize",
-            type=int,
-            default=self.default_filesize,
-            help=f"Output file size in urls. Default: {self.default_filesize}",
-        )
-
     @abc.abstractmethod
     def build_item_id(self, item: ITEMTYPE) -> ItemId:
         """
@@ -151,9 +138,11 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         )
 
     def get_filesize_from_item(self, item: ITEMTYPE) -> int:
-        if item.get("filters_file_hash"):
-            return REAL_TIME_FILESIZE
-        return self.args.filesize
+        """
+        Typically, the filesize is constant. But in some applications, file size
+        is regulated by indicator data in items.
+        """
+        return self.default_filesize
 
     def issue_item(self, item: ITEMTYPE):
         slot = self.get_output_slot_for_item(item)

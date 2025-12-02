@@ -601,7 +601,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         self, spider: str, tags: List[str], project_id: Optional[int] = None, **kwargs
     ) -> Generator[Job, None, None]:
         """
-        Get jobs with target tags
+        Get jobs with all target tags
         """
         has_tag, tags = tags[:1], tags[1:]
         for spider_job in self.get_jobs(project_id, spider=spider, has_tag=has_tag, **kwargs):
