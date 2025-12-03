@@ -195,6 +195,9 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     def on_close(self):
         super().on_close()
         self.seen.close()
+        self.flush_files()
+
+    def flush_files(self):
         for slot, sources in self.items_queue.items():
             for source in list(sources.keys()):
                 if len(sources[source]) > 0:
