@@ -8,7 +8,23 @@ import hashlib
 import logging
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
-from typing import List, Optional, Dict, Set, NewType, Tuple, Iterable, Any, Generic, TypeVar, TypedDict, Union, Type
+from typing import (
+    List,
+    Optional,
+    Dict,
+    Set,
+    NewType,
+    Tuple,
+    Iterable,
+    Any,
+    Generic,
+    TypeVar,
+    TypedDict,
+    Union,
+    Type,
+    Mapping,
+    cast,
+)
 
 import dateparser
 from typing_extensions import NotRequired
@@ -24,7 +40,7 @@ def hash_mod(text, divisor):
     returns the module of dividing text md5 hash over given divisor
     """
     if isinstance(text, str):
-        text = text.encode('utf8')
+        text = text.encode("utf8")
     md5 = hashlib.md5()
     md5.update(text)
     digest = md5.hexdigest()
@@ -130,9 +146,10 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
 
         self.processed_count += 1
 
-    def get_output_slot_for_item(self, item: ITEMTYPE) -> Union[Slot, None]:
+    def get_output_slot_for_item(self, item: ITEMTYPE, input_field="id") -> Union[Slot, None]:
+        input_value = cast(Mapping[str, Any], item)[input_field]
         return (
-            Slot(str(hash_mod(item["id"], self.parallel_outputs)))
+            Slot(str(hash_mod(input_value, self.parallel_outputs)))
             if self.output_slot is None and self.parallel_outputs > 1
             else self.output_slot
         )
@@ -391,7 +408,7 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
         super().add_argparser_options()
         self.argparser.add_argument(
             "target",
-            help="Which spiders to target. In format <type>:<name>, where type can be spider, canonical or class."
+            help="Which spiders to target. In format <type>:<name>, where type can be spider, canonical or class.",
         )
 
     def parse_args(self):
@@ -407,9 +424,14 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
         for spidername in self.spider_loader.list():
             canonical_name = self.get_canonical_spidername(SpiderName(spidername))
             spidercls = self.spider_loader.load(spidername)
-            if self._target_type == "spider" and spidername == self._target_name or \
-                    self._target_type == "canonical" and canonical_name == self._target_name or \
-                    self._target_type == "class" and self._target_name in [c.__name__ for c in spidercls.mro()]:
+            if (
+                self._target_type == "spider"
+                and spidername == self._target_name
+                or self._target_type == "canonical"
+                and canonical_name == self._target_name
+                or self._target_type == "class"
+                and self._target_name in [c.__name__ for c in spidercls.mro()]
+            ):
                 for jdict in self.get_jobs(
                     spider=spidername, state=["finished"], meta=["spider_args"], lacks_tag=self.CONSUMED_TAG
                 ):
