@@ -146,7 +146,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
 
         self.processed_count += 1
 
-    def get_output_slot_for_item(self, item: ITEMTYPE, input_field="id") -> Union[Slot, None]:
+    def get_output_slot_for_item(self, item: ITEMTYPE, input_field: str = "id") -> Union[Slot, None]:
         input_value = cast(Mapping[str, Any], item)[input_field]
         return (
             Slot(str(hash_mod(input_value, self.parallel_outputs)))
