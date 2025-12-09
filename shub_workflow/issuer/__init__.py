@@ -219,8 +219,13 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
             for source in list(sources.keys()):
                 if len(sources[source]) > 0:
                     self.send_file(slot, source)
+        self._remove_pending()
+
+    def _remove_pending(self):
         to_remove = [k for k, v in self.pending_inputs_to_remove.items() if not v]
         self.remove_inputs(to_remove)
+        for iname in to_remove:
+            self.pending_inputs_to_remove.pop(iname)
 
     @abc.abstractmethod
     def get_new_inputs(self) -> Iterable[Tuple[InputSource, PROCESS_INPUT_ARGS_TYPE]]:
@@ -326,10 +331,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
                     total_pending += pending_for_source
             LOGGER.info(f"Total urls pending to be wrote: {total_pending}")
 
-        to_remove = [k for k, v in self.pending_inputs_to_remove.items() if not v]
-        self.remove_inputs(to_remove)
-        for iname in to_remove:
-            self.pending_inputs_to_remove.pop(iname)
+        self._remove_pending()
 
         now = int(time.time())
         for slot, sources_items_dict in self.items_queue.items():
