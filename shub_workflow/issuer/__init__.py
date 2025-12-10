@@ -219,7 +219,6 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
             for source in list(sources.keys()):
                 if len(sources[source]) > 0:
                     self.send_file(slot, source)
-        self._remove_pending()
 
     def _remove_pending(self):
         to_remove = [k for k, v in self.pending_inputs_to_remove.items() if not v]
