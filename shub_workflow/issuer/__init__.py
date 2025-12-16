@@ -98,6 +98,8 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     # in memory during the live of the job. True deduplicator application requires this to be set.
     # You must also call load_last_outputs() on __init__() with the proper arguments for your application.
     LOAD_DELIVERED_IDS_DAYS: int
+    # if True, close once there are no more inputs to read
+    close_on_no_inputs = False
 
     def __init__(self):
         super().__init__()
@@ -346,6 +348,8 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
                     else:
                         self.running_spiders_check_time.pop(source, None)
 
+        if not new_inputs and self.close_on_no_inputs:
+            return False
         if self.processed_count < self.MAX_ITEMS:
             return True
         return False
