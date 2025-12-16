@@ -163,3 +163,4 @@ Minor version changes:
 - 1.14.28 scanjobs: allow to generate random sample from scanned items
 - 1.14.29 issuer: separate file flushing code for reusage
 - 1.14.30 issuer: allow to use a different item field for selecting slot
+- 1.14.31 issuer: allow to optionally close issuer when there are no new inputs
