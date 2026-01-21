@@ -75,6 +75,7 @@ class JobDict(TypedDict):
     state: NotRequired[str]
     items: NotRequired[int]
     pages: NotRequired[int]
+    errors: NotRequired[int]
 
 
 class CommandLineProgram(TypedDict):
