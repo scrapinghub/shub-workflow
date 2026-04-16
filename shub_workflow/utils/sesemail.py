@@ -132,6 +132,13 @@ class SESMailSenderMixin(BaseScriptProtocol):
                 image_attachments=image_attachments,
                 subject=subject,
             )
-            self.seshelper.send_ses_email(
-                "noreply@zyte.com", self.notification_emails, msg, cc_addrs=self.cc_emails, bcc_addrs=self.bcc_emails
-            )
+            try:
+                self.seshelper.send_ses_email(
+                    "noreply@zyte.com",
+                    self.notification_emails,
+                    msg,
+                    cc_addrs=self.cc_emails,
+                    bcc_addrs=self.bcc_emails,
+                )
+            except Exception as e:
+                logger.error(f"Could not send email to {self.notification_emails}. Error: {e!r}")
