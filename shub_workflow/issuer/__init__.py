@@ -456,8 +456,10 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
     def process_input(self, jkey: InputSource, args: Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]) -> bool:
         LOGGER.info(f"Reading job {jkey}...")
         spider_job = self.get_job(JobKey(jkey))
+        canonical_name = args[2]
         for item in spider_job.items.iter():
             try:
+                item["source"] = canonical_name
                 self.process_item(item, jkey)
             except Exception as e:
                 LOGGER.error("Error processing item: %s", e)
