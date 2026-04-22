@@ -39,7 +39,7 @@ class SESHelper:
         cc_addrs: Optional[List[str]] = None,
         bcc_addrs: Optional[List[str]] = None,
         reply_to: Optional[str] = None,
-    ) -> Dict:
+    ) -> List[Dict]:
 
         config = Config(connect_timeout=60, retries={"max_attempts": 20})
         client = boto3.client(
@@ -49,18 +49,24 @@ class SESHelper:
         msg["From"] = from_addr or self.DEFAULT_FROM_ADDR
         msg["To"] = ",".join(to_addrs)
         if cc_addrs:
-            msg["cc"] = ",".join(cc_addrs)
+            msg["Cc"] = ",".join(cc_addrs)
             logger.info(f"CC to {cc_addrs}")
         if bcc_addrs:
             logger.info(f"BCC to {bcc_addrs}")
         if reply_to:
             msg["Reply-To"] = reply_to
 
-        destinations = to_addrs + (cc_addrs or []) + (bcc_addrs or [])
-        response = client.send_raw_email(
-            Source=from_addr, Destinations=destinations, RawMessage={"Data": msg.as_string()}
-        )
-        return response
+        all_destinations = to_addrs + (cc_addrs or []) + (bcc_addrs or [])
+        responses = []
+        for destination in all_destinations:
+            try:
+                response = client.send_raw_email(
+                    Source=from_addr, Destinations=[destination], RawMessage={"Data": msg.as_string()}
+                )
+                responses.append(response)
+            except Exception as e:
+                logger.error(f"Failed to send email to {destination}: {e!r}")
+        return responses
 
     def build_email_message(
         self,
