@@ -103,6 +103,8 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
 
     def __init__(self):
         super().__init__()
+        if self.fshelper.exists("livedup.bloom"):
+            LOGGER.warning("A livedup.bloom cache already exists. Will use it.")
         self.seen: DupesFilterProtocol = BloomFilter(
             max_elements=self.MAX_ITEMS, error_rate=self.ERRORS_RATE, filename=("livedup.bloom", -1)
         )
@@ -215,6 +217,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         super().on_close()
         self.seen.close()
         self.flush_files()
+        self._remove_pending()
 
     def flush_files(self):
         for slot, sources in self.items_queue.items():
