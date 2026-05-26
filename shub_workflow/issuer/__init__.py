@@ -265,7 +265,11 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         return new_inputs_count
 
     def load_last_outputs(
-        self, output_folders: Tuple[str, ...], prefix: str = "", basename_re: Optional[str] = None, id_field: str = "id"
+        self,
+        output_folders: Tuple[str, ...],
+        prefix: str = "",
+        basename_re: Optional[str] = None,
+        id_field: Tuple[str, ...] = ("id",),
     ):
         """
         Load ids from the last LOAD_DELIVERED_IDS_DAYS days
@@ -274,8 +278,9 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
                         processing components (other issuers downstream), it can also be the output of them.
         prefix: only select files with the given prefix inside the target folders.
         basename_re: only select file names that matches the given regular expression.
-        id_field: the field name to use as the unique identifier for each record, for deduplication purposes.
-                  By default, it is "id".
+        id_field: the field names to use as the unique identifier for each record, for deduplication purposes.
+                  By default, it is ("id",). Each provided is tried in order until a match is found in the record.
+                  If no match is found, the record is skipped.
         """
         dtnow = datetime.utcnow()
         count = 0
@@ -298,8 +303,13 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
                         with gzip.open(basename) as r:
                             for line in r:
                                 rec = json.loads(line)
+                                for field in id_field:
+                                    if field in rec:
+                                        self.seen.add(rec[field])
+                                        break
+                                else:
+                                    continue
                                 self.stats.inc_value(f"urls/seen/{rec['source']}")
-                                self.seen.add(rec[id_field])
                                 self.stats.inc_value("urls/seen")
                                 count += 1
                         self.fshelper.rm_file(basename)
