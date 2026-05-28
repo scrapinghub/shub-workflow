@@ -193,15 +193,20 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         LOGGER.info(f"Wrote {count} records to {destfile}")
         return count
 
-    def send_file(self, output_slot: Union[Slot, None], source: Source):
+    def compute_destination_filename(self, output_slot: Union[Slot, None], source: Source) -> str:
         destname = datetime.utcnow().strftime("%Y%m%dT%H%M%S.%f")
         if self.input_slot is not None:
             destname = f"{destname}_{self.input_slot}"
+        destname = f"{source}_{destname}"
+        return destname
+
+    def send_file(self, output_slot: Union[Slot, None], source: Source):
+        destname = self.compute_destination_filename(output_slot, source)
 
         if output_slot is not None:
-            destfile = os.path.join(self.output_folder, f"{output_slot}_{source}_{destname}.jl.gz")
+            destfile = os.path.join(self.output_folder, f"{output_slot}_{destname}.jl.gz")
         else:
-            destfile = os.path.join(self.output_folder, f"{source}_{destname}.jl.gz")
+            destfile = os.path.join(self.output_folder, f"{destname}.jl.gz")
 
         count = self.write_items_file(list(self.items_queue[output_slot][source].values()), destfile)
         self.stats.inc_value("urls/wrote", count)
