@@ -125,6 +125,14 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         """
         Create item id from its fields
         """
+    @staticmethod
+    def adapt_input_item(item: Mapping[str, Any]) -> ITEMTYPE:
+        """
+        If the input item is not already in the expected format, adapt it to match the expected ITEMTYPE.
+        By default, it assumes that input item is already in the correct format and just casts it.
+        You can override this method if you need to adapt input items before processing them.
+        """
+        return cast(ITEMTYPE, item)
 
     def process_item(self, item: ITEMTYPE, input_source: InputSource):
         """
@@ -406,7 +414,8 @@ class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE, Tuple[()]]):
         with gzip.open("itemsin.jl.gz", "rt") as fz:
             count = 0
             for line in fz:
-                item = json.loads(line)
+                ditem = json.loads(line)
+                item = self.adapt_input_item(ditem)
                 self.process_item(item, fname)
                 count += 1
             LOGGER.info(f"Read {count} records from {fname}.")
@@ -479,9 +488,10 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
         LOGGER.info(f"Reading job {jkey}...")
         spider_job = self.get_job(JobKey(jkey))
         canonical_name = args[2]
-        for item in spider_job.items.iter():
+        for ditem in spider_job.items.iter():
+            item = self.adapt_input_item(ditem)
             try:
-                item["source"] = canonical_name
+                item["source"] = Source(canonical_name)
                 self.process_item(item, jkey)
             except Exception as e:
                 LOGGER.error("Error processing item: %s", e)
