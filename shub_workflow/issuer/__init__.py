@@ -331,7 +331,6 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         LOGGER.info(f"Loaded {count} seen ids.")
 
     def on_start(self):
-        assert hasattr(self, "output_folder"), "'output_folder' attribute is required."
         super().on_start()
         if hasattr(self, "LOAD_DELIVERED_IDS_DAYS") and not self.__loaded_delivered:
             raise AssertionError("You set LOAD_DELIVERED_IDS_DAYS but load_last_outputs() was never called on init.")
