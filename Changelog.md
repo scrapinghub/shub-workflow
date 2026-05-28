@@ -165,3 +165,4 @@ Minor version changes:
 - 1.14.30 issuer: allow to use a different item field for selecting slot
 - 1.14.31 issuer: allow to optionally close issuer when there are no new inputs
 - 1.14.32 issuer: allow to select specific record field when loading last outputs (deduplication status)
+- 1.14.33 issuer: separate code that computes destination file name, in order to allow override
