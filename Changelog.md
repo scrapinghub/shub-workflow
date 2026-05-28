@@ -166,3 +166,4 @@ Minor version changes:
 - 1.14.31 issuer: allow to optionally close issuer when there are no new inputs
 - 1.14.32 issuer: allow to select specific record field when loading last outputs (deduplication status)
 - 1.14.33 issuer: separate code that computes destination file name, in order to allow override
+- 1.14.34 issuer: allow to adapt input item just after reading it
