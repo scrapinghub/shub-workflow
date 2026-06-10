@@ -22,6 +22,12 @@ pip install shub-workflow[with-gcs-tools]
 
 Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for documentation. You can also see code tests for lots of examples of usage.
 
+# Claude Code skills
+
+The [`skills/`](skills/) directory ships [Claude Code](https://claude.com/claude-code) skills that
+help Claude work with shub-workflow tooling (e.g. authoring and running `scanjobs.py` programs).
+Copy the ones you want into your personal scope — see [skills/README.md](skills/README.md).
+
 # Note
 
 The requirements for this library are defined in setup.py as usual. The Pipfile files in the repository don't define dependencies. It is only used
