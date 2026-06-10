@@ -1,16 +1,16 @@
 ---
 name: scanjobs-programs
 description: >-
-  Use when authoring, editing, or running scanjobs "programs" — the predefined parameter sets in
-  the PROGRAMS dict of a project's scripts/scanjobs.py (a subclass of
-  shub_workflow.utils.scanjobs.ScanJobs), invoked as `scanjobs.py -g <program> -v key:val`. Covers
-  adding/editing a PROGRAMS entry (stat/log/item patterns, {var} placeholders + {{ }} escaping),
-  running one in the project environment, and the two embedded DSLs: the postscript post-processor
-  (-c) and the --plot mini-language. Applies to any project whose scripts/scanjobs.py subclasses
-  shub_workflow's ScanJobs.
+  Use for help using shub_workflow's scanjobs tool — scanning ScrapyCloud jobs to extract and plot
+  data from stats, logs, items or spider args. Covers building a scanjobs command line (the
+  stat/log/item/spider-arg patterns, the postscript post-processor -c, the --plot mini-language,
+  time windows, and output modes) and the predefined "programs" shortcut: the PROGRAMS dict in a
+  project's scripts/scanjobs.py (a subclass of shub_workflow.utils.scanjobs.ScanJobs), invoked as
+  `scanjobs.py -g <program> -v key:val`, including {var} placeholders and {{ }} escaping. Applies to
+  any project whose scripts/scanjobs.py subclasses shub_workflow's ScanJobs.
 ---
 
-# scanjobs programs
+# scanjobs
 
 `scanjobs.py` scans ScrapyCloud jobs for a spider/script, extracts data from **stats**, **log
 lines**, **items**, or **spider args** via regex, optionally post-processes the extracted numbers

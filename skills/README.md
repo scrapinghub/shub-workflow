@@ -15,7 +15,8 @@ you don't use costs nothing.
 
 ## Available skills
 
-- **scanjobs-programs** — authoring, editing, and running `scanjobs.py` *programs* (the predefined
-  `-g <alias>` parameter sets in a project's `scripts/scanjobs.py` `PROGRAMS` dict), including the
-  postscript post-processor (`-c`) and the `--plot` mini-language. See
+- **scanjobs-programs** — assistance using shub-workflow's `scanjobs.py` tool: scanning ScrapyCloud
+  jobs to extract and plot data from stats, logs, items and spider arguments (including the
+  postscript post-processor `-c` and the `--plot` mini-language), plus authoring and running the
+  predefined `-g <alias>` *programs* in a project's `scripts/scanjobs.py` `PROGRAMS` dict. See
   [scanjobs-programs/SKILL.md](scanjobs-programs/SKILL.md).
