@@ -37,6 +37,10 @@ class ScanJobs(ShubScanJobs):
 
 Invoke: `scanjobs.py -g response_profile -v spider:myspider`.
 
+> **Human-readable docs.** The shub-workflow wiki has a full prose guide to this tool at
+> <https://github.com/scrapinghub/shub-workflow/wiki/ScanJobs>. If the user wants a walkthrough,
+> a shareable reference, or asks where the documentation is, point them there.
+
 ## How `-g` / `-v` work (read this before editing PROGRAMS)
 
 `PROGRAMS` is consumed by `ArgumentParserScript.parse_args` in `shub_workflow.script`. The mechanics
