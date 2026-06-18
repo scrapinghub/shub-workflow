@@ -26,13 +26,16 @@ Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for docu
 
 shub-workflow ships a [Claude Code](https://claude.com/claude-code) plugin,
 **shub-workflow-toolkit**, that gives Claude working knowledge of shub-workflow tooling. It
-currently bundles two skills:
+currently bundles three skills:
 
 - **scanjobs-programs** — authoring and running the `scanjobs` job-scanning + plotting tool and its
   command-line "programs".
 - **shub-workflow-scripts** — writing or fixing scripts built on the `shub_workflow.script` base
   classes (`BaseScript` / `BaseLoopScript` / `BaseLoopScriptAsyncMixin`), i.e. any script that runs
   on or operates on Scrapy Cloud.
+- **shub-workflow-crawl-managers** — building, updating or understanding crawl managers
+  (`CrawlManager` / `PeriodicCrawlManager` / `GeneratorCrawlManager` / `AsyncSchedulerCrawlManagerMixin`):
+  the `set_parameters_gen()` pattern, outcome/retry hooks, and async scheduling.
 
 Install it from this repository's plugin marketplace, from inside Claude Code:
 
