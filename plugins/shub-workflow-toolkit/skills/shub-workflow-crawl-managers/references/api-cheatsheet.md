@@ -1,7 +1,10 @@
 # Crawl manager API cheat-sheet
 
-Full reference (behavior, the resume model, parameter types) is in the wiki:
-[Appendix C: Crawl Manager Classes](https://github.com/scrapinghub/shub-workflow/wiki/Appendix-C:-Crawl-Manager-Classes).
+Full reference in the wiki:
+[Appendix D: Crawl Manager Classes](https://github.com/scrapinghub/shub-workflow/wiki/Appendix-D:-Crawl-Manager-Classes)
+(crawl manager classes) and
+[Appendix C: Workflow Manager](https://github.com/scrapinghub/shub-workflow/wiki/Appendix-C:-Workflow-Manager)
+(the inherited `WorkFlowManager` layer).
 Source of truth:
 [`shub_workflow/crawl.py`](https://github.com/scrapinghub/shub-workflow/blob/master/shub_workflow/crawl.py)
 and [`shub_workflow/base.py`](https://github.com/scrapinghub/shub-workflow/blob/master/shub_workflow/base.py).

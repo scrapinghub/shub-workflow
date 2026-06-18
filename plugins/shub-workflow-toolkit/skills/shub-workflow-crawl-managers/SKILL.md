@@ -16,7 +16,9 @@ A **crawl manager** is a workflow-manager script that schedules spider jobs on S
 reacts to how they finish. The classes live in
 [`shub_workflow/crawl.py`](https://github.com/scrapinghub/shub-workflow/blob/master/shub_workflow/crawl.py)
 on top of `WorkFlowManager` → `BaseLoopScript`. Full reference:
-[Appendix C: Crawl Manager Classes](https://github.com/scrapinghub/shub-workflow/wiki/Appendix-C:-Crawl-Manager-Classes);
+[Appendix D: Crawl Manager Classes](https://github.com/scrapinghub/shub-workflow/wiki/Appendix-D:-Crawl-Manager-Classes)
+(and [Appendix C: Workflow Manager](https://github.com/scrapinghub/shub-workflow/wiki/Appendix-C:-Workflow-Manager)
+for the inherited layer);
 gentler intro: the [Crawl Managers](https://github.com/scrapinghub/shub-workflow/wiki/Crawl-Managers)
 tutorial. This skill builds on the `shub-workflow-scripts` skill (the base-class layer).
 
