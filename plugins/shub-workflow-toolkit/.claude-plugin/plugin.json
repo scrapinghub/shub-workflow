@@ -1,6 +1,5 @@
 {
   "name": "shub-workflow-toolkit",
-  "version": "1.0.0",
   "description": "Claude Code skills for working with the shub-workflow library: writing Scrapy Cloud scripts (BaseScript / loop / async) and using the scanjobs job-scanning + plotting tool.",
   "author": {
     "name": "Zyte / Scrapinghub"

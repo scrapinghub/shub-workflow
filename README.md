@@ -49,6 +49,40 @@ To enable it automatically for a project, add it to that project's `.claude/sett
 }
 ```
 
+## Updates
+
+The plugin is **unversioned** (its `plugin.json` has no `version` field), so each commit pushed to
+this repository is a new version. When Claude Code installs the plugin it **copies it into a local
+cache** (`~/.claude/plugins/cache/`) and uses that copy — it does **not** read your working tree or
+re-pull from GitHub on every session. You choose how new commits reach you:
+
+- **Automatic.** Turn on auto-update for this marketplace: run `/plugin`, open the **Marketplaces**
+  tab, and enable auto-update for `shub-workflow` (or set it in settings — see below). With this on,
+  Claude Code re-pulls the marketplace from GitHub and updates installed plugins **at startup**, so a
+  new session always loads the latest pushed commit. This is the low-friction option for staying
+  current.
+
+  ```json
+  {
+    "extraKnownMarketplaces": {
+      "shub-workflow": {
+        "source": { "source": "github", "repo": "scrapinghub/shub-workflow" },
+        "autoUpdate": true
+      }
+    },
+    "enabledPlugins": ["shub-workflow-toolkit@shub-workflow"]
+  }
+  ```
+
+- **Manual.** Leave auto-update off (the default for third-party marketplaces). The cached copy stays
+  pinned until you explicitly update — nothing changes under you between sessions. To pull the latest
+  when you want it:
+
+  ```
+  /plugin marketplace update shub-workflow            # refresh the catalog from GitHub
+  /plugin update shub-workflow-toolkit@shub-workflow  # update the installed plugin
+  ```
+
 The plugin lives in [`plugins/shub-workflow-toolkit/`](plugins/shub-workflow-toolkit); the
 marketplace manifest is [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json).
 
