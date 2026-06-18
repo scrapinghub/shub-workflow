@@ -22,11 +22,35 @@ pip install shub-workflow[with-gcs-tools]
 
 Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for documentation. You can also see code tests for lots of examples of usage.
 
-# Claude Code skills
+# Claude Code plugin
 
-The [`skills/`](skills/) directory ships [Claude Code](https://claude.com/claude-code) skills that
-help Claude work with shub-workflow tooling (e.g. authoring and running `scanjobs.py` programs).
-Copy the ones you want into your personal scope — see [skills/README.md](skills/README.md).
+shub-workflow ships a [Claude Code](https://claude.com/claude-code) plugin,
+**shub-workflow-toolkit**, that gives Claude working knowledge of shub-workflow tooling. It
+currently bundles two skills:
+
+- **scanjobs-programs** — authoring and running the `scanjobs` job-scanning + plotting tool and its
+  command-line "programs".
+- **shub-workflow-scripts** — writing or fixing scripts built on the `shub_workflow.script` base
+  classes (`BaseScript` / `BaseLoopScript` / `BaseLoopScriptAsyncMixin`), i.e. any script that runs
+  on or operates on Scrapy Cloud.
+
+Install it from this repository's plugin marketplace, from inside Claude Code:
+
+```
+/plugin marketplace add scrapinghub/shub-workflow
+/plugin install shub-workflow-toolkit@shub-workflow
+```
+
+To enable it automatically for a project, add it to that project's `.claude/settings.json`:
+
+```json
+{
+  "enabledPlugins": ["shub-workflow-toolkit@shub-workflow"]
+}
+```
+
+The plugin lives in [`plugins/shub-workflow-toolkit/`](plugins/shub-workflow-toolkit); the
+marketplace manifest is [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json).
 
 # Note
 

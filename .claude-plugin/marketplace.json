@@ -1,0 +1,15 @@
+{
+  "name": "shub-workflow",
+  "owner": {
+    "name": "Zyte / Scrapinghub"
+  },
+  "description": "Claude Code plugins shipped with the shub-workflow library.",
+  "plugins": [
+    {
+      "name": "shub-workflow-toolkit",
+      "source": "./plugins/shub-workflow-toolkit",
+      "category": "developer-tools",
+      "tags": ["shub-workflow", "scrapy-cloud", "scanjobs"]
+    }
+  ]
+}
