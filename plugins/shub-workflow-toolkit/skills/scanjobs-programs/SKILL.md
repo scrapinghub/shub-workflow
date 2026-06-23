@@ -70,7 +70,7 @@ bogus `-g` (e.g. `-g ?`) — the parser prints `* <name>: <description>` for eac
    - stats → `-s <regex>` (matched against stat keys; regex groups + the stat value are emitted)
    - log lines → `-l <regex>` (regex groups emitted; add `--count` to emit `1` per match for counting)
    - items → `-i <jmespath>:<regex>`
-   - filter jobs by spider arg → `-a <arg>:<regex>`
+   - filter jobs by argument → `-a <arg>:<regex>` for spiders; for scripts (`py:`) a bare `-a <regex>` matched against the job command line
 2. **Always set `--project-id`** (jobs are read outside ScrapyCloud): a numeric SC project id, or a
    configured alias if the project defines one.
 3. **Parameterize** the per-run bits (spider, source, …) as `{var}` and document them in the

@@ -17,7 +17,7 @@ are `action="append"` — repeat the flag to give several.
 | `-s`, `--stat-pattern` | regex on stat **keys** | regex groups + the stat's value |
 | `-l`, `--log-pattern` | regex on log lines | regex groups (with `--count`, emits `1` per match) |
 | `-i`, `--item-field-pattern` | `jmespath:regex` on items | regex groups, or just existence if regex is empty |
-| `-a`, `--spider-argument-pattern` | `arg:regex` | does not emit; **filters** scan to jobs whose spider arg matches |
+| `-a`, `--argument-pattern` | spiders: `arg:regex`; scripts (`py:`): bare `regex` | does not emit; **filters** scan to jobs whose argument matches. For spiders the regex is matched against the spider arg named `arg`; for scripts there is no `arg:` separator — the regex is matched against the job command line (`job_cmd`) |
 | `--tag-pattern` | regex | only scan jobs whose tag matches |
 
 ## Time window

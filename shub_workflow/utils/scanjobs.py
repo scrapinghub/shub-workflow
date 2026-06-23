@@ -6,8 +6,10 @@ from them (see --plot option). Plotting requires pandas, seaborn and matplotlib 
 It can generate regex pattern groups, post process them via simple post-script like language,
 save in order to generate data tables and generate plots.
 
-If you use --spider-argument-pattern, matches from provided logs, stats and items patterns are limited to those jobs
-that matches any of the provided spider argument patterns.
+If you use --argument-pattern, matches from provided logs, stats and items patterns are limited to those jobs
+that matches any of the provided argument patterns. For spiders, the pattern has the format arg:value (the value is
+a regex matched against the spider argument named arg). For scripts (target starting with 'py:'), there is no
+arg:value separator: the whole pattern is a regex matched against the job command line.
 
 By default, the scan period is the las 1 day. See --period option.
 
@@ -988,9 +990,13 @@ class ScanJobs(BaseScript):
             "--log-pattern", "-l", help="Log pattern. Can be multiple.", action="append", default=[]
         )
         self.argparser.add_argument(
-            "--spider-argument-pattern",
+            "--argument-pattern",
             "-a",
-            help="argument pattern (in format arg:value). Can be multiple.",
+            help=(
+                "Argument pattern. Can be multiple. For spiders, in format arg:value (the value is a regex pattern "
+                "matched against the spider argument named arg). For scripts (those starting with 'py:'), there is no "
+                "arg:value separator: the whole pattern is a regex matched against the job command line."
+            ),
             action="append",
             default=[],
         )
@@ -1302,18 +1308,29 @@ class ScanJobs(BaseScript):
                 "groups": tuple(groups),
             }
 
-    def filter_spider_argument(
+    def filter_argument(
         self, jdict: JobDict, tstamp: datetime.datetime, jobcount: int
-    ) -> Optional[Dict[str, str]]:
-        for spider_arg_pattern in self.args.spider_argument_pattern:
-            key, pattern = spider_arg_pattern.split(":", 1)
-            if re.search(pattern, jdict.get("spider_args", {}).get(key, "")):
-                print(f"Jobs scanned: {jobcount}")
-                print(f"Timestamp reached: {tstamp}")
-                print(f"https://app.zyte.com/p/{jdict['key']}/stats")
-                print(jdict["spider_args"])
-                return jdict["spider_args"]
+    ) -> Optional[Union[Dict[str, str], List[str]]]:
+        is_script = jdict.get("spider", "").startswith("py:")
+        for arg_pattern in self.args.argument_pattern:
+            if is_script:
+                job_cmd = jdict.get("job_cmd", [])
+                if re.search(arg_pattern, " ".join(job_cmd)):
+                    self._print_argument_match(jdict, tstamp, jobcount)
+                    print(job_cmd)
+                    return job_cmd
+            else:
+                key, pattern = arg_pattern.split(":", 1)
+                if re.search(pattern, jdict.get("spider_args", {}).get(key, "")):
+                    self._print_argument_match(jdict, tstamp, jobcount)
+                    print(jdict["spider_args"])
+                    return jdict["spider_args"]
         return None
+
+    def _print_argument_match(self, jdict: JobDict, tstamp: datetime.datetime, jobcount: int) -> None:
+        print(f"Jobs scanned: {jobcount}")
+        print(f"Timestamp reached: {tstamp}")
+        print(f"https://app.zyte.com/p/{jdict['key']}/stats")
 
     def run(self):
 
@@ -1404,12 +1421,12 @@ class ScanJobs(BaseScript):
             self.args.write or self.args.plot or self.args.no_user_enter
             or self.args.generate_items_sample
         )
-        if self.args.spider_argument_pattern:
+        if self.args.argument_pattern:
             meta.append("spider_args")
+            meta.append("job_cmd")
         if self.args.stat_pattern:
             meta.append("scrapystats")
-        if self.args.spiders_only or self.args.scripts_only:
-            meta.append("spider")
+        meta.append("spider")
         tag_patterns = []
         if self.args.tag_pattern:
             meta.append("tags")
@@ -1453,13 +1470,13 @@ class ScanJobs(BaseScript):
             tstamp = datetime.datetime.fromtimestamp(job_tstamp / 1000)
             has_match = False
 
-            spiderargs = self.filter_spider_argument(jdict, tstamp, jobcount)
+            spiderargs = self.filter_argument(jdict, tstamp, jobcount)
             if spiderargs:
                 has_match = True
                 keyprinted = True
                 if not no_user_enter:
                     input("Press Enter to continue...\n")
-            elif self.args.spider_argument_pattern:
+            elif self.args.argument_pattern:
                 continue
 
             post_process_instructions: Optional[List[str]] = (
@@ -1532,7 +1549,7 @@ class ScanJobs(BaseScript):
                         if self.args.plot:
                             plot_data_points.insert(0, result["dict_groups"])
                             all_headers.update(headers)
-                        if spiderargs and self.args.capture_spiderargs:
+                        if isinstance(spiderargs, dict) and self.args.capture_spiderargs:
                             result["dict_groups"].update(spiderargs)
                         if self.args.capture_joblink:
                             result["dict_groups"]["job_link"] = job_link
