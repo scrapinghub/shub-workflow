@@ -218,10 +218,10 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         destfile = self.compute_destination_filename(output_slot, source)
 
         count = self.write_items_file(list(self.items_queue[output_slot][source].values()), destfile)
-        self.stats.inc_value("urls/wrote", count)
-        self.stats.inc_value(f"urls/{source}/wrote", count)
+        self.stats.inc_value("records/wrote", count)
+        self.stats.inc_value(f"records/{source}/wrote", count)
         if output_slot is not None:
-            self.stats.inc_value(f"urls/{output_slot}/{source}/wrote", count)
+            self.stats.inc_value(f"records/{output_slot}/{source}/wrote", count)
         self.items_queue[output_slot][source] = {}
 
         for slots_sources in self.pending_inputs_to_remove.values():
