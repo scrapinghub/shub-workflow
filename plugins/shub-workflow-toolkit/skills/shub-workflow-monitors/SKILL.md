@@ -53,6 +53,14 @@ API tables: [references/api-cheatsheet.md](references/api-cheatsheet.md).
   honour a `*_FAKE` setting that logs instead of sending.
 - **`stats_hooks` method signature** is `(self, start_limit, end_limit, value, *regex_groups)` — one
   extra positional per capturing group in the stat regex. Mismatched arity raises at runtime.
+- **`target_spider_classes` is first-match by `issubclass`, order matters.** Each spider job's prefix
+  is the first entry whose class it subclasses. To give a subclass its own group, list it **before**
+  its parent — listed after, the parent wins and it folds into the parent's prefix. Conversely, adding
+  a base class that's already a parent of a targeted class changes nothing (it's already matched).
+- **`additional_projects` covers script scans too.** It feeds `get_jobs_in_window` (`(project_id,) +
+  additional_projects`), which backs the spider scan *and* `target_script_stats`/`target_script_logs`.
+  So a script's regex set runs against that script's jobs in every scanned project — entries just
+  don't match where a stat is absent, letting you rename a per-project stat variant to a common name.
 - **`--flow-id` scoping.** With no flow id the monitor aggregates *all* jobs in the window; with
   `--flow-id` (or when scheduled by a graph manager, inheriting its flow id) it scopes to that
   workflow. Pick deliberately.

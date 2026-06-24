@@ -18,7 +18,7 @@ stats → `close()` (sends queued alerts). It runs **once** and exits — schedu
 
 | Attribute | Meaning |
 | --- | --- |
-| `target_spider_classes` | `{SpiderClass: stats_prefix}` — which spiders to scan + per-group prefix. Default `{Spider: ""}`. |
+| `target_spider_classes` | `{SpiderClass: stats_prefix}` — which spiders to scan + per-group prefix. Default `{Spider: ""}`. A spider's prefix is the **first** entry whose class it `issubclass`-matches, so list more-specific subclasses **before** their parent. Matching is by `issubclass`, so adding a base that's already a parent of a targeted class is a no-op. |
 | `target_spider_stats` | extra stat-key regex prefixes to aggregate (added to `BASE_TARGET_SPIDER_STATS`). |
 | `stats_only_total` | `True` ⇒ only `…/total`, no per-spider. Default `False`. |
 | `target_script_stats` | `{script: ((regex, prefix), …)}` — aggregate a script's stats → `<prefix>/<group-or-key>` (+ `/total`). |
@@ -26,7 +26,7 @@ stats → `close()` (sends queued alerts). It runs **once** and exits — schedu
 | `stats_ratios` | `((num_regex, den_regex, target), …)` — ratio stats (grouped by first regex group). |
 | `stats_hooks` | `((stat_regex, method_name), …)` — call a method per matching stat. |
 | `report_table` | header row + data rows for `generate_report()`. |
-| `additional_projects` | extra project ids to scan. |
+| `additional_projects` | extra project ids to scan. Applies to **both** the spider scan and the script-stats/script-logs scans (everything goes through `get_jobs_in_window`, which loops `(self.project_id,) + self.additional_projects`). A `target_script_stats` regex set therefore runs against that script's jobs in every scanned project; entries simply don't match where a stat is absent, so you can rename per-project stat variants to a common name. |
 | `default_subject` | default alert subject (`--subject` overrides). |
 
 Always-on defaults (`BASE_TARGET_SPIDER_STATS`): `downloader/response_status_count/`,
