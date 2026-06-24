@@ -26,7 +26,7 @@ Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for docu
 
 shub-workflow ships a [Claude Code](https://claude.com/claude-code) plugin,
 **shub-workflow-toolkit**, that gives Claude working knowledge of shub-workflow tooling. It
-currently bundles three skills:
+currently bundles five skills:
 
 - **scanjobs-programs** — authoring and running the `scanjobs` job-scanning + plotting tool and its
   command-line "programs".
@@ -36,6 +36,12 @@ currently bundles three skills:
 - **shub-workflow-crawl-managers** — building, updating or understanding crawl managers
   (`CrawlManager` / `PeriodicCrawlManager` / `GeneratorCrawlManager` / `AsyncSchedulerCrawlManagerMixin`):
   the `set_parameters_gen()` pattern, outcome/retry hooks, and async scheduling.
+- **shub-workflow-graph-managers** — building, updating or understanding graph managers
+  (`GraphManager` + `Task` / `SpiderTask`): declaring a DAG of tasks in `configure_workflow()`,
+  dependency linking, `on_finish`/retry routing, resources, and parallelization.
+- **shub-workflow-monitors** — building, updating or understanding monitors (`BaseMonitor`):
+  cross-job stat aggregation over a time window, ratios, reports, custom checks, and threshold
+  alerts via Slack / Sentry.
 
 Install it from this repository's plugin marketplace, from inside Claude Code:
 
