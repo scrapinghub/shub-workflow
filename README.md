@@ -26,7 +26,7 @@ Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for docu
 
 shub-workflow ships a [Claude Code](https://claude.com/claude-code) plugin,
 **shub-workflow-toolkit**, that gives Claude working knowledge of shub-workflow tooling. It
-currently bundles five skills:
+currently bundles six skills:
 
 - **scanjobs-programs** — authoring and running the `scanjobs` job-scanning + plotting tool and its
   command-line "programs".
@@ -42,6 +42,9 @@ currently bundles five skills:
 - **shub-workflow-monitors** — building, updating or understanding monitors (`BaseMonitor`):
   cross-job stat aggregation over a time window, ratios, reports, custom checks, and threshold
   alerts via Slack / Sentry.
+- **shub-workflow-fshelper** — reading/writing/listing files through the cloud-agnostic filesystem
+  layer (`shub_workflow.utils.futils` / `FSHelper`): prefix-based `s3://`/`gs://`/local dispatch,
+  role-assumed credentials, the listing variants, and `op_kwargs`/ACLs.
 
 Install it from this repository's plugin marketplace, from inside Claude Code:
 

@@ -1,6 +1,7 @@
 import re
 import logging
 import uuid
+import warnings
 from typing import List, Generator, Callable
 from operator import itemgetter
 from glob import iglob
@@ -460,6 +461,16 @@ class S3Helper:
         op_kwargs_by_method_name=None,
         **kwargs
     ):
+        # S3Helper is kept only for backward compatibility. The recommended, more general class is
+        # FSHelper (also used by shub_workflow.script). Warn only on direct S3Helper() use, not on
+        # subclasses such as FSHelper (which call super().__init__).
+        if type(self) is S3Helper:
+            warnings.warn(
+                "S3Helper is kept only for backward compatibility; use FSHelper instead "
+                "(the general, recommended filesystem helper, also used by shub_workflow.script).",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.bucket_kwargs = kwargs.pop("bucket_kwargs", {})
         self.s3_session_factory = None
         self.credentials = {"aws_key": aws_key, "aws_secret": aws_secret}
