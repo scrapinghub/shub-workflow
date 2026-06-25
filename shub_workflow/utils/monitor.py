@@ -6,7 +6,7 @@ import inspect
 import csv
 from io import StringIO
 from typing import Dict, Type, Tuple, Optional, Protocol, Union
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time as dt_time
 from collections import Counter
 
 import dateparser
@@ -155,6 +155,11 @@ that can be recognized by dateparser.""",
         self.argparser.add_argument(
             "--slack-report", action="store_true", help="Send report to slack. By default it just prints it in the log."
         )
+        self.argparser.add_argument(
+            "--collection-name",
+            type=str,
+            help="Name of the Scrapy Cloud collection to save the stats to",
+        )
 
     def stats_postprocessing(self, start_limit, end_limit):
         """
@@ -210,8 +215,10 @@ that can be recognized by dateparser.""",
             start_limit = dt.timestamp()
         else:
             LOG.info(f"Period set: {timedelta(seconds=self.args.period)}")
-        LOG.info(f"Start time: {str(datetime.fromtimestamp(start_limit))}")
-        LOG.info(f"End time: {str(datetime.fromtimestamp(end_limit))}")
+        start_dt = datetime.fromtimestamp(start_limit)
+        end_dt = datetime.fromtimestamp(end_limit)
+        LOG.info(f"Start time: {str(start_dt)}")
+        LOG.info(f"End time: {str(end_dt)}")
 
         for attr in dir(self):
             if attr.startswith("check_"):
@@ -226,6 +233,7 @@ that can be recognized by dateparser.""",
         if self.args.generate_report:
             self.generate_report()
         self.run_stats_hooks(start_limit, end_limit)
+        self.save_stats_to_collection(start_dt, end_dt)
         self.upload_stats()
         self.print_stats()
         self.close()
@@ -408,6 +416,25 @@ that can be recognized by dateparser.""",
                                 self.stats.inc_value(stat, val)
                                 if stat_suffix:
                                     self.stats.inc_value(stat + f"/{stat_suffix}", val)
+
+    def save_stats_to_collection(self, start_dt, end_dt):
+        if not self.args.collection_name:
+            return
+        if any(limit.time() != dt_time(0, 0) for limit in (start_dt, end_dt)):
+            LOG.error("start_time and end_time times must be 00:00 when saving to a collection")
+            return
+
+        LOG.info(f"Saving stats to Scrapy Cloud collection: {self.args.collection_name}")
+        project = self.get_project(self.project_id)
+        collection = project.collections.get_store(self.args.collection_name)
+        stats = self.stats.get_stats()
+
+        time_delta = (end_dt - start_dt).total_seconds()
+        start_dt_str = start_dt.strftime("%Y-%m-%d")
+        end_dt_str = end_dt.strftime("%Y-%m-%d")
+
+        key = start_dt_str if time_delta == 86400 else f"{start_dt_str} to {end_dt_str}"
+        collection.set({"_key": key, "value": stats})
 
     def close(self):
         self.send_messages()
