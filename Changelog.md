@@ -168,3 +168,4 @@ Minor version changes:
 - 1.14.33 issuer: separate code that computes destination file name, in order to allow override
 - 1.14.34 issuer: allow to adapt input item just after reading it
 - 1.14.35 scanjobs: allow script argument pattern matching
+- 1.14.36 monitor: allow to save stats in collection.
