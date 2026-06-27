@@ -69,6 +69,10 @@ project already has one and build on it rather than re-adding shared options.
 - **`workflow_loop()` returns `bool`:** `True` keeps looping (with `--loop-mode`/`loop_mode`);
   `False` stops immediately. A loop with `loop_mode = 0` runs its body once.
 - **Set `project_required = False`** only for scripts that genuinely never touch SC.
+- **File I/O? Use the built-in `self.fshelper`** (an `FSHelper`) — don't construct your own
+  `FSHelper`/`S3Helper`. To configure its credentials/role/ACLs, **override the `init_fshelper()`
+  hook** (default is a bare `FSHelper()`); `self.project_settings` is available there. See the
+  api-cheatsheet's *File operations* and the **`shub-workflow-fshelper`** skill.
 - For the `-g`/`-v` `PROGRAMS` mechanism (predefined command-line shortcuts), see the
   **`scanjobs-programs`** skill — `scanjobs.py` is the canonical example of a heavily
   `PROGRAMS`-driven script.

@@ -63,7 +63,25 @@ Stats & settings:
 - `self.stats` (Scrapy `StatsCollector`: `inc_value`/`set_value`/`get_value`), `upload_stats()`,
   `print_stats()`
 - `get_sc_project_settings()` — live project settings from the dashboard API
-- `self.fshelper` — `FSHelper` for s3/gcs/local file ops
+File operations (`self.fshelper`):
+- `self.fshelper` — a ready-built `FSHelper` (cloud-agnostic s3/gcs/local file ops). **Prefer it over
+  constructing your own helper.** It's created once in `BaseScript.__init__` via the
+  **`init_fshelper()`** hook, whose default returns a bare `FSHelper()` (ambient/env credentials).
+  **Override `init_fshelper()`** to control how it's built — inject explicit AWS keys / an assumed
+  role, a GCS project, or default per-method ACLs. `self.project_settings` is already populated when
+  the hook runs, so read config from there:
+
+  ```python
+  def init_fshelper(self):
+      return FSHelper(
+          aws_key=self.project_settings["AWS_ACCESS_KEY"],
+          aws_secret=self.project_settings["AWS_SECRET_KEY"],
+          aws_role=self.project_settings["AWS_USE_ROLE"],          # optional: STS assume-role
+          aws_external_id=self.project_settings["AWS_EXTERNAL_ID"],
+      )
+  ```
+  For the `FSHelper` API itself (the three listing variants, `op_kwargs`/ACLs, role assumption), see
+  the **`shub-workflow-fshelper`** skill.
 
 Spiders:
 - `get_canonical_spidername(spidername)`, `get_project_running_spiders(canonical=False,
