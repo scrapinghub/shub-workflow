@@ -2,6 +2,7 @@ import abc
 import time
 import asyncio
 import logging
+import warnings
 from collections import defaultdict
 from typing import Generator, List, Tuple, Protocol, Union, Type, Dict
 
@@ -59,6 +60,15 @@ class BaseDeliverScript(BaseLoopScript, DeliverScriptProtocol):
     strict_max_time = False
 
     def __init__(self):
+        # BaseDeliverScript is deprecated: build delivery (and other data-chain stages) as an
+        # IssuerScript (shub_workflow.issuer) instead. Warns for the base and every subclass, since
+        # the whole base-deliver approach is being phased out.
+        warnings.warn(
+            "BaseDeliverScript is deprecated; build delivery as an IssuerScript "
+            "(shub_workflow.issuer) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__()
         self._all_jobs_to_tag = []
         self.total_items_count = 0

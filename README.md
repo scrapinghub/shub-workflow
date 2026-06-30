@@ -26,7 +26,7 @@ Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for docu
 
 shub-workflow ships a [Claude Code](https://claude.com/claude-code) plugin,
 **shub-workflow-toolkit**, that gives Claude working knowledge of shub-workflow tooling. It
-currently bundles six skills:
+currently bundles seven skills:
 
 - **scanjobs-programs** — authoring and running the `scanjobs` job-scanning + plotting tool and its
   command-line "programs".
@@ -45,6 +45,9 @@ currently bundles six skills:
 - **shub-workflow-fshelper** — reading/writing/listing files through the cloud-agnostic filesystem
   layer (`shub_workflow.utils.futils` / `FSHelper`): prefix-based `s3://`/`gs://`/local dispatch,
   role-assumed credentials, the listing variants, and `op_kwargs`/ACLs.
+- **shub-workflow-issuers** — building data-pipeline issuers (`IssuerScript` /
+  `IssuerScriptWithFileSystemInput` / `IssuerScriptWithSCJobInput`): reading job/file input,
+  dedup, batch output slots, and issuer-based delivery (replacing the deprecated `BaseDeliverScript`).
 
 Install it from this repository's plugin marketplace, from inside Claude Code:
 
