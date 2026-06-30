@@ -434,7 +434,7 @@ that can be recognized by dateparser.""",
         end_dt_str = end_dt.strftime("%Y-%m-%d")
 
         key = start_dt_str if time_delta == 86400 else f"{start_dt_str} to {end_dt_str}"
-        collection.set({"_key": key, "value": stats})
+        collection.set({"_key": key, **stats})
 
     def close(self):
         self.send_messages()
