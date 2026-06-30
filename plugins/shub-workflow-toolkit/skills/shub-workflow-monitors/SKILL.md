@@ -68,6 +68,14 @@ API tables: [references/api-cheatsheet.md](references/api-cheatsheet.md).
   `downloader/response_count`, `downloader/response_status_count/*`, `spider_exceptions/*`,
   `scrapy-zyte-api/429`, `zyte_api_proxy/response/status/429`. Set `stats_only_total = True` to drop
   per-spider entries. (Note: per-spider *job counts* are **not** aggregated by default.)
+- **Persisting stats history:** `--collection-name <name>` saves the whole stats dict to a Scrapy
+  Cloud collection (one record per window, `_key` = the date, or `<start> to <end>`) — the built-in
+  way to keep monitor history. It only saves when the window is **midnight-aligned** (both ends at
+  `00:00`), else it's skipped with an error; so schedule day-aligned runs (e.g. `-e "today at 0:00"`).
+- **Visualizing stat trends:** to see how a monitor's aggregated stats evolve over time, scan the
+  monitor's own jobs with the **scanjobs** tool (filter by its run tag, `-s` the stat, `--plot`) —
+  see the `scanjobs-programs` skill. A lightweight complement to `--collection-name`, often
+  predefined as scanjobs `programs`.
 - **Always `super().add_argparser_options()`** before adding CLI args.
 
 ## Entry point boilerplate

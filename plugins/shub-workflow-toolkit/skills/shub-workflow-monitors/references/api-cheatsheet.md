@@ -11,8 +11,9 @@ Source:
 ## What it is
 
 `BaseMonitor` is a **`BaseScript`** (not a loop manager). `run()` computes a time window, runs every
-`check_*` method, then `stats_postprocessing` → ratios → optional report → stat hooks → upload/print
-stats → `close()` (sends queued alerts). It runs **once** and exits — schedule it periodically.
+`check_*` method, then `stats_postprocessing` → ratios → optional report → stat hooks → save-to-
+collection (if `--collection-name`) → upload/print stats → `close()` (sends queued alerts). It runs
+**once** and exits — schedule it periodically.
 
 ## Configuration attributes
 
@@ -55,7 +56,9 @@ Both honour `SPIDERMON_*_FAKE` (log instead of send). Subject = `--subject` or `
 
 `--period/-p` (seconds, default `86400`), `--start-time/-s`, `--end-time/-e` (dateparser strings; `-s`
 overrides `-p`), `--generate-report`, `--report-format` (`pretty`|`pretty_with_borders`|
-`pretty_with_tabs`|`csv`), `--slack-report`, `--subject`; plus `BaseScript` options (`--project-id`,
+`pretty_with_tabs`|`csv`), `--slack-report`, `--collection-name` (persist the stats dict to a Scrapy
+Cloud collection; one record per window keyed by date — **requires a midnight-aligned window**),
+`--subject`; plus `BaseScript` options (`--project-id`,
 `--flow-id`, `--children-tag`, `-g`/`-v`). `--flow-id` (or being scheduled by a graph manager) scopes
 the checks to one workflow; otherwise all jobs in the window are considered.
 

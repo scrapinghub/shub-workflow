@@ -37,6 +37,11 @@ class ScanJobs(ShubScanJobs):
 
 Invoke: `scanjobs.py -g response_profile -v spider:myspider`.
 
+> **Common use — plotting a monitor's stats over time.** A periodically-scheduled `BaseMonitor` run
+> carries its aggregated stats in its job stats, so a frequent program scans the monitor script's
+> jobs (e.g. `py:monitor.py`, filtered by its run tag like `--has-tag=DAILY`), selects a stat with
+> `-s`, and `--plot`s its evolution over `--period` — a lightweight way to watch monitor-stat trends.
+
 > **Human-readable docs.** The shub-workflow wiki has a full prose guide to this tool at
 > <https://github.com/scrapinghub/shub-workflow/wiki/ScanJobs>. If the user wants a walkthrough,
 > a shareable reference, or asks where the documentation is, point them there.
