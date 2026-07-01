@@ -8,7 +8,7 @@ setup(
     description="Workflow manager for Zyte ScrapyCloud tasks.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    license="BSD",
+    license="Apache-2.0",
     url="https://github.com/scrapinghub/shub-workflow",
     maintainer="Scrapinghub",
     packages=find_packages(),
@@ -35,7 +35,7 @@ setup(
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
-        "License :: OSI Approved :: BSD License",
+        "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
