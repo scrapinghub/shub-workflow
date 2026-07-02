@@ -47,8 +47,9 @@ delivery-specific:
   want **all items of one job in the same output file**, pair it with a big **`default_filesize`** (so
   a batch is never split by size before the per-job flush).
 
-Override the **`post_process_input_items(jkey, args)`** hook (default no-op) to run logic once per
-scanned job **after all its items are read** and **before** the flush. It enables the
+Override the **`post_process_input_items(spider_job, args)`** hook (default no-op) to run logic once
+per scanned job **after all its items are read** and **before** the flush (`spider_job` is the read
+job — use its metadata/key/items). It enables the
 **accumulate-then-merge** pattern below. It's also where you'd aggregate a job's stats if needed —
 mix in `SpiderStatsAggregatorMixin` yourself and call `self.aggregate_spider_stats(...)` here (no
 built-in flag for it).

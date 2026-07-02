@@ -45,13 +45,14 @@ class MergeIssuer(IssuerScriptWithSCJobInput[ProductItem]):
         else:
             self._info[pid] = ProductItem(product_id=pid, source=item["source"], images=[])
 
-    def post_process_input_items(self, jkey: InputSource, args):
+    def post_process_input_items(self, spider_job, args):
         # the whole input has been read: merge and issue one combined record per product. issue_item()
         # needs id / source / input_source set on the record; then reset the accumulators.
+        # spider_job is the just-read job (its key is the input source; also args[0]["key"]).
         for pid, product in self._info.items():
             product["images"] = self._images.get(pid, [])
             product["id"] = self.build_item_id(product)
-            product["input_source"] = jkey
+            product["input_source"] = InputSource(spider_job.key)
             self.issue_item(product)
         self._info.clear()
         self._images.clear()

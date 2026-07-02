@@ -30,6 +30,7 @@ import dateparser
 from typing_extensions import NotRequired
 from bloom_filter2 import BloomFilter
 from scrapy import Spider
+from scrapinghub.client.jobs import Job
 
 from shub_workflow.script import BaseLoopScript, SpiderName, JobKey, JobDict
 from shub_workflow.utils.dupefilter import DupesFilterProtocol
@@ -496,10 +497,13 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
         LOGGER.info(f"Tagged a total of {count} input jobs.")
 
     def post_process_input_items(
-        self, jkey: InputSource, args: Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]
+        self, spider_job: Job, args: Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]
     ):
         """Hook called once per scanned job, after all its items have been read (and processed via
         process_item()) and before the optional per-job flush. Default: no-op.
+
+        `spider_job` is the just-read Scrapy Cloud job — use its metadata / key / items (the job key is
+        also available as args[0]["key"]).
 
         Override it to run any per-job finalization. For example: the accumulate-then-merge pattern (an
         issuer that accumulates items in process_item() instead of issuing them inline merges them and
@@ -520,7 +524,7 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
             except Exception as e:
                 LOGGER.error("Error processing item: %s", e)
                 continue
-        self.post_process_input_items(jkey, args)
+        self.post_process_input_items(spider_job, args)
         if self.flush_on_each_input:
             self.flush_files()
         return True

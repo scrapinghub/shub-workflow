@@ -42,7 +42,7 @@ your fields and bind it: `class X(IssuerScriptWithFileSystemInput[MyItem])`.
 | `build_item_id(item) -> ItemId` | **abstract** | dedup/identity key. |
 | `adapt_input_item(raw) -> ITEMTYPE` | optional | adapt raw records to your item type (default casts). |
 | `process_item(item, input_source)` | optional override | dedup + enqueue; override to filter/transform (call `super()`), or to *accumulate* (delivery pattern — don't call super). |
-| `post_process_input_items(jkey, args)` | optional override *(SC-job input)* | hook run once per scanned job, after all its items are read and before the per-job aggregation/flush; default no-op. Enables the accumulate-then-merge pattern (any issuer). |
+| `post_process_input_items(spider_job, args)` | optional override *(SC-job input)* | hook run once per scanned job (`spider_job` = the read job), after all its items are read and before the per-job flush; default no-op. Enables the accumulate-then-merge pattern (any issuer). |
 | `get_output_slot_for_item(item)` | optional | route to an output slot (default: hash of id over `parallel_outputs`). |
 | `get_filesize_from_item(item)` | optional | per-item batch size (default `default_filesize`). |
 | `compute_destination_filename(slot, source)` | optional | output filename (default: timestamped, source/slot-prefixed). |

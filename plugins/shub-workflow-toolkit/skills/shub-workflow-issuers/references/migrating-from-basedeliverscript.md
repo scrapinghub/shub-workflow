@@ -30,7 +30,7 @@ You always implement:
 | BaseDeliverScript | Issuer (`IssuerScriptWithSCJobInput`) |
 | --- | --- |
 | `on_item(item, scrapername)` | `process_item(item, input_source)` — issue inline (default) or accumulate |
-| `process_job_items(scrapername, job)` | the base `process_input()` reads the job; do per-job finalization in `post_process_input_items(jkey, args)` |
+| `process_job_items(scrapername, job)` | the base `process_input()` reads the job; do per-job finalization in `post_process_input_items(spider_job, args)` (`spider_job` = the read job) |
 | `fshelper.upload_file(...)` to a per-job path | `issue_item()` + `flush_files()` (via `flush_on_each_input=True`); path from `compute_destination_filename()` |
 | `DEDUPE_KEY_BY_FIELDS` / `is_seen_item()` | `dedupe` + `build_item_id()` (bloom filter) |
 | `scrapername` positional arg | `target` positional arg (`spider:<name>` / `canonical:<name>` / `class:<ClassName>`) |
@@ -48,8 +48,8 @@ You always implement:
   flow id). If you relied on per-workflow scoping (delivery scheduled by a graph manager), reintroduce
   it — e.g. add a tag filter by overriding `get_new_inputs()`.
 - **Destination from job args.** Read the per-job destination (e.g. an `upload_prefix` arg) from
-  `args[0]["spider_args"]` in `post_process_input_items()` (or `self.get_job_metadata(JobKey(jkey))`),
-  stash it, and return it from `compute_destination_filename()`.
+  `spider_job.metadata` (or `args[0]["spider_args"]`) in `post_process_input_items()`, stash it, and
+  return it from `compute_destination_filename()`.
 - **Serialize plain dicts.** If the delivered records are `scrapy.Item`s, convert them to `dict` before
   `issue_item()` — the writer `json.dumps()` them.
 - **Stats aggregation is opt-in.** There is no built-in flag: mix in
