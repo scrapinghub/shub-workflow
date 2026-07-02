@@ -169,3 +169,4 @@ Minor version changes:
 - 1.14.34 issuer: allow to adapt input item just after reading it
 - 1.14.35 scanjobs: allow script argument pattern matching
 - 1.14.36 monitor: allow to save stats in collection.
+- 1.14.37 issuer: additional configuration flags and hooks
