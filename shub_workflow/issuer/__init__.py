@@ -464,7 +464,7 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
         try:
             self._target_type, self._target_name = args.target.split(":")
         except ValueError:
-            self.argparser.error("Wrong target format.")
+            self.argparser.error("Wrong target format. Required format: <target_type>:<target name>.")
         assert self._target_type in ("spider", "canonical", "class"), f"Invalid target type: {self._target_type}"
         return args
 
