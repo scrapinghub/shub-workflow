@@ -25,6 +25,16 @@ your fields and bind it: `class X(IssuerScriptWithFileSystemInput[MyItem])`.
 | `IssuerScriptWithFileSystemInput[T]` | gzipped JSON-lines **batch files** in `input_folder` (opt. `input_slot` prefix); moves to `processed_folder` or deletes | `get_new_inputs`, `process_input`, `remove_inputs` |
 | `IssuerScriptWithSCJobInput[T]` | finished **SC spider jobs** chosen by the `target` CLI arg (`spider:`/`canonical:`/`class:`); tags consumed jobs `CONSUMED=True` | same |
 
+`IssuerScriptWithSCJobInput` adds these SC-job-input-only flags:
+
+| Attribute | Default | Meaning |
+| --- | --- | --- |
+| `set_item_source` | `True` | stamp each item's `source` with the scanned spider's canonical name. Set `False` for a **secondary** spider whose items already carry their originating `source` (conserve it). |
+| `flush_on_each_input` | `False` | `flush_files()` at the end of each scanned job. Pair with a big `default_filesize` to keep all of a job's items in one output file. |
+
+(To aggregate a scanned job's stats, mix in `SpiderStatsAggregatorMixin` and call
+`aggregate_spider_stats(...)` from `post_process_input_items()` — there is no built-in flag for it.)
+
 ## Methods
 
 | Method | Required? | Purpose |
@@ -32,6 +42,7 @@ your fields and bind it: `class X(IssuerScriptWithFileSystemInput[MyItem])`.
 | `build_item_id(item) -> ItemId` | **abstract** | dedup/identity key. |
 | `adapt_input_item(raw) -> ITEMTYPE` | optional | adapt raw records to your item type (default casts). |
 | `process_item(item, input_source)` | optional override | dedup + enqueue; override to filter/transform (call `super()`), or to *accumulate* (delivery pattern — don't call super). |
+| `post_process_input_items(jkey, args)` | optional override *(SC-job input)* | hook run once per scanned job, after all its items are read and before the per-job aggregation/flush; default no-op. Enables the accumulate-then-merge pattern (any issuer). |
 | `get_output_slot_for_item(item)` | optional | route to an output slot (default: hash of id over `parallel_outputs`). |
 | `get_filesize_from_item(item)` | optional | per-item batch size (default `default_filesize`). |
 | `compute_destination_filename(slot, source)` | optional | output filename (default: timestamped, source/slot-prefixed). |
@@ -71,8 +82,17 @@ your fields and bind it: `class X(IssuerScriptWithFileSystemInput[MyItem])`.
   `on_start()`.
 - Launch is synchronous: `Script().run()` (issuers are not async-launched).
 
+## Accumulate-then-merge (any issuer)
+
+To combine an input's records into fewer output records: override `process_item` to **accumulate**
+(don't call `super()`), then in `post_process_input_items` merge, set each combined record's
+`id`/`input_source`, `issue_item()` them, and clear the accumulator; pair with `flush_on_each_input=True`
+for one file per job. Generic to any `IssuerScriptWithSCJobInput` — not delivery-specific.
+
 ## Delivery
 
-Build delivery as an issuer (`IssuerScriptWithSCJobInput`, `dedupe=False`, `close_on_no_inputs=True`,
-accumulate in `process_item`, merge+issue+`flush_files` in `process_input`). This **replaces** the
-deprecated `shub_workflow.deliver.BaseDeliverScript` (now warns on instantiation).
+A **terminal** issuer (`IssuerScriptWithSCJobInput`): `dedupe=False`, `close_on_no_inputs=True`, usually
+`set_item_source=False` (reads a secondary spider), writing to the customer destination (often
+`flush_on_each_input=True` + big `default_filesize`). Issues items like any issuer; combining records
+first is optional and uses the generic pattern above. **Replaces** the deprecated
+`shub_workflow.deliver.BaseDeliverScript` (now warns on instantiation).

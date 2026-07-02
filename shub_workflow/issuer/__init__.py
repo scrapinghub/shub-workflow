@@ -434,6 +434,17 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
 
     CONSUMED_TAG = "CONSUMED=True"
 
+    # If True (default), stamp each read item's "source" with the canonical name of the scanned spider. Set to
+    # False when the scanned spider is a secondary/post-processing stage within the pipeline (i.e. it processes
+    # data coming from a primary spider): in that case the items already carry their originating source and it
+    # must be conserved.
+    set_item_source: bool = True
+
+    # If True, flush the output files at the end of processing each scanned job (instead of only when a source's
+    # spider stops or on close). Useful when each output batch must contain the items of a single scanned job.
+    # False by default.
+    flush_on_each_input: bool = False
+
     def __init__(self):
         self._target_type: Union[str, None] = None
         self._target_name: Union[str, None] = None
@@ -483,6 +494,18 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
                 LOGGER.info(f"Tagged {count} input jobs.")
         LOGGER.info(f"Tagged a total of {count} input jobs.")
 
+    def post_process_input_items(
+        self, jkey: InputSource, args: Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]
+    ):
+        """Hook called once per scanned job, after all its items have been read (and processed via
+        process_item()) and before the optional per-job flush. Default: no-op.
+
+        Override it to run any per-job finalization. For example: the accumulate-then-merge pattern (an
+        issuer that accumulates items in process_item() instead of issuing them inline merges them and
+        issue_item()s the combined records here; combined with flush_on_each_input=True they are written
+        as a single output file per scanned job), or to aggregate the scanned job's stats — mix in
+        SpiderStatsAggregatorMixin and call self.aggregate_spider_stats(...) here."""
+
     def process_input(self, jkey: InputSource, args: Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]) -> bool:
         LOGGER.info(f"Reading job {jkey}...")
         spider_job = self.get_job(JobKey(jkey))
@@ -490,9 +513,13 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
         for ditem in spider_job.items.iter():
             item = self.adapt_input_item(ditem)
             try:
-                item["source"] = Source(canonical_name)
+                if self.set_item_source:
+                    item["source"] = Source(canonical_name)
                 self.process_item(item, jkey)
             except Exception as e:
                 LOGGER.error("Error processing item: %s", e)
                 continue
+        self.post_process_input_items(jkey, args)
+        if self.flush_on_each_input:
+            self.flush_files()
         return True

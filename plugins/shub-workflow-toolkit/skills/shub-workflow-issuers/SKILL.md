@@ -34,6 +34,35 @@ an issuer.
 Delivery-as-an-issuer (replacing `BaseDeliverScript`): [examples/delivery_issuer.py](examples/delivery_issuer.py).
 API tables: [references/api-cheatsheet.md](references/api-cheatsheet.md).
 
+## `IssuerScriptWithSCJobInput` options
+
+`IssuerScriptWithSCJobInput` exposes two flags (defaults in parens) — both generic, not
+delivery-specific:
+
+- **`set_item_source`** (`True`) — stamp each read item's `source` with the scanned spider's canonical
+  name. Set **`False`** when the scanned spider is a **secondary/post-processing** stage (it processes
+  data produced by a primary spider): its items already carry their originating `source`, so conserve
+  it instead of overwriting. *This is why a delivery issuer keeps the upstream source.*
+- **`flush_on_each_input`** (`False`) — flush output files at the end of **each** scanned job. If you
+  want **all items of one job in the same output file**, pair it with a big **`default_filesize`** (so
+  a batch is never split by size before the per-job flush).
+
+Override the **`post_process_input_items(jkey, args)`** hook (default no-op) to run logic once per
+scanned job **after all its items are read** and **before** the flush. It enables the
+**accumulate-then-merge** pattern below. It's also where you'd aggregate a job's stats if needed —
+mix in `SpiderStatsAggregatorMixin` yourself and call `self.aggregate_spider_stats(...)` here (no
+built-in flag for it).
+
+## Accumulate-then-merge (any issuer, not delivery-specific)
+
+When an input's records must be **combined** into fewer output records (join, roll-up, reconcile),
+override `process_item` to **accumulate** them (do **not** call `super()`), then in
+`post_process_input_items` merge the accumulated records, set each combined record's `id` /
+`input_source`, `issue_item()` them, and clear the accumulator; pair with `flush_on_each_input=True`
+for one output file per job. This is generic to **any** `IssuerScriptWithSCJobInput` — a delivery
+issuer may use it, but so may a filter or roll-up stage. See
+[examples/merge_issuer.py](examples/merge_issuer.py).
+
 ## Consumer vs deduplicator (the two archetypes)
 
 Most issuers are one of two shapes that differ on **dedup persistence**:
@@ -61,8 +90,9 @@ of bottlenecking in one process.
    hash-routed slots so N downstream issuers can each own a slot).
 4. Dedup: keep `dedupe=True`; for cross-run dedup set `LOAD_DELIVERED_IDS_DAYS` **and** call
    `load_last_outputs(...)` in `__init__`.
-5. Custom logic by overriding `process_item` (filter/transform — call `super()`) or, for delivery,
-   accumulate in `process_item` and merge+issue+`flush_files` in `process_input`.
+5. Custom logic by overriding `process_item` (filter/transform — call `super()`); to **combine** an
+   input's records, *accumulate* in `process_item` and merge+`issue_item` in the
+   `post_process_input_items` hook (the accumulate-then-merge pattern).
 6. `__main__` boilerplate (`Script().run()` — synchronous). Register in `setup.py`; deploy via the
    **`scrapy-cloud-deployment`** skill.
 
@@ -79,10 +109,13 @@ for shared output-routing/sizing — subclass it (mixin first) when present.
 - **`parallel_outputs` hash-routes by id** (`hash_mod(id, N)`) so the same id always lands in the
   same slot — that's what lets N parallel downstream issuers each own one slot. Use `input_slot` to
   pin an instance to one input slot.
-- **Delivery pattern differs:** `dedupe=False`, `close_on_no_inputs=True`, large `default_filesize`,
-  and **don't call `issue_item` inline** — accumulate in `process_item`, then merge + `issue_item` +
-  `flush_files()` in `process_input` (one delivery file per source per job). This replaces
-  `BaseDeliverScript`, which is **deprecated** (now warns on instantiation).
+- **Delivery is a terminal issuer:** its defining traits are `dedupe=False` (dedup happened upstream),
+  `close_on_no_inputs=True`, usually `set_item_source=False` (it reads a secondary spider — keep the
+  upstream source), and writing to the customer destination (commonly `flush_on_each_input=True` + big
+  `default_filesize` for one file per job). It issues items like any issuer; **combining records first
+  is not a delivery trait** — if needed it uses the generic accumulate-then-merge pattern above. This
+  replaces `BaseDeliverScript`, which is **deprecated** (now warns on instantiation). See
+  [examples/delivery_issuer.py](examples/delivery_issuer.py).
 - **Stopped-spider flush assumes `py:crawlmanager.py`.** The loop flushes a source's partial batch
   when that source's spider is no longer running, detected via
   `get_project_running_spiders(crawlmanagers=("py:crawlmanager.py",))` — the default expects the

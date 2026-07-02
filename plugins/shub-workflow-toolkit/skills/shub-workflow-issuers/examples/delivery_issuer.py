@@ -1,18 +1,23 @@
 """
 Delivery built as an issuer (the modern replacement for the deprecated BaseDeliverScript).
 
-A final-stage issuer: read a job's items, accumulate/merge them in memory, then issue the merged
-records once per job and flush them to the customer's delivery location. Distinctive choices:
-- dedupe = False (delivery doesn't dedup; that happened upstream),
+A final-stage issuer that writes the customer's delivery files. Its DEFINING traits are about being
+the terminal stage of the pipeline, NOT about any particular item processing:
+- dedupe = False (dedup already happened upstream),
 - close_on_no_inputs = True (run to completion, not continuously),
-- a very large default_filesize (keep a job's delivery in one file),
-- process_item() overridden to accumulate (NOT call issue_item inline); merge + issue in process_input(),
-- the output path/prefix usually comes from the spider job's args.
+- set_item_source = False (delivery reads a SECONDARY / post-processing spider, so each item already
+  carries its originating source — conserve it),
+- flush_on_each_input = True + a big default_filesize (so all of a job's items land in one delivery
+  file, never pre-empted by a size split),
+- output goes to the customer's delivery location (output_folder / compute_destination_filename).
+
+By default it issues each read item as-is. If a particular delivery must COMBINE records before
+writing them, it uses the generic accumulate-then-merge pattern (see merge_issuer.py) — that pattern
+is NOT specific to delivery, so it is illustrated separately.
 """
 import logging
-from typing import Dict, List
 
-from shub_workflow.issuer import IssuerScriptWithSCJobInput, IssuerItem, ItemId, Source
+from shub_workflow.issuer import IssuerScriptWithSCJobInput, IssuerItem, ItemId
 
 
 class DeliverItem(IssuerItem):
@@ -24,33 +29,17 @@ class DeliveryIssuer(IssuerScriptWithSCJobInput[DeliverItem]):
     name = "deliver"
     dedupe = False
     close_on_no_inputs = True
-    default_filesize = 10_000_000         # effectively "one file per source per job"
-
-    def __init__(self):
-        super().__init__()
-        self._acc: Dict[Source, List[DeliverItem]] = {}
+    set_item_source = False               # reads a secondary spider — keep each item's own "source"
+    flush_on_each_input = True            # one delivery file per scanned job
+    default_filesize = 10_000_000         # so the per-job flush is never split by size first
+    output_folder = "gs://customer-bucket/delivery"
 
     def build_item_id(self, item: DeliverItem) -> ItemId:
-        return ItemId("null")             # unused: process_item is overridden, no inline issuing
+        return ItemId(item["id"])
 
-    def process_item(self, item: DeliverItem, input_source):
-        # accumulate instead of issuing immediately
-        self._acc.setdefault(item["source"], []).append(item)
-
-    def process_input(self, jkey, args) -> bool:
-        ok = super().process_input(jkey, args)     # reads the job's items -> process_item()
-        for source, items in self._acc.items():
-            merged = self._merge(items)            # your merge/validate/clean logic
-            for rec in merged:
-                rec["source"] = source
-                rec["input_source"] = jkey
-                self.issue_item(rec)               # now issue the finished records
-        self.flush_files()                         # one delivery file per source for this job
-        self._acc.clear()
-        return ok
-
-    def _merge(self, items: List[DeliverItem]) -> List[DeliverItem]:
-        return items
+    # Each read item is issued as-is (default process_item) and written under output_folder with a
+    # timestamped, source-prefixed name. Override compute_destination_filename() to control the delivery
+    # path/name (e.g. derive it from the scanned job's spider args, available via post_process_input_items).
 
 
 if __name__ == "__main__":
