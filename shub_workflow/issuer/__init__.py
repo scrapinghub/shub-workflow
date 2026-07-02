@@ -125,6 +125,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         """
         Create item id from its fields
         """
+
     @staticmethod
     def adapt_input_item(item: Mapping[str, Any]) -> ITEMTYPE:
         """

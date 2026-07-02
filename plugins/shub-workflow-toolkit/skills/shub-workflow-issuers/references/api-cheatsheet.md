@@ -89,10 +89,12 @@ To combine an input's records into fewer output records: override `process_item`
 `id`/`input_source`, `issue_item()` them, and clear the accumulator; pair with `flush_on_each_input=True`
 for one file per job. Generic to any `IssuerScriptWithSCJobInput` — not delivery-specific.
 
-## Delivery
+## Delivery — a configuration, not a class
 
-A **terminal** issuer (`IssuerScriptWithSCJobInput`): `dedupe=False`, `close_on_no_inputs=True`, usually
-`set_item_source=False` (reads a secondary spider), writing to the customer destination (often
-`flush_on_each_input=True` + big `default_filesize`). Issues items like any issuer; combining records
-first is optional and uses the generic pattern above. **Replaces** the deprecated
-`shub_workflow.deliver.BaseDeliverScript` (now warns on instantiation).
+No dedicated class: a delivery is an `IssuerScriptWithSCJobInput` configured for the terminal stage.
+Typical: `close_on_no_inputs=True`, and `flush_on_each_input=True` + big `default_filesize` for one file
+per job. `dedupe=False` / `set_item_source=False` apply **only** when the data was already
+deduplicated/post-processed upstream (delivering a primary crawl keeps the defaults). Supply
+`build_item_id` and `compute_destination_filename`. **Replaces** the deprecated
+`shub_workflow.deliver.BaseDeliverScript` (now warns on instantiation) — see
+[migrating-from-basedeliverscript.md](migrating-from-basedeliverscript.md).

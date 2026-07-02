@@ -1,14 +1,15 @@
 """
 Delivery built as an issuer (the modern replacement for the deprecated BaseDeliverScript).
 
-A final-stage issuer that writes the customer's delivery files. Its DEFINING traits are about being
-the terminal stage of the pipeline, NOT about any particular item processing:
-- dedupe = False (dedup already happened upstream),
-- close_on_no_inputs = True (run to completion, not continuously),
-- set_item_source = False (delivery reads a SECONDARY / post-processing spider, so each item already
-  carries its originating source — conserve it),
-- flush_on_each_input = True + a big default_filesize (so all of a job's items land in one delivery
-  file, never pre-empted by a size split),
+There is NO dedicated delivery class — a delivery is just an IssuerScriptWithSCJobInput configured for
+the terminal stage. Which knobs you set is USE-CASE DEPENDENT (see references/migrating-from-
+basedeliverscript.md); this example delivers an already-post-processed pipeline:
+- close_on_no_inputs = True — deliver the finished jobs, then stop (typical for delivery),
+- flush_on_each_input = True + a big default_filesize — one delivery file per scanned job,
+- dedupe = False — the data was ALREADY deduplicated upstream (a delivery reading a primary spider's
+  crawl directly would instead keep dedupe=True),
+- set_item_source = False — this reads a SECONDARY spider whose items already carry their originating
+  source (a delivery of a PRIMARY spider would keep the default True),
 - output goes to the customer's delivery location (output_folder / compute_destination_filename).
 
 By default it issues each read item as-is. If a particular delivery must COMBINE records before

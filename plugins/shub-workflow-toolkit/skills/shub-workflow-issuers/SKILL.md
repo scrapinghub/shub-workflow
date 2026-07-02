@@ -109,13 +109,15 @@ for shared output-routing/sizing — subclass it (mixin first) when present.
 - **`parallel_outputs` hash-routes by id** (`hash_mod(id, N)`) so the same id always lands in the
   same slot — that's what lets N parallel downstream issuers each own one slot. Use `input_slot` to
   pin an instance to one input slot.
-- **Delivery is a terminal issuer:** its defining traits are `dedupe=False` (dedup happened upstream),
-  `close_on_no_inputs=True`, usually `set_item_source=False` (it reads a secondary spider — keep the
-  upstream source), and writing to the customer destination (commonly `flush_on_each_input=True` + big
-  `default_filesize` for one file per job). It issues items like any issuer; **combining records first
-  is not a delivery trait** — if needed it uses the generic accumulate-then-merge pattern above. This
-  replaces `BaseDeliverScript`, which is **deprecated** (now warns on instantiation). See
-  [examples/delivery_issuer.py](examples/delivery_issuer.py).
+- **Delivery is a configuration, not a class** (there is **no** `DeliverIssuerScript`): a delivery is
+  an `IssuerScriptWithSCJobInput` you configure for the terminal stage. Which knobs you set is
+  **use-case dependent**, not fixed by "delivery": `close_on_no_inputs=True` and — for one file per job
+  — `flush_on_each_input=True` + a big `default_filesize` are typical; **`dedupe=False` and
+  `set_item_source=False` apply only when the data was already deduplicated/post-processed upstream**
+  (delivering a primary spider's crawl keeps the defaults). You supply `build_item_id` and the
+  destination (`compute_destination_filename`). Replaces the **deprecated** `BaseDeliverScript` (warns
+  on instantiation). Example: [examples/delivery_issuer.py](examples/delivery_issuer.py); migrating an
+  old one: [references/migrating-from-basedeliverscript.md](references/migrating-from-basedeliverscript.md).
 - **Stopped-spider flush assumes `py:crawlmanager.py`.** The loop flushes a source's partial batch
   when that source's spider is no longer running, detected via
   `get_project_running_spiders(crawlmanagers=("py:crawlmanager.py",))` — the default expects the
