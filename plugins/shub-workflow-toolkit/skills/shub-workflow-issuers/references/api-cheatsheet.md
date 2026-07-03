@@ -97,4 +97,5 @@ per job. `dedupe=False` / `set_item_source=False` apply **only** when the data w
 deduplicated/post-processed upstream (delivering a primary crawl keeps the defaults). Supply
 `build_item_id` and `compute_destination_filename`. **Replaces** the deprecated
 `shub_workflow.deliver.BaseDeliverScript` (now warns on instantiation) — see
-[migrating-from-basedeliverscript.md](migrating-from-basedeliverscript.md).
+[migrating-from-basedeliverscript.md](migrating-from-basedeliverscript.md). When migrating, set
+`CONSUMED_TAG = "delivered"` (the old `DELIVERED_TAG`) or already-delivered jobs get re-delivered.

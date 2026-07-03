@@ -34,10 +34,17 @@ You always implement:
 | `fshelper.upload_file(...)` to a per-job path | `issue_item()` + `flush_files()` (via `flush_on_each_input=True`); path from `compute_destination_filename()` |
 | `DEDUPE_KEY_BY_FIELDS` / `is_seen_item()` | `dedupe` + `build_item_id()` (bloom filter) |
 | `scrapername` positional arg | `target` positional arg (`spider:<name>` / `canonical:<name>` / `class:<ClassName>`) |
-| `DELIVERED_TAG` + `FLOW_ID` job selection | `lacks_tag=CONSUMED_TAG`; consumed jobs tagged `CONSUMED=True` |
+| `DELIVERED_TAG` (`"delivered"`) marks done jobs | `lacks_tag=CONSUMED_TAG` selects; consumed jobs get `CONSUMED_TAG` (default `"CONSUMED=True"`) — **override `CONSUMED_TAG = "delivered"` on migration** (see gotchas) |
+| `FLOW_ID` job selection | *(none by default — see the FLOW_ID gotcha)* |
 
 ## Gotchas
 
+- **Preserve the old "delivered" tag (production-critical).** `BaseDeliverScript` tagged already-delivered
+  jobs with `DELIVERED_TAG = "delivered"` to avoid re-reading them; the issuer instead selects jobs
+  `lacks_tag=CONSUMED_TAG` and tags consumed ones with `CONSUMED_TAG` (default `"CONSUMED=True"`). If you
+  deploy the migrated issuer with the default tag, it will **re-deliver every job the old script already
+  delivered** (none carry `CONSUMED=True`). Set **`CONSUMED_TAG = "delivered"`** on the issuer so the old
+  tags are honored and new deliveries keep tagging `"delivered"`.
 - **Invocation changes.** `deliver.py <scrapername...>` → `deliver.py <type>:<name>` (e.g.
   `canonical:example_spider`). Update the periodic job / scheduler that launches it.
 - **Conserve the source (the #1 subtle bug).** If the delivered spider is secondary, set
