@@ -7,6 +7,7 @@ import gzip
 import hashlib
 import logging
 from datetime import datetime, timedelta
+from itertools import cycle
 from collections import defaultdict, Counter
 from typing import (
     List,
@@ -26,6 +27,7 @@ from typing import (
     cast,
 )
 
+import jmespath
 import dateparser
 from typing_extensions import NotRequired
 from bloom_filter2 import BloomFilter
@@ -101,6 +103,11 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     LOAD_DELIVERED_IDS_DAYS: int
     # if True, close once there are no more inputs to read
     close_on_no_inputs = False
+    # Optional jmespath expression selecting, within each raw input record, the list of objects to explode:
+    # when set, process_item() is called once per selected object instead of once per raw record. Lets a
+    # spider that emits records bundling several issuable objects be consumed without overriding
+    # process_input(). None (default) => each raw record is processed as a single item.
+    explode_input_items: Optional[str] = None
 
     def __init__(self):
         super().__init__()
@@ -135,6 +142,17 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         You can override this method if you need to adapt input items before processing them.
         """
         return cast(ITEMTYPE, item)
+
+    def explode_input_record(self, record: Mapping[str, Any]) -> List[Mapping[str, Any]]:
+        """
+        Given a raw input record, return the list of raw items to process from it. With explode_input_items
+        set (a jmespath expression) it returns the objects the expression selects inside the record (so one
+        record yields many items); otherwise it returns the record itself as a single item. adapt_input_item()
+        is applied afterwards, per returned item.
+        """
+        if self.explode_input_items is None:
+            return [record]
+        return jmespath.search(self.explode_input_items, record) or []
 
     def process_item(self, item: ITEMTYPE, input_source: InputSource):
         """
@@ -416,8 +434,9 @@ class IssuerScriptWithFileSystemInput(IssuerScript[ITEMTYPE, Tuple[()]]):
             count = 0
             for line in fz:
                 ditem = json.loads(line)
-                item = self.adapt_input_item(ditem)
-                self.process_item(item, fname)
+                for record in self.explode_input_record(ditem):
+                    item = self.adapt_input_item(record)
+                    self.process_item(item, fname)
                 count += 1
             LOGGER.info(f"Read {count} records from {fname}.")
         return True
@@ -451,6 +470,13 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
         self._target_type: Union[str, None] = None
         self._target_name: Union[str, None] = None
         super().__init__()
+        # Cycle over the spider list so the starting source rotates across loops: when a loop is cut short at
+        # max_inputs_per_loop the generator is left mid-cycle, and the next loop continues from there instead
+        # of restarting at the first spider — otherwise an early source that always has pending jobs would
+        # starve the later ones. It is a no-op when a single spider is targeted.
+        spiders = list(self.spider_loader.list())
+        self._spider_cycle = cycle(spiders)
+        self._spider_count = len(spiders)
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -469,8 +495,11 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
         return args
 
     def get_new_inputs(self) -> Iterable[Tuple[InputSource, Tuple[JobDict, SpiderName, SpiderName, Type[Spider]]]]:
-        for spidername in self.spider_loader.list():
-            canonical_name = self.get_canonical_spidername(SpiderName(spidername))
+        # Visit each spider once, but starting from the cycle's current position (see __init__) so the loop's
+        # starting source rotates and no source starves.
+        for _ in range(self._spider_count):
+            spidername = SpiderName(next(self._spider_cycle))
+            canonical_name = self.get_canonical_spidername(spidername)
             spidercls = self.spider_loader.load(spidername)
             if (
                 self._target_type == "spider"
@@ -485,7 +514,7 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
                 ):
                     if jdict["key"] in self.pending_inputs_to_remove:
                         continue
-                    yield InputSource(jdict["key"]), (jdict, SpiderName(spidername), canonical_name, spidercls)
+                    yield InputSource(jdict["key"]), (jdict, spidername, canonical_name, spidercls)
 
     def remove_inputs(self, jobkeys: List[InputSource]):
         count = 0
@@ -516,14 +545,15 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
         spider_job = self.get_job(JobKey(jkey))
         canonical_name = args[2]
         for ditem in spider_job.items.iter():
-            item = self.adapt_input_item(ditem)
-            try:
-                if self.set_item_source:
-                    item["source"] = Source(canonical_name)
-                self.process_item(item, jkey)
-            except Exception as e:
-                LOGGER.error("Error processing item: %s", e)
-                continue
+            for record in self.explode_input_record(ditem):
+                item = self.adapt_input_item(record)
+                try:
+                    if self.set_item_source:
+                        item["source"] = Source(canonical_name)
+                    self.process_item(item, jkey)
+                except Exception as e:
+                    LOGGER.error("Error processing item: %s", e)
+                    continue
         self.post_process_input_items(spider_job, args)
         if self.flush_on_each_input:
             self.flush_files()

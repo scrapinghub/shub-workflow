@@ -54,6 +54,12 @@ job — use its metadata/key/items). It enables the
 mix in `SpiderStatsAggregatorMixin` yourself and call `self.aggregate_spider_stats(...)` here (no
 built-in flag for it).
 
+`get_new_inputs()` visits the targeted spiders **round-robin, rotating the starting spider across
+loops**: when the target matches **multiple** spiders (e.g. `class:BaseSpider`, to consume every source
+in one job) a source with a big backlog can't starve the others, since only `max_inputs_per_loop`
+inputs run per loop and each loop resumes where the previous left off. It's a no-op for a
+single-spider target.
+
 ## Accumulate-then-merge (any issuer, not delivery-specific)
 
 When an input's records must be **combined** into fewer output records (join, roll-up, reconcile),
@@ -64,14 +70,41 @@ for one output file per job. This is generic to **any** `IssuerScriptWithSCJobIn
 issuer may use it, but so may a filter or roll-up stage. See
 [examples/merge_issuer.py](examples/merge_issuer.py).
 
+### Pairing the hook with `flush_on_each_input` (decision guide)
+
+`flush_on_each_input` and `post_process_input_items` are **orthogonal**. `flush_on_each_input` only
+controls output **file granularity** — one file per scanned job vs. size-batched by `default_filesize`
+— it does **not** gate the hook. They co-occur in the *one-delivery-file-per-job* shape (issue the
+job's records in the hook, then flush them together), which is why our delivery and per-job-merge cases
+set `True` — but that pairing is not required:
+
+- **Hook issues, but you want size-batched output → `flush_on_each_input=False`.** A **roll-up/reducer**
+  that accumulates a whole job and emits only a *few* merged records per job should leave it `False`, so
+  those records batch up to `default_filesize`; `True` would spray thousands of tiny one-record files.
+  The records issued in the hook are still written (by size / `on_close`), just packed across jobs.
+- **Hook issues nothing → `flush_on_each_input` irrelevant (leave `False`).** Non-issuing per-job side
+  effects — `aggregate_spider_stats`, pushing seeds to the frontier, capturing job metadata — touch no
+  output queue, so flush timing doesn't matter (e.g. a consumer that issues inline in `process_item` and
+  does its per-job seed push in the hook).
+
+**Timing:** the hook runs **after** any mid-read size-flushes (an inline `issue_item` that hit
+`default_filesize` during the read loop already wrote a file) and **before** the per-job flush. So to
+finalize a *whole job's* items before any of them are written, don't inline-issue — **accumulate** in
+`process_item` (or use a big `default_filesize`) so nothing flushes before the hook.
+
 ## Consumer vs deduplicator (the two archetypes)
 
 Most issuers are one of two shapes that differ on **dedup persistence**:
 
 - **Consumer** (first stage): cheap **in-memory** preliminary dedup, **distributes** items across
-  `parallel_outputs` slots (so the same id always lands in the same slot), often also extracting
-  seeds to the frontier. Short-lived and **cheaply restartable** — **no** `load_last_outputs`; a
-  restart only loses in-memory dedup (the authoritative dedup is downstream).
+  `parallel_outputs` slots (so the same id always lands in the same slot). A **discovery** consumer
+  also explodes/side-effects — when each scraped record bundles many issuable objects, set
+  **`explode_input_items`** (a jmespath to that list) so the base calls `process_item()` once per object;
+  put per-item work in `process_item` and per-job side effects (e.g. extracting seeds and writing them to
+  the frontier) in `post_process_input_items` — no `process_input` override needed (see
+  [examples/sc_job_input_issuer.py](examples/sc_job_input_issuer.py)). Short-lived and **cheaply
+  restartable** — **no** `load_last_outputs`; a restart only loses in-memory dedup (the authoritative
+  dedup is downstream).
 - **Deduplicator** (heavy stage): runs **continuously**, one instance per slot, doing massive
   **persistent** dedup. Calls `load_last_outputs(...)` on init to refill its bloom filter from the
   last `LOAD_DELIVERED_IDS_DAYS` of its own (and downstream) output, so dedup **survives restarts**.

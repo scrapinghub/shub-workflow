@@ -35,6 +35,10 @@ your fields and bind it: `class X(IssuerScriptWithFileSystemInput[MyItem])`.
 (To aggregate a scanned job's stats, mix in `SpiderStatsAggregatorMixin` and call
 `aggregate_spider_stats(...)` from `post_process_input_items()` — there is no built-in flag for it.)
 
+`get_new_inputs()` visits the matched spiders **round-robin, rotating the starting spider across loops**
+(only `max_inputs_per_loop` inputs run per loop; each loop resumes where the last left off), so when the
+target matches many spiders a big-backlog source can't starve the others. No-op for a single-spider target.
+
 ## Methods
 
 | Method | Required? | Purpose |
@@ -56,6 +60,7 @@ your fields and bind it: `class X(IssuerScriptWithFileSystemInput[MyItem])`.
 | `output_folder` | *(required)* | where batch output files are written. |
 | `default_filesize` | `10_000` | items per output batch file. |
 | `parallel_outputs` | `1` | output slots; `>1` ⇒ items hash-routed by id (same id → same slot). |
+| `explode_input_items` | `None` | jmespath to a list **inside** each raw record; when set, `process_item()` runs once per selected object (one record → many items) instead of once per record. Avoids overriding `process_input` just to explode. |
 | `input_slot` / `output_slot` | `None` | pin this instance to one input / output slot. |
 | `dedupe` | `True` | bloom-filter de-duplication (set `False` for delivery). |
 | `MAX_ITEMS` | `200_000_000` | bloom capacity + per-job processed ceiling. |
