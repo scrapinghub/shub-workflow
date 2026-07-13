@@ -466,6 +466,12 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
     # False by default.
     flush_on_each_input: bool = False
 
+    # If True, read only input jobs tagged with this script's own FLOW_ID (from the `--flow-id` arg, or the
+    # FLOW_ID tag when running inside a workflow), so a script scheduled by a graph manager reads all and only
+    # the jobs of its own workflow instance. False by default (read every matching finished job). This ports the
+    # workflow-scoping the deprecated BaseDeliverScript did automatically. No-op if no flow_id is set.
+    scope_input_to_flow_id: bool = False
+
     def __init__(self):
         self._target_type: Union[str, None] = None
         self._target_name: Union[str, None] = None
@@ -477,6 +483,9 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
         spiders = list(self.spider_loader.list())
         self._spider_cycle = cycle(spiders)
         self._spider_count = len(spiders)
+        if self.scope_input_to_flow_id and not self.flow_id:
+            LOGGER.warning("scope_input_to_flow_id is set but no flow_id is available; every target job "
+                           "will be read. Provide one with --flow-id or run inside a workflow.")
 
     def add_argparser_options(self):
         super().add_argparser_options()
@@ -509,9 +518,12 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
                 or self._target_type == "class"
                 and self._target_name in [c.__name__ for c in spidercls.mro()]
             ):
-                for jdict in self.get_jobs(
+                job_kwargs: Dict[str, Any] = dict(
                     spider=spidername, state=["finished"], meta=["spider_args"], lacks_tag=self.CONSUMED_TAG
-                ):
+                )
+                if self.scope_input_to_flow_id and self.flow_id:
+                    job_kwargs["has_tag"] = [f"FLOW_ID={self.flow_id}"]
+                for jdict in self.get_jobs(**job_kwargs):
                     if jdict["key"] in self.pending_inputs_to_remove:
                         continue
                     yield InputSource(jdict["key"]), (jdict, spidername, canonical_name, spidercls)

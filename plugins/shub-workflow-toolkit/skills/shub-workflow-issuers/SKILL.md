@@ -36,7 +36,7 @@ API tables: [references/api-cheatsheet.md](references/api-cheatsheet.md).
 
 ## `IssuerScriptWithSCJobInput` options
 
-`IssuerScriptWithSCJobInput` exposes two flags (defaults in parens) — both generic, not
+`IssuerScriptWithSCJobInput` exposes three flags (defaults in parens) — all generic, not
 delivery-specific:
 
 - **`set_item_source`** (`True`) — stamp each read item's `source` with the scanned spider's canonical
@@ -46,6 +46,10 @@ delivery-specific:
 - **`flush_on_each_input`** (`False`) — flush output files at the end of **each** scanned job. If you
   want **all items of one job in the same output file**, pair it with a big **`default_filesize`** (so
   a batch is never split by size before the per-job flush).
+- **`scope_input_to_flow_id`** (`False`) — read only jobs tagged with this script's own `FLOW_ID`
+  (from `--flow-id`, or the `FLOW_ID` tag inside a workflow), so a script scheduled by a **graph
+  manager** reads all and only its own workflow instance's jobs. Ports what the deprecated
+  `BaseDeliverScript` did automatically; no-op (reads everything, with a warning) if no `flow_id`.
 
 Override the **`post_process_input_items(spider_job, args)`** hook (default no-op) to run logic once
 per scanned job **after all its items are read** and **before** the flush (`spider_job` is the read

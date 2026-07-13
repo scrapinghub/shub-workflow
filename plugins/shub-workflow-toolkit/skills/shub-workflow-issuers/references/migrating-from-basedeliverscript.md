@@ -50,10 +50,11 @@ You always implement:
 - **Conserve the source (the #1 subtle bug).** If the delivered spider is secondary, set
   `set_item_source=False`. Otherwise the base stamps `item["source"]` with the *scanned* spider's
   canonical name and clobbers the real upstream source that the delivery keys stats/paths on.
-- **No FLOW_ID scoping.** The SC-job issuer selects **all** finished, un-`CONSUMED` jobs of the target.
-  That's correct for a standalone-scheduled delivery (e.g. a Scrapy Cloud periodic job with no
-  flow id). If you relied on per-workflow scoping (delivery scheduled by a graph manager), reintroduce
-  it — e.g. add a tag filter by overriding `get_new_inputs()`.
+- **FLOW_ID scoping.** By default the SC-job issuer selects **all** finished, un-`CONSUMED` jobs of the
+  target — correct for a standalone-scheduled delivery (e.g. a Scrapy Cloud periodic job with no flow
+  id). If you relied on per-workflow scoping (delivery scheduled by a graph manager, where
+  `BaseDeliverScript` scoped to `FLOW_ID` automatically), set **`scope_input_to_flow_id = True`** to
+  restore it (reads only jobs tagged with this run's `FLOW_ID`).
 - **Destination from job args.** Read the per-job destination (e.g. an `upload_prefix` arg) from
   `spider_job.metadata` (or `args[0]["spider_args"]`) in `post_process_input_items()`, stash it, and
   return it from `compute_destination_filename()`.

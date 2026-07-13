@@ -31,6 +31,7 @@ your fields and bind it: `class X(IssuerScriptWithFileSystemInput[MyItem])`.
 | --- | --- | --- |
 | `set_item_source` | `True` | stamp each item's `source` with the scanned spider's canonical name. Set `False` for a **secondary** spider whose items already carry their originating `source` (conserve it). |
 | `flush_on_each_input` | `False` | `flush_files()` at the end of each scanned job. Pair with a big `default_filesize` to keep all of a job's items in one output file. |
+| `scope_input_to_flow_id` | `False` | read only jobs tagged with this script's own `FLOW_ID` (from `--flow-id` / the workflow tag) — a graph-manager-scheduled script reads only its own workflow instance's jobs. No-op (warns) if no `flow_id`. |
 
 (To aggregate a scanned job's stats, mix in `SpiderStatsAggregatorMixin` and call
 `aggregate_spider_stats(...)` from `post_process_input_items()` — there is no built-in flag for it.)

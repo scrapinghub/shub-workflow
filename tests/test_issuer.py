@@ -404,6 +404,39 @@ class GetNewInputsRotationTest(IssuerTestBase):
 
 
 # --------------------------------------------------------------------------- #
+# scope_input_to_flow_id                                                       #
+# --------------------------------------------------------------------------- #
+
+
+class ScopedIssuer(RotatingSCIssuer):
+    scope_input_to_flow_id = True
+
+
+@patch("shub_workflow.script.BaseScript.get_jobs")
+class ScopeInputToFlowIdTest(IssuerTestBase):
+    def test_scopes_get_jobs_to_the_flow_id_tag(self, mocked_get_jobs):
+        mocked_get_jobs.side_effect = lambda **kw: [{"key": "a/1/0"}]
+        issuer = self.make(ScopedIssuer, ["spider:a", "--flow-id=f1"])
+        list(issuer.get_new_inputs())
+        _args, kwargs = mocked_get_jobs.call_args
+        self.assertEqual(kwargs.get("has_tag"), ["FLOW_ID=f1"])
+
+    def test_no_flow_id_tag_when_flag_unset(self, mocked_get_jobs):
+        mocked_get_jobs.side_effect = lambda **kw: [{"key": "a/1/0"}]
+        issuer = self.make(RotatingSCIssuer, ["spider:a", "--flow-id=f1"])   # flag defaults False
+        list(issuer.get_new_inputs())
+        _args, kwargs = mocked_get_jobs.call_args
+        self.assertNotIn("has_tag", kwargs)
+
+    def test_no_scope_without_flow_id(self, mocked_get_jobs):
+        mocked_get_jobs.side_effect = lambda **kw: [{"key": "a/1/0"}]
+        issuer = self.make(ScopedIssuer, ["spider:a"])   # flag set but no flow_id -> reads everything
+        list(issuer.get_new_inputs())
+        _args, kwargs = mocked_get_jobs.call_args
+        self.assertNotIn("has_tag", kwargs)
+
+
+# --------------------------------------------------------------------------- #
 # Accumulate-then-merge (delivery pattern)                                     #
 # --------------------------------------------------------------------------- #
 
