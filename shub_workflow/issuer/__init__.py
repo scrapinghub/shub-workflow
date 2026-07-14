@@ -108,6 +108,12 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     # spider that emits records bundling several issuable objects be consumed without overriding
     # process_input(). None (default) => each raw record is processed as a single item.
     explode_input_items: Optional[str] = None
+    # If True (default), output is grouped by source: one output file per (slot, source), the source
+    # prefixed in the default filename. If False, all sources of a slot share a single output queue, so
+    # items pack into default_filesize-sized files regardless of source (one file per slot) and the source
+    # is dropped from the default filename. When False, the per-source "stopped spider" partial flush does
+    # not apply (a slot's batch flushes only at default_filesize or on close).
+    separate_output_by_source: bool = True
 
     def __init__(self):
         super().__init__()
@@ -193,23 +199,34 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         """
         return self.default_filesize
 
+    def output_source(self, item: ITEMTYPE) -> Source:
+        """The source bucket an item is queued and written under. By default the item's own source, so output
+        is grouped and named per source. When separate_output_by_source is False it returns an empty source,
+        collapsing all sources of a slot into a single queue (items pack into default_filesize files across
+        sources, and the source is dropped from the default filename)."""
+        if self.separate_output_by_source:
+            return item["source"]
+        return Source(SpiderName(""))
+
     def issue_item(self, item: ITEMTYPE):
         slot = self.get_output_slot_for_item(item)
         self.enqueue_item(item, slot)
         filesize = self.get_filesize_from_item(item)
-        if len(self.items_queue[slot][item["source"]]) >= filesize:
-            self.send_file(slot, item["source"])
+        source = self.output_source(item)
+        if len(self.items_queue[slot][source]) >= filesize:
+            self.send_file(slot, source)
 
     def enqueue_item(self, item: ITEMTYPE, slot: Union[Slot, None]):
         input_source: InputSource = item["input_source"]
         self.add_item_to_queue(item, slot)
-        self.pending_inputs_to_remove[input_source].add((slot, item["source"]))
+        self.pending_inputs_to_remove[input_source].add((slot, self.output_source(item)))
 
     def add_item_to_queue(self, item: ITEMTYPE, slot: Union[Slot, None]):
-        if item["id"] not in self.items_queue[slot][item["source"]] or "search_keywords" not in item:
-            self.items_queue[slot][item["source"]][item["id"]] = item
+        source = self.output_source(item)
+        if item["id"] not in self.items_queue[slot][source] or "search_keywords" not in item:
+            self.items_queue[slot][source][item["id"]] = item
         else:
-            self.items_queue[slot][item["source"]][item["id"]]["search_keywords"].update(item["search_keywords"])
+            self.items_queue[slot][source][item["id"]]["search_keywords"].update(item["search_keywords"])
 
     def write_items_file(self, items: List[ITEMTYPE], destfile: str) -> int:
         count = 0
@@ -225,7 +242,8 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         destname = datetime.utcnow().strftime("%Y%m%dT%H%M%S.%f")
         if self.input_slot is not None:
             destname = f"{destname}_{self.input_slot}"
-        destname = f"{source}_{destname}"
+        if source:
+            destname = f"{source}_{destname}"
 
         if output_slot is not None:
             destfile = os.path.join(self.output_folder, f"{output_slot}_{destname}.jl.gz")
@@ -239,9 +257,10 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
 
         count = self.write_items_file(list(self.items_queue[output_slot][source].values()), destfile)
         self.stats.inc_value("records/wrote", count)
-        self.stats.inc_value(f"records/{source}/wrote", count)
-        if output_slot is not None:
-            self.stats.inc_value(f"records/{output_slot}/{source}/wrote", count)
+        if source:
+            self.stats.inc_value(f"records/{source}/wrote", count)
+            if output_slot is not None:
+                self.stats.inc_value(f"records/{output_slot}/{source}/wrote", count)
         self.items_queue[output_slot][source] = {}
 
         for slots_sources in self.pending_inputs_to_remove.values():
@@ -386,7 +405,9 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         now = int(time.time())
         for slot, sources_items_dict in self.items_queue.items():
             for source in list(sources_items_dict.keys()):
-                if len(sources_items_dict[source]) > 0:
+                # The per-source stopped-spider partial flush only applies when output is grouped by source;
+                # with a single collapsed bucket a slot's batch flushes only at default_filesize or on close.
+                if self.separate_output_by_source and len(sources_items_dict[source]) > 0:
                     running_spiders = self.get_project_running_spiders(
                         canonical=True, crawlmanagers=("py:crawlmanager.py",)
                     )

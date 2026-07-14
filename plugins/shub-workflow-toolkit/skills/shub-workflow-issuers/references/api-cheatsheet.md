@@ -61,6 +61,7 @@ target matches many spiders a big-backlog source can't starve the others. No-op 
 | `output_folder` | *(required)* | where batch output files are written. |
 | `default_filesize` | `10_000` | items per output batch file. |
 | `parallel_outputs` | `1` | output slots; `>1` ⇒ items hash-routed by id (same id → same slot). |
+| `separate_output_by_source` | `True` | one output file per `(slot, source)`. `False` ⇒ all sources of a slot pack into `default_filesize` files (one file per slot, source dropped from the default filename; per-source stopped-spider flush disabled). |
 | `explode_input_items` | `None` | jmespath to a list **inside** each raw record; when set, `process_item()` runs once per selected object (one record → many items) instead of once per record. Avoids overriding `process_input` just to explode. |
 | `input_slot` / `output_slot` | `None` | pin this instance to one input / output slot. |
 | `dedupe` | `True` | bloom-filter de-duplication (set `False` for delivery). |

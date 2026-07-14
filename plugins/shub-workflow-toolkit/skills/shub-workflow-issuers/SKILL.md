@@ -125,7 +125,10 @@ of bottlenecking in one process.
 2. Pick the input subclass (file vs SC-job). It implements input discovery/reading/consumption; you
    normally just implement **`build_item_id(item)`** and set attributes.
 3. Set output: `output_folder` (required), `default_filesize`, and `parallel_outputs` (>1 for
-   hash-routed slots so N downstream issuers can each own a slot).
+   hash-routed slots so N downstream issuers can each own a slot). Output is grouped **per source** by
+   default (one file per `(slot, source)`); set `separate_output_by_source=False` to pack all sources
+   into `default_filesize`-sized files per slot instead (one file per slot, no source in the default
+   filename).
 4. Dedup: keep `dedupe=True`; for cross-run dedup set `LOAD_DELIVERED_IDS_DAYS` **and** call
    `load_last_outputs(...)` in `__init__`.
 5. Custom logic by overriding `process_item` (filter/transform — call `super()`); to **combine** an

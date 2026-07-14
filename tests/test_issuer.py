@@ -15,6 +15,7 @@ from shub_workflow.issuer import (
     IssuerItem,
     ItemId,
     InputSource,
+    Source,
 )
 
 
@@ -434,6 +435,46 @@ class ScopeInputToFlowIdTest(IssuerTestBase):
         list(issuer.get_new_inputs())
         _args, kwargs = mocked_get_jobs.call_args
         self.assertNotIn("has_tag", kwargs)
+
+
+# --------------------------------------------------------------------------- #
+# separate_output_by_source                                                    #
+# --------------------------------------------------------------------------- #
+
+
+class NoSeparateIssuer(RecordingSCIssuer):
+    set_item_source = False            # items already carry distinct sources
+    separate_output_by_source = False
+
+
+class SeparateIssuer(RecordingSCIssuer):
+    set_item_source = False            # keep the per-record source (default separation)
+
+
+@patch("shub_workflow.script.BaseScript.add_job_tags")
+class SeparateOutputBySourceTest(IssuerTestBase):
+    RECORDS = [{"url": "u1", "source": "s1"}, {"url": "u2", "source": "s2"}]
+
+    def test_collapses_all_sources_into_one_slot_bucket(self, _tags):
+        issuer = self.make(NoSeparateIssuer, ["spider:a"])
+        with patch("shub_workflow.script.BaseScript.get_job", return_value=FakeJob(self.RECORDS)):
+            issuer.process_input(InputSource("999/1/1"), sc_args())
+        buckets = issuer.items_queue[None]           # parallel_outputs=1 -> slot None
+        self.assertEqual(list(buckets.keys()), [""])  # single collapsed (empty) source bucket
+        self.assertEqual(sorted(i["url"] for i in buckets[""].values()), ["u1", "u2"])
+
+    def test_default_keeps_one_bucket_per_source(self, _tags):
+        issuer = self.make(SeparateIssuer, ["spider:a"])
+        with patch("shub_workflow.script.BaseScript.get_job", return_value=FakeJob(self.RECORDS)):
+            issuer.process_input(InputSource("999/1/1"), sc_args())
+        self.assertEqual(sorted(issuer.items_queue[None].keys()), ["s1", "s2"])
+
+    def test_default_filename_drops_source_when_collapsed(self, _tags):
+        issuer = self.make(NoSeparateIssuer, ["spider:a"])
+        collapsed = os.path.basename(issuer.compute_destination_filename(None, Source(SpiderName(""))))
+        sourced = os.path.basename(issuer.compute_destination_filename(None, Source(SpiderName("s1"))))
+        self.assertTrue(sourced.startswith("s1_"))
+        self.assertFalse(collapsed.startswith("s1_"))
 
 
 # --------------------------------------------------------------------------- #
