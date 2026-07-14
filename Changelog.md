@@ -172,3 +172,4 @@ Minor version changes:
 - 1.14.37 issuer: additional configuration flags and hooks
 - 1.14.38 issuer: explode items feature
 - 1.14.39 issuer: allow to target by flow id, as deprecated deliver base class
+- 1.14.40: issuers: allow to mix all sources in same ouput files
