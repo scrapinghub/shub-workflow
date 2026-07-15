@@ -515,6 +515,48 @@ class PersistItemsQueueOnDiskTest(IssuerTestBase):
 
 
 # --------------------------------------------------------------------------- #
+# Per-input consumption when flushing per input                                #
+# --------------------------------------------------------------------------- #
+
+
+@patch("shub_workflow.script.BaseScript.add_job_tags")
+class RemovePendingAfterEachInputTest(IssuerTestBase):
+    def _run_loop(self, issuer, jobs):
+        inputs = [(InputSource(k), sc_args(key=k)) for k in jobs]
+        with patch.object(issuer, "get_new_inputs", return_value=inputs), patch(
+            "shub_workflow.script.BaseScript.get_job",
+            side_effect=lambda jk: FakeJob(jobs[str(jk)], key=str(jk)),
+        ):
+            issuer._issuer_workflow_loop()
+
+    @staticmethod
+    def _consumed(mocked_add_job_tags, issuer):
+        return sorted(
+            c.args[0]
+            for c in mocked_add_job_tags.call_args_list
+            if len(c.args) >= 2 and c.args[1] == [issuer.CONSUMED_TAG]
+        )
+
+    def test_flush_on_each_input_consumes_each_job_exactly_once(self, mocked_add_job_tags):
+        issuer = self.make(PerJobFlushSCIssuer, ["spider:a"])
+        jobs = {"999/1/1": [{"url": "u1"}], "999/1/2": [{"url": "u2"}]}
+        self._run_loop(issuer, jobs)
+        # each job flushed then consumed once, right after its process_input — not doubled by the loop's
+        # no-items check (which would tag CONSUMED twice), and nothing left pending.
+        self.assertEqual(self._consumed(mocked_add_job_tags, issuer), ["999/1/1", "999/1/2"])
+        self.assertEqual(dict(issuer.pending_inputs_to_remove), {})
+
+    def test_no_per_input_consumption_without_flush(self, mocked_add_job_tags):
+        issuer = self.make(RecordingSCIssuer, ["spider:a"])   # flush_on_each_input=False
+        jobs = {"999/1/1": [{"url": "u1"}], "999/1/2": [{"url": "u2"}]}
+        self._run_loop(issuer, jobs)
+        # items stay queued (default_filesize not reached), so the jobs are not consumed per input; they
+        # remain pending for the end-of-loop sweep (unchanged behavior for non-flush issuers).
+        self.assertEqual(self._consumed(mocked_add_job_tags, issuer), [])
+        self.assertEqual(sorted(issuer.pending_inputs_to_remove), ["999/1/1", "999/1/2"])
+
+
+# --------------------------------------------------------------------------- #
 # Accumulate-then-merge (delivery pattern)                                     #
 # --------------------------------------------------------------------------- #
 

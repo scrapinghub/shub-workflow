@@ -316,6 +316,13 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         for iname in to_remove:
             self.pending_inputs_to_remove.pop(iname)
 
+    def _remove_pending_after_each_input(self) -> bool:
+        """Whether to sweep fully-flushed inputs (consuming them) after each processed input, instead of only
+        once per loop. Default False. Input subclasses that flush after every input override this so those
+        inputs are consumed as soon as their output is written (bounding re-processing if the job is killed
+        mid-loop). It is safe because an input is only swept once all its items have been flushed."""
+        return False
+
     @abc.abstractmethod
     def get_new_inputs(self) -> Iterable[Tuple[InputSource, PROCESS_INPUT_ARGS_TYPE]]:
         """
@@ -345,6 +352,11 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
                 new_inputs_count += 1
             if inputsrc not in self.pending_inputs_to_remove:  # input with no new items
                 self.remove_inputs([inputsrc])
+            elif self._remove_pending_after_each_input():
+                # its items were just flushed (e.g. flush_on_each_input), so consume it now rather than
+                # waiting for the end-of-loop sweep.
+                self._remove_pending()
+                self.upload_stats()  # so the stats of the flushed input are persisted even if the loop is cut short
             if new_inputs_count == self.max_inputs_per_loop:
                 break
         return new_inputs_count
@@ -623,3 +635,8 @@ class IssuerScriptWithSCJobInput(IssuerScript[ITEMTYPE, Tuple[JobDict, SpiderNam
         if self.flush_on_each_input:
             self.flush_files()
         return True
+
+    def _remove_pending_after_each_input(self) -> bool:
+        # when flushing per job, each job's items are fully written by the time process_input() returns, so
+        # the loop can consume it immediately instead of waiting for the end-of-loop sweep.
+        return self.flush_on_each_input
