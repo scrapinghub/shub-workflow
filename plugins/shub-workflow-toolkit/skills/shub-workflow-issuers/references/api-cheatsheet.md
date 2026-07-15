@@ -30,7 +30,7 @@ your fields and bind it: `class X(IssuerScriptWithFileSystemInput[MyItem])`.
 | Attribute | Default | Meaning |
 | --- | --- | --- |
 | `set_item_source` | `True` | stamp each item's `source` with the scanned spider's canonical name. Set `False` for a **secondary** spider whose items already carry their originating `source` (conserve it). |
-| `flush_on_each_input` | `False` | `flush_files()` at the end of each scanned job. Pair with a big `default_filesize` to keep all of a job's items in one output file. Each job is also **consumed (tagged `CONSUMED`) right after its flush** rather than at the end-of-loop sweep, so a mid-loop crash won't re-deliver already-written jobs. |
+| `flush_on_each_input` | `False` | `flush_files()` at the end of each scanned job. Pair with a big `default_filesize` to keep all of a job's items in one output file. Each job is also **consumed (tagged `CONSUMED`) right after its flush** rather than at the end-of-loop sweep, so a mid-loop crash won't re-deliver already-written jobs. Consuming an input also uploads stats immediately (see below), so a monitor still sees delivery stats for every delivered job even if the script is later killed. |
 | `scope_input_to_flow_id` | `False` | read only jobs tagged with this script's own `FLOW_ID` (from `--flow-id` / the workflow tag) — a graph-manager-scheduled script reads only its own workflow instance's jobs. No-op (warns) if no `flow_id`. |
 
 (To aggregate a scanned job's stats, mix in `SpiderStatsAggregatorMixin` and call
@@ -79,7 +79,10 @@ target matches many spiders a big-backlog source can't starve the others. No-op 
 
 `workflow_loop` → `get_new_inputs()` → per input `process_input()` → per record `process_item()` →
 (dedup) → `issue_item()` → enqueue per `(slot, source)` → `send_file()` when the queue hits filesize.
-`on_close` flushes remaining queues; an input is retired only after all its items are written.
+`on_close` flushes remaining queues; an input is retired only after all its items are written. Retiring
+inputs (`_remove_pending`) also **uploads stats at that moment** — consumption and stats persistence are
+coupled, so a monitor never ends up missing the stats of a job that was delivered but whose script was
+killed before the next periodic/close upload.
 
 ## Footguns
 

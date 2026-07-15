@@ -557,6 +557,32 @@ class RemovePendingAfterEachInputTest(IssuerTestBase):
 
 
 # --------------------------------------------------------------------------- #
+# _remove_pending uploads stats when it consumes inputs                        #
+# --------------------------------------------------------------------------- #
+
+
+@patch("shub_workflow.script.BaseScript.add_job_tags")
+class RemovePendingUploadsStatsTest(IssuerTestBase):
+    def test_uploads_stats_when_inputs_are_consumed(self, _tags):
+        issuer = self.make(RecordingSCIssuer, ["spider:a"])
+        issuer.pending_inputs_to_remove[InputSource("999/1/1")] = set()   # fully flushed -> ready to consume
+        with patch.object(issuer, "upload_stats") as mocked_upload, patch.object(issuer, "remove_inputs") as rm:
+            issuer._remove_pending()
+        rm.assert_called_once_with([InputSource("999/1/1")])
+        mocked_upload.assert_called_once()   # stats persisted together with the consumption
+        self.assertNotIn(InputSource("999/1/1"), issuer.pending_inputs_to_remove)
+
+    def test_does_not_upload_stats_when_nothing_is_consumed(self, _tags):
+        issuer = self.make(RecordingSCIssuer, ["spider:a"])
+        # still has un-flushed items -> not ready to consume
+        issuer.pending_inputs_to_remove[InputSource("999/1/1")] = {(None, Source(SpiderName("a")))}
+        with patch.object(issuer, "upload_stats") as mocked_upload:
+            issuer._remove_pending()
+        mocked_upload.assert_not_called()
+        self.assertIn(InputSource("999/1/1"), issuer.pending_inputs_to_remove)
+
+
+# --------------------------------------------------------------------------- #
 # Accumulate-then-merge (delivery pattern)                                     #
 # --------------------------------------------------------------------------- #
 

@@ -815,11 +815,16 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
                 break
             self.maybe_upload_stats()
 
+    def upload_stats(self):
+        # reset the throttle window on every upload — including explicit ones (e.g. an issuer uploading on
+        # input consumption) — so maybe_upload_stats() won't re-upload again until stats_interval has elapsed
+        # since the last actual upload.
+        super().upload_stats()
+        self.__last_stats_upload = time.time()
+
     def maybe_upload_stats(self):
-        now = time.time()
-        if self.__last_stats_upload is None or now - self.__last_stats_upload >= self.stats_interval:
+        if self.__last_stats_upload is None or time.time() - self.__last_stats_upload >= self.stats_interval:
             self.upload_stats()
-            self.__last_stats_upload = now
 
     def _on_start(self):
         self.on_start()

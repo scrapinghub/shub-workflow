@@ -315,6 +315,11 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         self.remove_inputs(to_remove)
         for iname in to_remove:
             self.pending_inputs_to_remove.pop(iname)
+        if to_remove:
+            # Persist stats now, coupled with consumption: a consumed input is not reprocessed, so if the job
+            # is later killed before its next periodic/close stats upload, the delivery stats of these inputs
+            # would otherwise be lost — leaving a monitor with no stats for jobs that were in fact delivered.
+            self.upload_stats()
 
     def _remove_pending_after_each_input(self) -> bool:
         """Whether to sweep fully-flushed inputs (consuming them) after each processed input, instead of only
@@ -353,10 +358,9 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
             if inputsrc not in self.pending_inputs_to_remove:  # input with no new items
                 self.remove_inputs([inputsrc])
             elif self._remove_pending_after_each_input():
-                # its items were just flushed (e.g. flush_on_each_input), so consume it now rather than
-                # waiting for the end-of-loop sweep.
+                # its items were just flushed (e.g. flush_on_each_input), so consume it now (which also
+                # uploads stats) rather than waiting for the end-of-loop sweep.
                 self._remove_pending()
-                self.upload_stats()  # so the stats of the flushed input are persisted even if the loop is cut short
             if new_inputs_count == self.max_inputs_per_loop:
                 break
         return new_inputs_count
