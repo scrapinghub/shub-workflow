@@ -62,6 +62,7 @@ target matches many spiders a big-backlog source can't starve the others. No-op 
 | `default_filesize` | `10_000` | items per output batch file. |
 | `parallel_outputs` | `1` | output slots; `>1` ⇒ items hash-routed by id (same id → same slot). |
 | `separate_output_by_source` | `True` | one output file per `(slot, source)`. `False` ⇒ all sources of a slot pack into `default_filesize` files (one file per slot, source dropped from the default filename; per-source stopped-spider flush disabled). |
+| `persist_items_queue_on_disk` | `False` | back each output-queue bucket with an on-disk `SqliteDict` instead of an in-memory dict — low memory (items streamed to the output file), slower. Use for large items whose batch won't fit in RAM (e.g. metadata-heavy deliveries). |
 | `explode_input_items` | `None` | jmespath to a list **inside** each raw record; when set, `process_item()` runs once per selected object (one record → many items) instead of once per record. Avoids overriding `process_input` just to explode. |
 | `input_slot` / `output_slot` | `None` | pin this instance to one input / output slot. |
 | `dedupe` | `True` | bloom-filter de-duplication (set `False` for delivery). |

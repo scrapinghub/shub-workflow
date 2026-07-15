@@ -128,7 +128,9 @@ of bottlenecking in one process.
    hash-routed slots so N downstream issuers can each own a slot). Output is grouped **per source** by
    default (one file per `(slot, source)`); set `separate_output_by_source=False` to pack all sources
    into `default_filesize`-sized files per slot instead (one file per slot, no source in the default
-   filename).
+   filename). The output queue is an in-memory dict by default; set `persist_items_queue_on_disk=True`
+   to back it with an on-disk `SqliteDict` (much lower memory, slower) when items are large enough that a
+   batch would not fit in RAM — e.g. a delivery of records carrying heavy metadata.
 4. Dedup: keep `dedupe=True`; for cross-run dedup set `LOAD_DELIVERED_IDS_DAYS` **and** call
    `load_last_outputs(...)` in `__init__`.
 5. Custom logic by overriding `process_item` (filter/transform — call `super()`); to **combine** an

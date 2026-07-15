@@ -232,9 +232,13 @@ class IssuerTestBase(TestCase):
         self._cwd = os.getcwd()
         self._tmp = tempfile.mkdtemp()
         os.chdir(self._tmp)   # keep the livedup.bloom file out of the repo, isolated per test
+        # route tempfile (e.g. the on-disk SqliteDict output queue) into the per-test tmpdir so it's cleaned up
+        self._old_tempdir = tempfile.tempdir
+        tempfile.tempdir = self._tmp
 
     def tearDown(self):
         os.chdir(self._cwd)
+        tempfile.tempdir = self._old_tempdir
         shutil.rmtree(self._tmp, ignore_errors=True)
 
     def make(self, cls, argv):
@@ -475,6 +479,39 @@ class SeparateOutputBySourceTest(IssuerTestBase):
         sourced = os.path.basename(issuer.compute_destination_filename(None, Source(SpiderName("s1"))))
         self.assertTrue(sourced.startswith("s1_"))
         self.assertFalse(collapsed.startswith("s1_"))
+
+
+# --------------------------------------------------------------------------- #
+# persist_items_queue_on_disk                                                  #
+# --------------------------------------------------------------------------- #
+
+
+class DiskQueueIssuer(RecordingSCIssuer):
+    persist_items_queue_on_disk = True
+    flush_on_each_input = True
+
+
+@patch("shub_workflow.script.BaseScript.add_job_tags")
+class PersistItemsQueueOnDiskTest(IssuerTestBase):
+    def test_bucket_is_sqlitedict_and_items_flush_streamed(self, _tags):
+        from sqlitedict import SqliteDict
+
+        issuer = self.make(DiskQueueIssuer, ["spider:a"])
+        records = [{"url": "u1"}, {"url": "u2"}, {"url": "u1"}]   # u1 repeated -> deduped
+        with patch("shub_workflow.script.BaseScript.get_job", return_value=FakeJob(records)):
+            issuer.process_input(InputSource("999/1/1"), sc_args(canonical="a"))
+        buckets = issuer.items_queue[None]
+        self.assertEqual(list(buckets.keys()), ["a"])
+        self.assertIsInstance(buckets["a"], SqliteDict)     # on-disk bucket, not a plain dict
+        # the two unique items were streamed out (u1 deduped), and the bucket was cleared after flushing
+        self.assertEqual(sum(len(items) for _, items in issuer.written), 2)
+        self.assertEqual(len(buckets["a"]), 0)
+
+    def test_default_bucket_is_plain_dict(self, _tags):
+        issuer = self.make(RecordingSCIssuer, ["spider:a"])
+        with patch("shub_workflow.script.BaseScript.get_job", return_value=FakeJob([{"url": "u1"}])):
+            issuer.process_input(InputSource("999/1/1"), sc_args(canonical="a"))
+        self.assertIsInstance(issuer.items_queue[None]["a"], dict)
 
 
 # --------------------------------------------------------------------------- #

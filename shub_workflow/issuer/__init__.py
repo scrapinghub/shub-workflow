@@ -6,6 +6,7 @@ import time
 import gzip
 import hashlib
 import logging
+import tempfile
 from datetime import datetime, timedelta
 from itertools import cycle
 from collections import defaultdict, Counter
@@ -24,6 +25,7 @@ from typing import (
     Union,
     Type,
     Mapping,
+    MutableMapping,
     cast,
 )
 
@@ -31,6 +33,7 @@ import jmespath
 import dateparser
 from typing_extensions import NotRequired
 from bloom_filter2 import BloomFilter
+from sqlitedict import SqliteDict
 from scrapy import Spider
 from scrapinghub.client.jobs import Job
 
@@ -114,6 +117,12 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     # is dropped from the default filename. When False, the per-source "stopped spider" partial flush does
     # not apply (a slot's batch flushes only at default_filesize or on close).
     separate_output_by_source: bool = True
+    # By default each output queue bucket (items_queue[slot][source]) is an in-memory dict — fast, but it holds
+    # a whole batch in RAM until flushed. Set to True to back each bucket with an on-disk SqliteDict instead:
+    # much lower memory (items live on disk, streamed to the output file at flush), at the cost of speed. Use
+    # it when items are large (e.g. a delivery of records carrying heavy metadata) and a batch would not fit
+    # in memory. Default False (keep the fast in-memory dict).
+    persist_items_queue_on_disk: bool = False
 
     def __init__(self):
         super().__init__()
@@ -124,8 +133,8 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         )
         if self.dedupe:
             LOGGER.info(f"Max capacity: {self.MAX_ITEMS}")
-        self.items_queue: Dict[Union[Slot, None], Dict[Source, Dict[ItemId, ITEMTYPE]]] = defaultdict(
-            lambda: defaultdict(dict)
+        self.items_queue: Dict[Union[Slot, None], Dict[Source, MutableMapping[ItemId, ITEMTYPE]]] = defaultdict(
+            lambda: defaultdict(self._new_items_bucket)
         )
         self.pending_inputs_to_remove: Dict[InputSource, Set[Tuple[Union[Slot, None], Source]]] = defaultdict(set)
         self.processed_count = 0
@@ -208,6 +217,13 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
             return item["source"]
         return Source(SpiderName(""))
 
+    def _new_items_bucket(self) -> MutableMapping[ItemId, ITEMTYPE]:
+        # a per-(slot, source) output queue bucket: an on-disk SqliteDict when persist_items_queue_on_disk is
+        # set (low memory), otherwise a plain in-memory dict (fast; the default).
+        if self.persist_items_queue_on_disk:
+            return SqliteDict(tempfile.mktemp(), flag="n", autocommit=True)
+        return {}
+
     def issue_item(self, item: ITEMTYPE):
         slot = self.get_output_slot_for_item(item)
         self.enqueue_item(item, slot)
@@ -222,13 +238,15 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         self.pending_inputs_to_remove[input_source].add((slot, self.output_source(item)))
 
     def add_item_to_queue(self, item: ITEMTYPE, slot: Union[Slot, None]):
-        source = self.output_source(item)
-        if item["id"] not in self.items_queue[slot][source] or "search_keywords" not in item:
-            self.items_queue[slot][source][item["id"]] = item
+        bucket = self.items_queue[slot][self.output_source(item)]
+        if item["id"] not in bucket or "search_keywords" not in item:
+            bucket[item["id"]] = item
         else:
-            self.items_queue[slot][source][item["id"]]["search_keywords"].update(item["search_keywords"])
+            merged = bucket[item["id"]]
+            merged["search_keywords"].update(item["search_keywords"])
+            bucket[item["id"]] = merged  # write back so an on-disk (SqliteDict) bucket persists the merge
 
-    def write_items_file(self, items: List[ITEMTYPE], destfile: str) -> int:
+    def write_items_file(self, items: Iterable[ITEMTYPE], destfile: str) -> int:
         count = 0
         with gzip.open("itemsout.jl.gz", "wt") as fz:
             for im in items:
@@ -255,13 +273,16 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     def send_file(self, output_slot: Union[Slot, None], source: Source):
         destfile = self.compute_destination_filename(output_slot, source)
 
-        count = self.write_items_file(list(self.items_queue[output_slot][source].values()), destfile)
+        bucket = self.items_queue[output_slot][source]
+        # stream the bucket's values into the output file (do not materialize them into a list) so an on-disk
+        # bucket stays memory-bounded at flush time too.
+        count = self.write_items_file(bucket.values(), destfile)
         self.stats.inc_value("records/wrote", count)
         if source:
             self.stats.inc_value(f"records/{source}/wrote", count)
             if output_slot is not None:
                 self.stats.inc_value(f"records/{output_slot}/{source}/wrote", count)
-        self.items_queue[output_slot][source] = {}
+        bucket.clear()  # empties the dict, or the on-disk SqliteDict (its file is reused for the next batch)
 
         for slots_sources in self.pending_inputs_to_remove.values():
             slots_sources.discard((output_slot, source))
@@ -271,6 +292,17 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         self.seen.close()
         self.flush_files()
         self._remove_pending()
+        if self.persist_items_queue_on_disk:
+            # close and delete the temporary SqliteDict files backing the output queue buckets.
+            for sources in self.items_queue.values():
+                for bucket in sources.values():
+                    disk_bucket = cast(Any, bucket)   # a SqliteDict when persist_items_queue_on_disk is set
+                    fname = disk_bucket.filename
+                    disk_bucket.close()
+                    try:
+                        os.remove(fname)
+                    except OSError:
+                        pass
 
     def flush_files(self):
         for slot, sources in self.items_queue.items():
