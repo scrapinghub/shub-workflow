@@ -410,7 +410,8 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
                                         break
                                 else:
                                     continue
-                                self.stats.inc_value(f"urls/seen/{rec['source']}")
+                                if "source" in rec:
+                                    self.stats.inc_value(f"urls/seen/{rec['source']}")
                                 self.stats.inc_value("urls/seen")
                                 count += 1
                         self.fshelper.rm_file(basename)
