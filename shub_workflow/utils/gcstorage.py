@@ -1,9 +1,8 @@
 import os
 import re
 import logging
+from importlib.resources import files
 from typing import Generator, List
-
-from pkg_resources import resource_filename
 
 from google.cloud import storage
 
@@ -14,7 +13,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def get_credfile_path(module, resource, check_exists=True):
-    credfile = resource_filename(module, resource)
+    credfile = str(files(module).joinpath(resource))
     if not check_exists or os.path.exists(credfile):
         return credfile
 
