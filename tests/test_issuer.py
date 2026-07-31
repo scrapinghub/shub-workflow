@@ -231,14 +231,11 @@ class IssuerTestBase(TestCase):
             self.addCleanup(target.stop)
         self._cwd = os.getcwd()
         self._tmp = tempfile.mkdtemp()
-        os.chdir(self._tmp)   # keep the livedup.bloom file out of the repo, isolated per test
-        # route tempfile (e.g. the on-disk SqliteDict output queue) into the per-test tmpdir so it's cleaned up
-        self._old_tempdir = tempfile.tempdir
-        tempfile.tempdir = self._tmp
+        os.chdir(self._tmp)   # keep the livedup.bloom file and the on-disk SqliteDict queue out of the repo,
+        #                       isolated per test (the queue is created in cwd, cleaned by tearDown's rmtree)
 
     def tearDown(self):
         os.chdir(self._cwd)
-        tempfile.tempdir = self._old_tempdir
         shutil.rmtree(self._tmp, ignore_errors=True)
 
     def make(self, cls, argv):
@@ -512,6 +509,28 @@ class PersistItemsQueueOnDiskTest(IssuerTestBase):
         with patch("shub_workflow.script.BaseScript.get_job", return_value=FakeJob([{"url": "u1"}])):
             issuer.process_input(InputSource("999/1/1"), sc_args(canonical="a"))
         self.assertIsInstance(issuer.items_queue[None]["a"], dict)
+
+    def test_bucket_file_lives_in_cwd_not_system_tempdir(self, _tags):
+        # regression: the sqlite file must be on a real filesystem (cwd), NOT tempfile.gettempdir() (/tmp),
+        # which on Scrapy Cloud is a RAM-backed tmpfs where a large queue is OOM-killed (counted as memory).
+        issuer = self.make(DiskQueueIssuer, ["spider:a"])
+        with patch("shub_workflow.script.BaseScript.get_job", return_value=FakeJob([{"url": "u1"}])):
+            issuer.process_input(InputSource("999/1/1"), sc_args(canonical="a"))
+        bucket = issuer.items_queue[None]["a"]
+        self.assertEqual(os.path.dirname(bucket.filename), os.getcwd())
+        self.assertNotEqual(os.path.dirname(bucket.filename), tempfile.gettempdir())
+
+    def test_persist_items_queue_dir_override(self, _tags):
+        subdir = os.path.join(self._tmp, "queuedir")
+        os.makedirs(subdir)
+
+        class DirIssuer(DiskQueueIssuer):
+            persist_items_queue_dir = subdir
+
+        issuer = self.make(DirIssuer, ["spider:a"])
+        with patch("shub_workflow.script.BaseScript.get_job", return_value=FakeJob([{"url": "u1"}])):
+            issuer.process_input(InputSource("999/1/1"), sc_args(canonical="a"))
+        self.assertEqual(os.path.dirname(issuer.items_queue[None]["a"].filename), subdir)
 
 
 # --------------------------------------------------------------------------- #

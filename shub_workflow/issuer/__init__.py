@@ -123,6 +123,11 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     # it when items are large (e.g. a delivery of records carrying heavy metadata) and a batch would not fit
     # in memory. Default False (keep the fast in-memory dict).
     persist_items_queue_on_disk: bool = False
+    # Directory for the on-disk SqliteDict files used when persist_items_queue_on_disk is set. Defaults to the
+    # current working directory. IMPORTANT: it MUST be a real filesystem, never a tmpfs such as /tmp: on Scrapy
+    # Cloud /tmp is RAM-backed, so a SqliteDict placed there is counted against the container memory and gets
+    # OOM-killed, defeating the whole purpose. That is why we do NOT use tempfile.mktemp()'s default location.
+    persist_items_queue_dir: Optional[str] = None
 
     def __init__(self):
         super().__init__()
@@ -221,7 +226,10 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         # a per-(slot, source) output queue bucket: an on-disk SqliteDict when persist_items_queue_on_disk is
         # set (low memory), otherwise a plain in-memory dict (fast; the default).
         if self.persist_items_queue_on_disk:
-            return SqliteDict(tempfile.mktemp(), flag="n", autocommit=True)
+            # put the sqlite file on a real filesystem (cwd by default), NOT tempfile's default /tmp, which on
+            # Scrapy Cloud is a RAM-backed tmpfs (a large queue there is counted as memory and OOM-killed).
+            directory = self.persist_items_queue_dir or os.getcwd()
+            return SqliteDict(tempfile.mktemp(dir=directory), flag="n", autocommit=True)
         return {}
 
     def issue_item(self, item: ITEMTYPE):
