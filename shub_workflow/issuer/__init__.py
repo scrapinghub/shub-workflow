@@ -26,6 +26,7 @@ from typing import (
     Type,
     Mapping,
     MutableMapping,
+    Iterator,
     cast,
 )
 
@@ -124,10 +125,15 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     # in memory. Default False (keep the fast in-memory dict).
     persist_items_queue_on_disk: bool = False
     # Directory for the on-disk SqliteDict files used when persist_items_queue_on_disk is set. Defaults to the
-    # current working directory. IMPORTANT: it MUST be a real filesystem, never a tmpfs such as /tmp: on Scrapy
-    # Cloud /tmp is RAM-backed, so a SqliteDict placed there is counted against the container memory and gets
-    # OOM-killed, defeating the whole purpose. That is why we do NOT use tempfile.mktemp()'s default location.
+    # current working directory instead of tempfile's default /tmp, so the queue lands on the same filesystem
+    # as the job's other temporary files. Point it elsewhere when a batch needs more room than /tmp (or the
+    # cwd device) has.
     persist_items_queue_dir: Optional[str] = None
+    # How many items to read at a time from an on-disk output queue bucket while writing the output file (see
+    # _iter_bucket_values: sqlitedict's own iteration would hold the WHOLE batch in memory). Peak memory at
+    # flush time is roughly this many items, so keep it small when items are big: 100 items of 100 KB ~ 10 MB.
+    # Only relevant with persist_items_queue_on_disk.
+    items_queue_read_chunk_size: int = 100
 
     def __init__(self):
         super().__init__()
@@ -226,11 +232,39 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         # a per-(slot, source) output queue bucket: an on-disk SqliteDict when persist_items_queue_on_disk is
         # set (low memory), otherwise a plain in-memory dict (fast; the default).
         if self.persist_items_queue_on_disk:
-            # put the sqlite file on a real filesystem (cwd by default), NOT tempfile's default /tmp, which on
-            # Scrapy Cloud is a RAM-backed tmpfs (a large queue there is counted as memory and OOM-killed).
+            # keep the sqlite file in cwd by default rather than tempfile's default /tmp (see
+            # persist_items_queue_dir).
             directory = self.persist_items_queue_dir or os.getcwd()
             return SqliteDict(tempfile.mktemp(dir=directory), flag="n", autocommit=True)
         return {}
+
+    def _iter_bucket_values(self, bucket: MutableMapping[ItemId, ITEMTYPE]) -> Iterator[ITEMTYPE]:
+        """Iterate over an output queue bucket's items with bounded memory.
+
+        NEVER iterate an on-disk bucket through sqlitedict's own values()/items()/keys(): those are not lazy.
+        Each hands one SELECT over the whole table to sqlitedict's writer thread, which pushes every matching
+        row into an UNBOUNDED Queue as fast as sqlite yields them, with no back-pressure from the consumer
+        (its select() docstring states it outright: "the entire result will be in memory"). Iterating that
+        way holds the entire batch in RAM -- precisely what the on-disk queue exists to avoid, and what
+        OOM-killed big deliveries even though the items really were on disk.
+
+        So read an on-disk bucket in chunks, keyset-paginated by rowid, holding at most
+        items_queue_read_chunk_size items at a time.
+        """
+        if not isinstance(bucket, SqliteDict):
+            # a plain in-memory dict: its values are resident anyway and its iteration is genuinely lazy.
+            yield from bucket.values()
+            return
+        get_chunk = 'SELECT rowid, value FROM "%s" WHERE rowid > ? ORDER BY rowid LIMIT ?' % bucket.tablename
+        last_rowid = 0
+        while True:
+            # list() materializes one chunk (bounded by the LIMIT), not the whole table.
+            rows = list(bucket.conn.select(get_chunk, (last_rowid, self.items_queue_read_chunk_size)))
+            if not rows:
+                return
+            for _rowid, value in rows:
+                yield cast(ITEMTYPE, bucket.decode(value))
+            last_rowid = rows[-1][0]   # keyset pagination: resume after the last row read
 
     def issue_item(self, item: ITEMTYPE):
         slot = self.get_output_slot_for_item(item)
@@ -282,9 +316,9 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         destfile = self.compute_destination_filename(output_slot, source)
 
         bucket = self.items_queue[output_slot][source]
-        # stream the bucket's values into the output file (do not materialize them into a list) so an on-disk
-        # bucket stays memory-bounded at flush time too.
-        count = self.write_items_file(bucket.values(), destfile)
+        # stream the bucket's items into the output file in bounded chunks (never bucket.values(), which would
+        # pull the whole batch into memory -- see _iter_bucket_values).
+        count = self.write_items_file(self._iter_bucket_values(bucket), destfile)
         self.stats.inc_value("records/wrote", count)
         if source:
             self.stats.inc_value(f"records/{source}/wrote", count)
@@ -452,7 +486,9 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
             total_pending = 0
             for slot, sources_items_dict in self.items_queue.items():
                 for source, items_dict in sources_items_dict.items():
-                    pending_for_source = len(items_dict.keys())
+                    # len(items_dict), never len(items_dict.keys()): on an on-disk bucket keys() is a generator
+                    # (no len()), and it would read the whole table just to count it. len() is a COUNT(*).
+                    pending_for_source = len(items_dict)
                     LOGGER.info(f"'{slot}/{source}' urls pending to be wrote: {pending_for_source}")
                     total_pending += pending_for_source
             LOGGER.info(f"Total urls pending to be wrote: {total_pending}")

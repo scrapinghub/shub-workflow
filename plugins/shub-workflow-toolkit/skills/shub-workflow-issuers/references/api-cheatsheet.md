@@ -62,7 +62,9 @@ target matches many spiders a big-backlog source can't starve the others. No-op 
 | `default_filesize` | `10_000` | items per output batch file. |
 | `parallel_outputs` | `1` | output slots; `>1` ⇒ items hash-routed by id (same id → same slot). |
 | `separate_output_by_source` | `True` | one output file per `(slot, source)`. `False` ⇒ all sources of a slot pack into `default_filesize` files (one file per slot, source dropped from the default filename; per-source stopped-spider flush disabled). |
-| `persist_items_queue_on_disk` | `False` | back each output-queue bucket with an on-disk `SqliteDict` instead of an in-memory dict — low memory (items streamed to the output file), slower. Use for large items whose batch won't fit in RAM (e.g. metadata-heavy deliveries). |
+| `persist_items_queue_on_disk` | `False` | back each output-queue bucket with an on-disk `SqliteDict` instead of an in-memory dict — low memory (items read from disk in chunks and streamed to the output file), slower. Use for large items whose batch won't fit in RAM (e.g. metadata-heavy deliveries). |
+| `persist_items_queue_dir` | `None` (cwd) | directory for the `persist_items_queue_on_disk` sqlite files. Defaults to cwd (rather than `tempfile`'s default `/tmp`), so a big batch doesn't depend on how much room `/tmp` has. |
+| `items_queue_read_chunk_size` | `100` | items read at a time from an on-disk bucket when writing the output file; peak flush memory ≈ this × item size. Lower it for very big items. No effect without `persist_items_queue_on_disk`. |
 | `explode_input_items` | `None` | jmespath to a list **inside** each raw record; when set, `process_item()` runs once per selected object (one record → many items) instead of once per record. Avoids overriding `process_input` just to explode. |
 | `input_slot` / `output_slot` | `None` | pin this instance to one input / output slot. |
 | `dedupe` | `True` | bloom-filter de-duplication (set `False` for delivery). |
@@ -92,6 +94,22 @@ killed before the next periodic/close upload.
 - Setting `LOAD_DELIVERED_IDS_DAYS` without calling `load_last_outputs()` in `__init__` raises in
   `on_start()`.
 - Launch is synchronous: `Script().run()` (issuers are not async-launched).
+- **The output queue buffers a whole batch.** An issuer accumulates a `(slot, source)` batch until it
+  hits `default_filesize` (or, with `flush_on_each_input`, the end of the input). For big items × big
+  batches (e.g. a metadata-heavy delivery, `flush_on_each_input=True` + a huge `default_filesize`) that
+  batch can exceed the container memory → `close_reason: "killed by oom"`. Remedies: shrink each item,
+  lower `default_filesize`, or set `persist_items_queue_on_disk=True` to keep the batch on disk.
+- **NEVER iterate an on-disk bucket via `sqlitedict`'s `values()` / `items()` / `keys()`.** They look
+  lazy but are not: each hands one whole-table `SELECT` to sqlitedict's writer thread, which pushes
+  every row into an **unbounded** in-memory `Queue` with no back-pressure from the consumer — its own
+  `select()` docstring says "the entire result will be in memory". So iterating a disk-backed batch that
+  way holds all of it in RAM, defeating `persist_items_queue_on_disk` entirely and OOM-killing the job
+  (measured: a 96 MB batch of 50 KB items → +80 MB resident via `values()`, +0 MB chunked). Read in
+  chunks instead — `_iter_bucket_values()` does this, keyset-paginated by `rowid`, bounded by
+  `items_queue_read_chunk_size`; use it for any new bucket iteration.
+- Relatedly, count with `len(bucket)` (a `COUNT(*)`), **never** `len(bucket.keys())`: on an on-disk
+  bucket `keys()` is a generator, so that raises `TypeError` — and it would read the whole table just to
+  count it.
 
 ## Accumulate-then-merge (any issuer)
 

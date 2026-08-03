@@ -129,8 +129,12 @@ of bottlenecking in one process.
    default (one file per `(slot, source)`); set `separate_output_by_source=False` to pack all sources
    into `default_filesize`-sized files per slot instead (one file per slot, no source in the default
    filename). The output queue is an in-memory dict by default; set `persist_items_queue_on_disk=True`
-   to back it with an on-disk `SqliteDict` (much lower memory, slower) when items are large enough that a
-   batch would not fit in RAM — e.g. a delivery of records carrying heavy metadata.
+   to back it with an on-disk `SqliteDict` (much lower memory, slower) when items are large enough that
+   a batch would not fit in RAM — e.g. a delivery of records carrying heavy metadata.
+   `persist_items_queue_dir` chooses where that sqlite file goes (default: cwd), and
+   `items_queue_read_chunk_size` (default `100`) caps how many items are held while writing the output
+   file. **Never iterate a bucket with `sqlitedict`'s own `values()`/`items()`/`keys()`** — see the
+   footgun below.
 4. Dedup: keep `dedupe=True`; for cross-run dedup set `LOAD_DELIVERED_IDS_DAYS` **and** call
    `load_last_outputs(...)` in `__init__`.
 5. Custom logic by overriding `process_item` (filter/transform — call `super()`); to **combine** an

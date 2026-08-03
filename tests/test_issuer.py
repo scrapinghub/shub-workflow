@@ -488,6 +488,17 @@ class DiskQueueIssuer(RecordingSCIssuer):
     flush_on_each_input = True
 
 
+class DiskQueueChunkedIssuer(DiskQueueIssuer):
+    items_queue_read_chunk_size = 2
+
+
+class DiskQueueNoFlushIssuer(RecordingSCIssuer):
+    """On-disk queue that keeps its items queued (no per-input flush, batch far from default_filesize)."""
+
+    persist_items_queue_on_disk = True
+    default_filesize = 1000
+
+
 @patch("shub_workflow.script.BaseScript.add_job_tags")
 class PersistItemsQueueOnDiskTest(IssuerTestBase):
     def test_bucket_is_sqlitedict_and_items_flush_streamed(self, _tags):
@@ -511,14 +522,70 @@ class PersistItemsQueueOnDiskTest(IssuerTestBase):
         self.assertIsInstance(issuer.items_queue[None]["a"], dict)
 
     def test_bucket_file_lives_in_cwd_not_system_tempdir(self, _tags):
-        # regression: the sqlite file must be on a real filesystem (cwd), NOT tempfile.gettempdir() (/tmp),
-        # which on Scrapy Cloud is a RAM-backed tmpfs where a large queue is OOM-killed (counted as memory).
+        # the sqlite file goes to cwd (alongside the job's other temporary files) rather than
+        # tempfile.gettempdir(), so a big batch does not depend on how much room /tmp happens to have.
         issuer = self.make(DiskQueueIssuer, ["spider:a"])
         with patch("shub_workflow.script.BaseScript.get_job", return_value=FakeJob([{"url": "u1"}])):
             issuer.process_input(InputSource("999/1/1"), sc_args(canonical="a"))
         bucket = issuer.items_queue[None]["a"]
         self.assertEqual(os.path.dirname(bucket.filename), os.getcwd())
         self.assertNotEqual(os.path.dirname(bucket.filename), tempfile.gettempdir())
+
+    def test_disk_bucket_is_read_in_bounded_chunks(self, _tags):
+        # regression: sqlitedict's values()/items()/keys() are NOT lazy -- each hands one whole-table SELECT to
+        # its writer thread, which pushes every row into an unbounded in-memory Queue ("the entire result will
+        # be in memory", per its own docstring). That held a whole batch in RAM and OOM-killed big deliveries
+        # even though the items were on disk. The flush must page through the bucket instead, keeping at most
+        # items_queue_read_chunk_size items resident.
+        from sqlitedict import SqliteDict, SqliteMultithread
+
+        issuer = self.make(DiskQueueChunkedIssuer, ["spider:a"])
+        records = [{"url": f"u{i}"} for i in range(5)]
+        selects: List = []
+        real_select = SqliteMultithread.select
+
+        def spy_select(self, req, arg=None):
+            selects.append((req, arg))
+            return real_select(self, req, arg)
+
+        def no_whole_table_iteration(*args, **kwargs):
+            raise AssertionError("sqlitedict whole-table iteration must not be used: it buffers it all in RAM")
+
+        with patch.object(SqliteMultithread, "select", spy_select), patch.object(
+            SqliteDict, "itervalues", no_whole_table_iteration
+        ), patch.object(SqliteDict, "iteritems", no_whole_table_iteration), patch.object(
+            SqliteDict, "iterkeys", no_whole_table_iteration
+        ), patch(
+            "shub_workflow.script.BaseScript.get_job", return_value=FakeJob(records)
+        ):
+            issuer.process_input(InputSource("999/1/1"), sc_args(canonical="a"))
+
+        # every item was written, in insertion (rowid) order, across the paged reads
+        self.assertEqual([i["url"] for _dest, items in issuer.written for i in items], [f"u{i}" for i in range(5)])
+        # each paged read asked for at most items_queue_read_chunk_size rows: 5 items / 2 = 3 non-empty chunks
+        # plus the final empty one that ends the loop.
+        chunked = [(req, arg) for req, arg in selects if "LIMIT" in req]
+        self.assertEqual(len(chunked), 4)
+        self.assertTrue(all(arg[1] == DiskQueueChunkedIssuer.items_queue_read_chunk_size for _req, arg in chunked))
+
+    def test_pending_count_of_disk_bucket_does_not_raise(self, _tags):
+        # regression: the no-new-inputs branch counted pending items with len(bucket.keys()), but on an on-disk
+        # bucket keys() is a generator -> TypeError (and counting that way would read the whole table). Only
+        # reachable for an issuer that actually loops (loop_mode), which is why it stayed latent.
+        issuer = self.make(DiskQueueNoFlushIssuer, ["spider:a"])
+        with patch(
+            "shub_workflow.script.BaseScript.get_job", return_value=FakeJob([{"url": "u1"}, {"url": "u2"}])
+        ):
+            issuer.process_input(InputSource("999/1/1"), sc_args(canonical="a"))
+        self.assertEqual(len(issuer.items_queue[None]["a"]), 2)   # queued on disk, not flushed yet
+
+        with patch("shub_workflow.script.BaseScript.get_jobs", return_value=[]), patch(
+            "shub_workflow.script.BaseScript.get_project_running_spiders", return_value={SpiderName("a")}
+        ):
+            issuer.workflow_loop()
+
+        self.assertEqual(issuer.written, [])                      # source still running -> nothing flushed
+        self.assertEqual(len(issuer.items_queue[None]["a"]), 2)   # and the bucket is untouched
 
     def test_persist_items_queue_dir_override(self, _tags):
         subdir = os.path.join(self._tmp, "queuedir")
