@@ -41,6 +41,7 @@ BASE_TARGET_SPIDER_STATS = (
     "spider_exceptions/",
     "scrapy-zyte-api/429",
     "zyte_api_proxy/response/status/429",
+    "scrapy-zyte-api/status_codes/",
 )
 
 
