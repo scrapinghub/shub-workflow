@@ -7,7 +7,11 @@ description: >-
   post-crawl processing pipeline up to delivery. Built on shub_workflow.issuer (IssuerScript /
   IssuerScriptWithFileSystemInput / IssuerScriptWithSCJobInput) over BaseLoopScript. Use for
   consumers, deduplicators, filters, balancers, reducers, and issuer-based delivery scripts — and
-  when migrating an old delivery (BaseDeliverScript) to an issuer.
+  when migrating an old delivery (BaseDeliverScript) to an issuer. Also use when **reading the stats
+  an issuer job reports** from outside it (urls/seen/<source>, urls/issued/<source>,
+  urls/dupesrate/<source>, urls/dupes, records/<source>/wrote, inputs/processed) — in a monitor, a
+  pipeline status/report script, or an ad-hoc scan of issuer jobs — because what each key counts, and
+  which ones may be summed across jobs, is easy to get wrong.
 ---
 
 # shub-workflow issuers
@@ -117,6 +121,18 @@ So `load_last_outputs` / `LOAD_DELIVERED_IDS_DAYS` is a **deduplicator** trait (
 persistence), not a consumer one. Dedup lives in the deduplicators (not the consumer) deliberately:
 the volatile, single-writer consumer stays cheap to restart, and dedup scales across N slots instead
 of bottlenecking in one process.
+
+It is also what the two archetypes' stats look like from outside: `urls/seen/<source>` is incremented
+in the **same branch** as `urls/issued/<source>` (only for issued items), so a **consumer** reports
+them **equal**, while a **deduplicator** reports a much bigger `seen` because `load_last_outputs()`
+also counts every reloaded delivered id. Neither counts the items *read*. And `urls/dupesrate/<source>`
+is a **ratio** (`set`, not incremented), so it must never be summed across jobs — to aggregate several
+jobs of one source, sum `urls/issued/<source>` and derive the rate from the sums. And since **every
+stat is cumulative over the job's whole life**, a long-running issuer cannot tell you *when* it did
+something: for that, filter its timestamped `Read <n> records from …` / `Wrote <n> records to …` log
+lines server-side — an input read with nothing written is 100% dupes, which no stat can distinguish
+from "not reached yet". Full stat table and log-line cycle:
+[references/api-cheatsheet.md](references/api-cheatsheet.md#stats-reported-what-to-read-from-outside).
 
 ## Core procedure
 
