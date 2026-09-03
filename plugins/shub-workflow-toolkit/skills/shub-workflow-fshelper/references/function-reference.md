@@ -10,10 +10,19 @@ these as methods and the credentials are injected for you.
 
 | Function | Returns | Notes |
 | --- | --- | --- |
-| `get_file(path, *args, **kwargs)` | open file handle | Like builtin `open()`. S3 via `s3fs.open`; sets `fp.name = path`. `op_kwargs` with `ACL` is lowercased to `acl` for s3fs. Local/GCS supported. |
+| `get_file(path, *args, **kwargs)` | open file handle | Opens like builtin `open()`, but **only the positional args are open()'s** — `get_file(path, "rb")`. S3 via `s3fs.open`; sets `fp.name = path`. `op_kwargs` with `ACL` is lowercased to `acl` for s3fs. Local/GCS supported. |
 | `get_object(path, **kwargs)` | object or `None` | **GCS only** — returns `None` for non-GCS paths. |
 | `download_file(path, dest=None, ...)` | `None` | Downloads to `dest` (default = `basename(path)`). S3 path streamed in 500 MB chunks. Raises `ValueError` for unsupported FS. |
 | `get_glob(path, ...)` | `List[str]` | Glob match. S3: `fs.glob` (results re-prefixed with `s3://`); local: `iglob`. No GCS branch. |
+
+> ⚠️ **`get_file`: pass the mode positionally.** Its `**kwargs` are forwarded to the *filesystem
+> constructor* (`S3FileSystem(...)`), **not** to `open()`. So the natural-looking
+> `get_file(path, mode="rb")` fails with the thoroughly misleading
+> `TypeError: Session.__init__() got an unexpected keyword argument 'mode'`, which reads as a
+> credentials/boto problem rather than a signature one. Use `get_file(path, "rb")`.
+>
+> When you only need the bytes on disk, `download_file(path, dest)` is the simpler call and avoids
+> the question entirely.
 
 ## Writing / moving / deleting
 

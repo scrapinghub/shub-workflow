@@ -8,7 +8,9 @@ description: >-
   must list/download deliveries in a bucket. Covers the prefix-based dispatch, module functions vs.
   the helper class, credential/role handling, the three listing variants (`list_folder` vs `list_path`
   vs recursive), `op_kwargs`/ACLs, and the install extras. Reach for it whenever you see
-  `from shub_workflow.utils.futils import ...` or an `FSHelper`.
+  `from shub_workflow.utils.futils import ...`, an `FSHelper`, or any project-local factory that
+  returns one (a `build_fshelper()`-style wrapper, `self.fshelper`) — its API is NOT guessable and
+  not discoverable by `dir()`, so check here before calling anything on it.
 ---
 
 # shub-workflow filesystem utils (`futils` / `FSHelper`)
@@ -59,6 +61,13 @@ helper.download_file("s3://my-bucket/some/folder/file.json", "file.json")
 - Inside a `BaseScript`, a ready-made helper is already available as **`self.fshelper`** — prefer it
   rather than constructing your own. Override the **`init_fshelper()`** hook to customize how it's
   built (e.g. a GCS project, default ACLs).
+
+> ⚠️ **You cannot discover the helper's API by introspection.** The methods are bound dynamically
+> from the annotations, so **`dir(FSHelper)` returns `[]`** and editor autocomplete shows nothing —
+> which makes the class look empty and invites guessing (`helper.open(...)`, `helper.read(...)`:
+> there are no such methods). The operation list below and
+> [references/function-reference.md](references/function-reference.md) are the only listing; read one
+> of them before calling anything.
 
 ## The three listing functions — pick the right one
 
