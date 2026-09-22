@@ -16,7 +16,8 @@ and [`shub_workflow/base.py`](https://github.com/scrapinghub/shub-workflow/blob/
 | `name` | WorkFlowManager | `""` | **required** — set here or pass as the first positional arg. Distinct managers in a workflow need distinct names. |
 | `default_max_jobs` | WorkFlowManager | `1000` | cap on simultaneously-running children (`--max-running-jobs` overrides). |
 | `flow_id_required` | WorkFlowManager | `True` | a flow id is mandatory (auto-generated if absent). |
-| `acquire_all_jobs` / `dont_acquire_finished_jobs` | WorkFlowManager | `False` | resume tuning (acquire owned jobs regardless of flow id / skip finished). |
+| `acquire_all_jobs` | WorkFlowManager | `False` | adopt owned children (matched by `PARENT_NAME=<name>` alone) regardless of flow id. Needed by any manager that is scheduled automatically, since those never resume. |
+| `dont_acquire_finished_jobs` | WorkFlowManager | `False` | don't pull finished children when resuming/acquiring. |
 | `base_failed_outcomes` | WorkFlowManager | tuple | outcomes routed to `bad_outcome_hook`; copied to mutable `self.failed_outcomes`. |
 | `loop_mode` | BaseLoopScript | `0` | seconds between cycles; **required** for periodic/generator managers (`0` = run once). |
 | `spider` | CrawlManager | `None` | default target spider; if unset a positional `spider` arg is required. |

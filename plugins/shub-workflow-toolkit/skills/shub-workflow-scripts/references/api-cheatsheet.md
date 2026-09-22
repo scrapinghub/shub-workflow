@@ -51,7 +51,12 @@ Scheduling:
 Job querying:
 - `get_jobs(project_id=None, **kwargs) -> Generator[JobDict]` — paginated + de-duplicated; supports
   `spider=`, `state=[...]`, `has_tag=`, `lacks_tag=`, `count=`, `meta=[...]`, `startts=`, …
-- `get_jobs_with_tags(spider, tags, project_id=None, **kwargs) -> Generator[Job]`
+  **`has_tag` is not an AND:** several values are ORed server side, so only one tag can really be
+  pushed down — make it the *selective* one (e.g. a flow id, not a name shared by every instance of
+  the script) and check the rest in python. With a broad tag and no `count`, the generator pages
+  through the project's whole history before it ends.
+- `get_jobs_with_tags(spider, tags, project_id=None, **kwargs) -> Generator[Job]` — does that for
+  you: first tag server side, the rest post-filtered.
 - `is_running(jobkey) -> bool`, `is_finished(jobkey) -> close_reason | None`,
   `finish(jobkey=None, close_reason=None)` (own job if `jobkey` is None)
 
