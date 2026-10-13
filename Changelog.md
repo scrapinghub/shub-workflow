@@ -175,3 +175,4 @@ Minor version changes:
 - 1.14.40: issuer: allow to mix all sources in same ouput files
 - 1.14.41: issuer: allow to use disk for items buffer, in order to avoid mem issues on some use cases
 - 1.14.42: issuer: allow to select other disk folders for temporal storage of items
+- 1.14.43: issuer: crawl manager: added a public method for getting all the running jobs along with the spider args
