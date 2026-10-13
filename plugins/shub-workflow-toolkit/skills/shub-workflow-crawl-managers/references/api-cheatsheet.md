@@ -48,6 +48,7 @@ Positional `name` (unless `name` attr set), positional `spider` (unless `spider`
 - `add_job(spider, job_args_override)` — **GeneratorCrawlManager only** — queue an extra job ahead of the generator (used in retry/hook logic).
 - `schedule_spider_with_jobargs(job_args_override=None, spider=None)` — schedule one job (async on the async mixin).
 - `spider_running_count(spider)` / `get_running_spiders()` / `spider_delayed_count(spider)` — introspect current scheduling state.
+- `get_running_jobs()` — a copy of the running jobs as `{jobkey: (spider, job_args_override)}`, covering both scheduled and acquired-on-resume jobs. Use it when jobs of the **same spider** must be told apart by their arguments (`job_args_override["spider_args"]`), which the spider-name helpers above can't do. Don't read `_running_job_keys` directly.
 - `get_job_settings(override=None)` — `--job-settings` merged with an override.
 - `create_dupe_filter()` — classmethod; override to change the de-dup bloom filter capacity/error rate.
 - WorkFlowManager: `get_owned_jobs(state=[...], **kw)`, `get_finished_owned_jobs(...)`, `wait_for(keys, ...)`, `max_running_jobs` (property).

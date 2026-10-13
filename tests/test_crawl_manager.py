@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from shub_workflow.crawl import CrawlManager, PeriodicCrawlManager, GeneratorCrawlManager
 from shub_workflow.utils.contexts import script_args
-from shub_workflow.script import SpiderName, Outcome
+from shub_workflow.script import SpiderName, Outcome, JobKey
 
 
 class TestManager(CrawlManager):
@@ -173,6 +173,44 @@ class CrawlManagerTest(TestCase):
 
         self.assertFalse(result)
         self.assertFalse(mocked_super_schedule_spider.called)
+
+    @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
+    def test_get_running_jobs(self, mocked_super_schedule_spider, mocked_add_job_tags, mocked_get_jobs):
+        with script_args(["myspider", "--flow-id=3a20"]):
+            manager = TestManager()
+
+        mocked_get_jobs.side_effect = [
+            # the resumed job
+            [{"tags": ["FLOW_ID=3a20", "NAME=test"], "key": "999/10/1"}],
+            # the owned running job
+            [
+                {
+                    "spider": "myspider",
+                    "key": "999/1/1",
+                    "tags": ["FLOW_ID=3a20", "PARENT_NAME=test"],
+                    "spider_args": {"source": "a"},
+                }
+            ],
+            # the owned finished jobs
+            [],
+        ]
+        manager._on_start()
+
+        mocked_super_schedule_spider.side_effect = ["999/1/2"]
+        manager.schedule_spider_with_jobargs({"spider_args": {"source": "b"}})
+
+        running_jobs = manager.get_running_jobs()
+        self.assertEqual(set(running_jobs), {"999/1/1", "999/1/2"})
+        self.assertEqual(
+            {key: (spider, override["spider_args"]) for key, (spider, override) in running_jobs.items()},
+            {"999/1/1": ("myspider", {"source": "a"}), "999/1/2": ("myspider", {"source": "b"})},
+        )
+
+        # it is a copy: changing it doesn't change the manager state
+        running_jobs.pop(JobKey("999/1/1"))
+        running_jobs[JobKey("999/1/2")][1]["spider_args"]["source"] = "c"
+        self.assertEqual(set(manager.get_running_jobs()), {"999/1/1", "999/1/2"})
+        self.assertEqual(manager.get_running_jobs()[JobKey("999/1/2")][1]["spider_args"], {"source": "b"})
 
     @patch("shub_workflow.crawl.WorkFlowManager.schedule_spider")
     def test_schedule_spider_with_resume_not_found(

@@ -82,6 +82,13 @@ If the project already has a **base crawl-manager mixin** (shared options/helper
   generator — only scheduling is async.
 - **Always `super().add_argparser_options()`** before adding args, or you lose `name`/`spider`/
   `--spider-args`/etc.
+- **Capping jobs of one kind (same spider, different args):** `get_running_spiders()` and
+  `spider_running_count()` only see spider names. Use `get_running_jobs()` and look at
+  `job_args_override["spider_args"]`, checked in the generator before claiming an input. Two
+  traps. A cycle generates all its params before scheduling any, so a job yielded earlier in the same
+  cycle isn't running yet: add a flag set at yield time and reset it in `workflow_loop()`. And
+  `can_schedule_job_with_params()` runs after the yield, so deferring there leaves an input that the
+  generator already claimed (moved, marked) waiting in memory, and stranded if the manager stops.
 - **`default_max_jobs` defaults to 1000** (not infinite); override the attr or pass `--max-running-jobs`.
 
 ## Entry point boilerplate

@@ -180,6 +180,16 @@ class CrawlManager(SpiderStatsAggregatorMixin, WorkFlowManager, CrawlManagerProt
 
         return outcomes
 
+    def get_running_jobs(self) -> Dict[JobKey, Tuple[SpiderName, JobParams]]:
+        """
+        A copy of the jobs this manager currently considers running, as a dict
+        {job key: (spider, job_args_override)}. It includes both the jobs it scheduled and the running jobs it
+        acquired on resume, and the job args (job_args_override["spider_args"]) allow telling apart jobs of the
+        same spider. Updated by check_running_jobs(), at the start of each workflow loop, and on each new
+        scheduling.
+        """
+        return deepcopy(self._running_job_keys)
+
     def running_job_hook(self, jobkey: JobKey):
         """
         Allows to add some reaction on each running job. Here we only pass jobkey, as it is more
