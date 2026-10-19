@@ -59,8 +59,9 @@ class MyConsumer(IssuerScriptWithSCJobInput[MyItem]):
         self._seeds = set()
 
     def write_seeds_to_frontier(self, seeds: Set[str]):
-        # push seeds to your crawl frontier (e.g. hcf_backend's HCFManager). Real consumers often do this on a
-        # background thread so it doesn't block the read loop.
+        # push seeds to your crawl frontier, e.g. with hcf_backend's HCFManager (add_request() + flush()). Only one
+        # process may write a given frontier slot at a time. Real consumers often do this on a background thread so
+        # it doesn't block the read loop.
         ...
 
 

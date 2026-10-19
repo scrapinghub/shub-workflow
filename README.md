@@ -18,6 +18,12 @@ For google cloud storage tools support:
 pip install shub-workflow[with-gcs-tools]
 ```
 
+For Hubstorage Crawl Frontier (HCF) tools support (`shub_workflow.utils.hcf`):
+
+```
+pip install shub-workflow[with-hcf-backend]
+```
+
 # Usage
 
 Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for documentation. You can also see code tests for lots of examples of usage.
@@ -26,7 +32,7 @@ Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for docu
 
 shub-workflow ships a [Claude Code](https://claude.com/claude-code) plugin,
 **shub-workflow-toolkit**, that gives Claude working knowledge of shub-workflow tooling. It
-currently bundles eight skills:
+currently bundles nine skills:
 
 - **scanjobs-programs** — authoring and running the `scanjobs` job-scanning + plotting tool and its
   command-line "programs".
@@ -48,6 +54,9 @@ currently bundles eight skills:
 - **shub-workflow-issuers** — building data-pipeline issuers (`IssuerScript` /
   `IssuerScriptWithFileSystemInput` / `IssuerScriptWithSCJobInput`): reading job/file input,
   dedup, batch output slots, and issuer-based delivery (replacing the deprecated `BaseDeliverScript`).
+- **shub-workflow-hcf** — working with a Hubstorage Crawl Frontier (`shub_workflow.utils.hcf` /
+  `FrontierToolMixin`): building the frontier tool script (list/count/dump/add/delete/move slots), the
+  HCF semantics that bite, and reading/writing seeds from crawl managers and consumers.
 - **shub-workflow-diagrams** — generating a project's architecture diagrams from an editable model:
   banded workflow/pipeline diagrams and UML class-hierarchy diagrams, in the house style shared by
   these projects, with the rendering engine to copy and the Graphviz constraints that keep the

@@ -74,6 +74,7 @@ target matches many spiders a big-backlog source can't starve the others. No-op 
 | `close_on_no_inputs` | `False` | stop when no inputs remain (vs. loop forever). |
 | `max_inputs_per_loop` | `-1` | cap inputs per cycle (`-1` = unlimited). |
 | `min_wait_time_secs_to_flush_stopped_spiders` | `0` | grace before flushing a stopped source's partial batch. |
+| `source_crawlmanagers` | `("py:crawlmanager.py",)` | scripts that schedule the consumed spiders; while one runs with a source spider as argument, that source counts as running. |
 | `loop_mode` | `0` | (inherited) seconds between cycles; set for a continuous issuer. |
 | `input_folder` / `processed_folder` | — | (file-input subclass) where to read / move processed inputs. |
 
@@ -143,9 +144,9 @@ read again, and it must not be counted as processed.
 
 ## Footguns
 
-- The default loop checks `get_project_running_spiders(crawlmanagers=("py:crawlmanager.py",))` to
-  decide when to flush a stopped source's partial batch — it assumes the upstream discovery crawl
-  manager is named `py:crawlmanager.py`.
+- The loop checks `get_project_running_spiders(crawlmanagers=self.source_crawlmanagers)` to decide
+  when to flush a stopped source's partial batch. `source_crawlmanagers` defaults to
+  `("py:crawlmanager.py",)`: set it when the upstream crawl managers have other script names.
 - Setting `LOAD_DELIVERED_IDS_DAYS` without calling `load_last_outputs()` in `__init__` raises in
   `on_start()`.
 - Launch is synchronous: `Script().run()` (issuers are not async-launched).

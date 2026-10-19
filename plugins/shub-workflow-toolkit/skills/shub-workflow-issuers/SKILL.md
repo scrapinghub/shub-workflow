@@ -181,10 +181,11 @@ for shared output-routing/sizing — subclass it (mixin first) when present.
   destination (`compute_destination_filename`). Replaces the **deprecated** `BaseDeliverScript` (warns
   on instantiation). Example: [examples/delivery_issuer.py](examples/delivery_issuer.py); migrating an
   old one: [references/migrating-from-basedeliverscript.md](references/migrating-from-basedeliverscript.md).
-- **Stopped-spider flush assumes `py:crawlmanager.py`.** The loop flushes a source's partial batch
-  when that source's spider is no longer running, detected via
-  `get_project_running_spiders(crawlmanagers=("py:crawlmanager.py",))` — the default expects the
-  upstream discovery crawl manager to have that name.
+- **Stopped-spider flush needs the upstream crawl manager scripts.** The loop flushes a source's
+  partial batch when that source's spider is no longer running, detected via
+  `get_project_running_spiders(crawlmanagers=self.source_crawlmanagers)`. The attribute defaults to
+  `("py:crawlmanager.py",)`; set it to the actual `py:<name>.py` scripts that schedule the consumed
+  spiders, or a source whose manager is between jobs counts as stopped and gets flushed early.
 - **Set `loop_mode`** for a continuous stage; use `close_on_no_inputs=True` for a run-to-completion
   stage (e.g. reducers, delivery).
 - **Launch is synchronous** (`Script().run()`), and **always `super().add_argparser_options()`** if

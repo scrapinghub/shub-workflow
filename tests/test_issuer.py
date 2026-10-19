@@ -478,6 +478,31 @@ class SeparateOutputBySourceTest(IssuerTestBase):
         self.assertFalse(collapsed.startswith("s1_"))
 
 
+class CustomCrawlManagersIssuer(RecordingSCIssuer):
+    source_crawlmanagers = ("py:mymanager.py", "py:othermanager.py")
+
+
+@patch("shub_workflow.script.BaseScript.add_job_tags")
+class StoppedSpiderCrawlManagersTest(IssuerTestBase):
+    def _loop_running_check(self, cls):
+        issuer = self.make(cls, ["spider:a"])
+        with patch("shub_workflow.script.BaseScript.get_job", return_value=FakeJob([{"url": "u1"}])):
+            issuer.process_input(InputSource("999/1/1"), sc_args(canonical="a"))
+        with patch("shub_workflow.script.BaseScript.get_jobs", return_value=[]), patch(
+            "shub_workflow.script.BaseScript.get_project_running_spiders", return_value={SpiderName("a")}
+        ) as mocked_running:
+            issuer.workflow_loop()
+        return mocked_running
+
+    def test_default_crawlmanager_script(self, _tags):
+        mocked_running = self._loop_running_check(RecordingSCIssuer)
+        mocked_running.assert_called_with(canonical=True, crawlmanagers=("py:crawlmanager.py",))
+
+    def test_custom_crawlmanager_scripts(self, _tags):
+        mocked_running = self._loop_running_check(CustomCrawlManagersIssuer)
+        mocked_running.assert_called_with(canonical=True, crawlmanagers=("py:mymanager.py", "py:othermanager.py"))
+
+
 # --------------------------------------------------------------------------- #
 # persist_items_queue_on_disk                                                  #
 # --------------------------------------------------------------------------- #

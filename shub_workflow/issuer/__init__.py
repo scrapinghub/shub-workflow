@@ -54,7 +54,6 @@ def hash_mod(text, divisor):
     return int(digest, 16) % divisor
 
 
-logging.getLogger("hcf_backend.manager").setLevel(logging.ERROR)
 LOGGER = logging.getLogger(__name__)
 
 
@@ -99,6 +98,10 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     output_slot: Optional[Slot] = None
     dedupe = True
     min_wait_time_secs_to_flush_stopped_spiders: int = 0
+    # Scripts (in the format py:<basename>.py) that schedule the spiders this issuer consumes. While one of them is
+    # running with a source spider among its arguments, that source is considered still running, so its partial batch
+    # is not flushed yet (see min_wait_time_secs_to_flush_stopped_spiders).
+    source_crawlmanagers: Tuple[str, ...] = ("py:crawlmanager.py",)
     max_inputs_per_loop = -1
     # how many days back in time is the limit of output and other downstream files to read for filling
     # the deduplication cache. If not set, the deduplication performed will be limited to the cache
@@ -424,6 +427,10 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         id_field: the field names to use as the unique identifier for each record, for deduplication purposes.
                   By default, it is ("id",). Each provided is tried in order until a match is found in the record.
                   If no match is found, the record is skipped.
+
+        Each file is dated by the _YYYYmmddTHHMMSS timestamp in its name. Following the batch filename standard,
+        the name must start with a source (or slot) designation followed by an underscore before the timestamp:
+        files whose name starts with the bare timestamp are skipped.
         """
         dtnow = datetime.utcnow()
         count = 0
@@ -502,7 +509,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
                 # with a single collapsed bucket a slot's batch flushes only at default_filesize or on close.
                 if self.separate_output_by_source and len(sources_items_dict[source]) > 0:
                     running_spiders = self.get_project_running_spiders(
-                        canonical=True, crawlmanagers=("py:crawlmanager.py",)
+                        canonical=True, crawlmanagers=self.source_crawlmanagers
                     )
                     if source not in running_spiders:
                         delay = now - self.running_spiders_check_time.setdefault(source, now)
