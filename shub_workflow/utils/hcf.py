@@ -25,21 +25,23 @@ def _import_hcf_backend():
     return HCFManager, HCFPal
 
 
-class FrontierToolMixin(BaseScript):
+class FrontierTool(BaseScript):
     """
-    Adds a command line tool for inspecting and handling the slots of a crawl frontier: list the slots, count, dump,
-    add seeds, delete batches or slots, and move the seeds of a slot into another one.
+    Command line tool for inspecting and handling the slots of a crawl frontier: list the slots, count, dump, add
+    seeds, delete batches or slots, and move the seeds of a slot into another one.
 
-    Usage (scripts/frontier_tool.py):
+    It can run as is, passing the frontier name by command line:
 
-        class FrontierTool(FrontierToolMixin):
+        python -m shub_workflow.utils.hcf --frontier myfrontier --list
+
+    In a ScrapyCloud project, add a script (i.e. scripts/frontier_tool.py) that subclasses it in order to set the
+    frontier name (and your project base script mixin, if any):
+
+        class MyFrontierTool(FrontierTool):
             frontier_name = "myfrontier"
 
-    It can be combined with your project base script mixins, as any other shub-workflow script.
-
-    The handling methods (add_seeds(), move_slot(), etc.) can also be used programmatically. A subclass can add its
-    own commands by adding options in add_argparser_options() and overriding run(), calling super().run() for the
-    rest.
+    A subclass can add its own commands by adding options in add_argparser_options() and overriding run(), calling
+    super().run() for the rest, and reusing the handling methods (add_seeds(), move_slot(), etc.)
 
     HCF accepts a single writer per slot at a time. Don't add or move seeds into a slot while another process (i.e.
     a consumer) is writing to it.
@@ -63,7 +65,7 @@ class FrontierToolMixin(BaseScript):
             "--frontier",
             default=self.frontier_name,
             required=self.frontier_name is None,
-            help="Frontier name. Default: %(default)s",
+            help="Frontier name." + (" Default: %(default)s" if self.frontier_name else ""),
         )
         self.argparser.add_argument("--list", action="store_true", help="List the frontier slots.")
         self.argparser.add_argument("--count", action="store_true", help="Count the requests in the slot.")
@@ -174,3 +176,10 @@ class FrontierToolMixin(BaseScript):
                     print(batch_id, seed, qdata)
                 else:
                     print(batch_id, seed)
+
+
+if __name__ == "__main__":
+    from shub_workflow.utils import get_kumo_loglevel
+
+    logging.basicConfig(format="%(asctime)s %(name)s [%(levelname)s]: %(message)s", level=get_kumo_loglevel())
+    FrontierTool().run()

@@ -5,7 +5,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from shub_workflow.utils.contexts import script_args
-from shub_workflow.utils.hcf import FrontierToolMixin, _import_hcf_backend as real_import_hcf_backend
+from shub_workflow.utils.hcf import FrontierTool, _import_hcf_backend as real_import_hcf_backend
 
 
 class FakeFrontierStore:
@@ -89,12 +89,8 @@ class FakeHCFPal:
                     return
 
 
-class FrontierTool(FrontierToolMixin):
+class MyFrontierTool(FrontierTool):
     frontier_name = "myfrontier"
-
-
-class NoNameFrontierTool(FrontierToolMixin):
-    pass
 
 
 class FrontierToolTest(TestCase):
@@ -110,7 +106,7 @@ class FrontierToolTest(TestCase):
             p.start()
             self.addCleanup(p.stop)
 
-    def run_tool(self, argv, cls=FrontierTool):
+    def run_tool(self, argv, cls=MyFrontierTool):
         with script_args(argv):
             tool = cls()
         with patch("builtins.print") as mocked_print:
@@ -126,8 +122,8 @@ class FrontierToolTest(TestCase):
 
     def test_frontier_option_required_without_attribute(self):
         with self.assertRaises(SystemExit), patch("sys.stderr"):
-            self.run_tool(["--list"], cls=NoNameFrontierTool)
-        tool, _ = self.run_tool(["--list", "--frontier", "other"], cls=NoNameFrontierTool)
+            self.run_tool(["--list"], cls=FrontierTool)
+        tool, _ = self.run_tool(["--list", "--frontier", "other"], cls=FrontierTool)
         self.assertEqual(tool.args.frontier, "other")
 
     def test_add_seeds_and_list_count_dump(self):
@@ -144,7 +140,7 @@ class FrontierToolTest(TestCase):
 
     def test_add_seeds_flushes_by_chunks(self):
         with script_args([]):
-            tool = FrontierTool()
+            tool = MyFrontierTool()
         tool.add_seeds_flush_size = 2
         count = tool.add_seeds("slot_a", ["s1", "s2", "s3", "s1"], qdata={"k": "v"})
         self.assertEqual(count, 4)
@@ -167,7 +163,7 @@ class FrontierToolTest(TestCase):
 
     def test_move_slot_keeps_qdata_and_empties_source(self):
         with script_args([]):
-            tool = FrontierTool()
+            tool = MyFrontierTool()
         tool.move_read_size = 2
         tool.add_seeds("source", ["s1"], qdata={"k": "v"})
         tool.add_seeds("source", ["s2", "s3"])

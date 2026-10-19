@@ -2,7 +2,7 @@
 name: shub-workflow-hcf
 description: >-
   Use when working with a ScrapyCloud Hubstorage Crawl Frontier (HCF) from a shub-workflow project —
-  building or using a frontier tool script on top of `shub_workflow.utils.hcf.FrontierToolMixin` (list
+  running or extending the standalone frontier tool `shub_workflow.utils.hcf.FrontierTool` (list
   slots, count, dump, add seeds, delete batches or slots, move a slot into another), installing the
   `with-hcf-backend` extra, or writing crawl-manager / consumer code that reads seeds from a frontier
   slot or writes new seeds into it through `hcf_backend`'s `HCFManager`. Covers the HCF semantics that
@@ -13,7 +13,7 @@ description: >-
 # HCF frontier tools (`shub_workflow.utils.hcf`)
 
 [`shub_workflow/utils/hcf.py`](https://github.com/scrapinghub/shub-workflow/blob/master/shub_workflow/utils/hcf.py)
-provides `FrontierToolMixin`, a ready-made command line tool for inspecting and handling the slots of
+provides `FrontierTool`, a standalone command line script for inspecting and handling the slots of
 a crawl frontier. It wraps the optional [`hcf-backend`](https://github.com/scrapinghub/hcf-backend)
 package (`HCFManager` for queue reads/writes, `HCFPal` for slot listing/counting/dumping).
 
@@ -35,24 +35,28 @@ install hint, when a frontier operation is first used.
 - **One writer per slot at a time.** Never add or move seeds into a slot another process (typically a
   consumer) is writing to.
 
-## Building the tool
+## Running the tool
+
+Locally it runs as is: `python -m shub_workflow.utils.hcf --frontier myfrontier --list`. To have it
+on ScrapyCloud, add a project script that subclasses it to set the frontier name (and your project
+base-script mixin, if any):
 
 ```python
 # scripts/frontier_tool.py  (register it in setup.py `scripts=[...]`)
 import logging
 
-from shub_workflow.utils.hcf import FrontierToolMixin
+from shub_workflow.utils.hcf import FrontierTool
 
 
-class FrontierTool(FrontierToolMixin):      # combine with your project base-script mixin if you have one
-    frontier_name = "myfrontier"            # if omitted, --frontier becomes required
+class MyFrontierTool(FrontierTool):
+    frontier_name = "myfrontier"            # if omitted, --frontier is required
 
 
 if __name__ == "__main__":
     from shub_workflow.utils import get_kumo_loglevel
 
     logging.basicConfig(format="%(asctime)s %(name)s [%(levelname)s]: %(message)s", level=get_kumo_loglevel())
-    FrontierTool().run()
+    MyFrontierTool().run()
 ```
 
 | Command line | Effect |
@@ -77,7 +81,7 @@ the target are discarded.
 `hcf_manager` / `hcfpal` properties:
 
 ```python
-class FrontierTool(FrontierToolMixin):
+class MyFrontierTool(FrontierTool):
     frontier_name = "myfrontier"
 
     def add_argparser_options(self):
@@ -91,9 +95,8 @@ class FrontierTool(FrontierToolMixin):
             super().run()
 ```
 
-The mixin is a full `BaseScript` with its own CLI, so it is meant for tool/maintenance scripts — do
-**not** mix it into a crawl manager or an issuer (its positional `slot` would clash with theirs).
-Those use `HCFManager` directly, as below.
+The tool is a standalone script for operating a frontier by hand (or from maintenance scripts that
+subclass it). Workflow components — crawl managers and consumers — use `HCFManager` directly, as below.
 
 ## Seeds in workflow components
 

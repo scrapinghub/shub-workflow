@@ -55,7 +55,7 @@ currently bundles nine skills:
   `IssuerScriptWithFileSystemInput` / `IssuerScriptWithSCJobInput`): reading job/file input,
   dedup, batch output slots, and issuer-based delivery (replacing the deprecated `BaseDeliverScript`).
 - **shub-workflow-hcf** — working with a Hubstorage Crawl Frontier (`shub_workflow.utils.hcf` /
-  `FrontierToolMixin`): building the frontier tool script (list/count/dump/add/delete/move slots), the
+  `FrontierTool`): running and extending the frontier tool script (list/count/dump/add/delete/move slots), the
   HCF semantics that bite, and reading/writing seeds from crawl managers and consumers.
 - **shub-workflow-diagrams** — generating a project's architecture diagrams from an editable model:
   banded workflow/pipeline diagrams and UML class-hierarchy diagrams, in the house style shared by
