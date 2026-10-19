@@ -6,7 +6,7 @@
   },
   "homepage": "https://github.com/scrapinghub/shub-workflow/wiki",
   "repository": "https://github.com/scrapinghub/shub-workflow",
-  "license": "BSD-3-Clause",
+  "license": "Apache-2.0",
   "keywords": [
     "shub-workflow",
     "scrapy-cloud",
