@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="shub-workflow",
-    version="1.14.43",
+    version="1.14.44",
     description="Workflow manager for Zyte ScrapyCloud tasks.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
@@ -30,6 +30,7 @@ setup(
     extras_require = {
         "with-s3-tools": ["s3fs>=0.4.0"],
         "with-gcs-tools": ["google-cloud-storage>=1.38.0"],
+        "with-hcf-backend": ["hcf-backend"],
     },
     scripts=[],
     classifiers=[
