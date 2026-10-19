@@ -9,7 +9,16 @@
       "name": "shub-workflow-toolkit",
       "source": "./plugins/shub-workflow-toolkit",
       "category": "developer-tools",
-      "tags": ["shub-workflow", "scrapy-cloud", "scanjobs"]
+      "tags": [
+        "shub-workflow",
+        "scrapy-cloud",
+        "workflows",
+        "crawl-managers",
+        "issuers",
+        "monitors",
+        "hcf",
+        "scanjobs"
+      ]
     }
   ]
 }
