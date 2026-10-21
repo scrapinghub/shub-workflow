@@ -32,7 +32,7 @@ Check [Project Wiki](https://github.com/scrapinghub/shub-workflow/wiki) for docu
 
 shub-workflow ships a [Claude Code](https://claude.com/claude-code) plugin,
 **shub-workflow-toolkit**, that gives Claude working knowledge of shub-workflow tooling. It
-currently bundles nine skills:
+currently bundles ten skills:
 
 - **scanjobs-programs** — authoring and running the `scanjobs` job-scanning + plotting tool and its
   command-line "programs".
@@ -57,6 +57,10 @@ currently bundles nine skills:
 - **shub-workflow-hcf** — working with a Hubstorage Crawl Frontier (`shub_workflow.utils.hcf` /
   `FrontierTool`): running and extending the frontier tool script (list/count/dump/add/delete/move slots), the
   HCF semantics that bite, and reading/writing seeds from crawl managers and consumers.
+- **shub-workflow-architectures** — designing (or redesigning) a project's workflow architecture in an
+  interactive session: interviews the developer about the requirements, maps them to the independent
+  agents + role separation architecture, writes a design document, checks it against known pitfalls,
+  and scaffolds the script skeletons of the chosen roles.
 - **shub-workflow-diagrams** — generating a project's architecture diagrams from an editable model:
   banded workflow/pipeline diagrams and UML class-hierarchy diagrams, in the house style shared by
   these projects, with the rendering engine to copy and the Graphviz constraints that keep the

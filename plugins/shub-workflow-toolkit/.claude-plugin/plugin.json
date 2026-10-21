@@ -1,6 +1,6 @@
 {
   "name": "shub-workflow-toolkit",
-  "description": "Claude Code skills for working with the shub-workflow library: Scrapy Cloud scripts, crawl and graph managers, issuers (consumers, deduplicators, delivery), monitors, filesystem and crawl frontier (HCF) utilities, the scanjobs job-scanning + plotting tool, and architecture diagrams.",
+  "description": "Claude Code skills for working with the shub-workflow library: workflow architecture design, Scrapy Cloud scripts, crawl and graph managers, issuers (consumers, deduplicators, delivery), monitors, filesystem and crawl frontier (HCF) utilities, the scanjobs job-scanning + plotting tool, and architecture diagrams.",
   "author": {
     "name": "Zyte / Scrapinghub"
   },
@@ -10,6 +10,7 @@
   "keywords": [
     "shub-workflow",
     "scrapy-cloud",
+    "architecture",
     "scripts",
     "crawl-managers",
     "graph-managers",
