@@ -161,7 +161,7 @@ class ArgumentParserScript(ArgumentParserScriptProtocol):
         return "You didn't set description for this script. Please set description property accordingly."
 
     def parse_args(self) -> Namespace:
-        self.argparser = ArgumentParser(self.description)
+        self.argparser = ArgumentParser(description=self.description)
         self.add_argparser_options()
         self.argparser.set_programs(self.PROGRAMS)
         args = self.argparser.parse_args_no_error()
@@ -574,8 +574,8 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
 
     @dash_retry_decorator
     def get_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
-        meta = kwargs.get("meta", [])
-        if "has_tag" or "lacks_tag" in kwargs and "tags" not in meta:
+        meta = list(kwargs.get("meta") or [])
+        if ("has_tag" in kwargs or "lacks_tag" in kwargs) and "tags" not in meta:
             meta.append("tags")
         if meta:
             kwargs["meta"] = meta

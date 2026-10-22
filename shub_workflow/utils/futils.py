@@ -6,7 +6,7 @@ from typing import List, Generator, Callable
 from operator import itemgetter
 from glob import iglob
 from os import listdir, remove, environ, makedirs
-from os.path import exists as os_exists, dirname, getctime, basename
+from os.path import exists as os_exists, dirname, getctime, basename, isdir, join as path_join
 from shutil import copyfile
 from datetime import datetime, timedelta, timezone
 
@@ -279,11 +279,15 @@ def list_path(path, aws_key=None, aws_secret=None, aws_token=None, **kwargs) -> 
     elif check_gcs_path(path):
         yield from gcstorage.list_path(path, **kwargs)
     else:
+        # same prefix semantics as s3/gcs: a folder lists its contents, otherwise the
+        # last path component is a prefix for the names inside its parent folder.
+        if path.endswith("/") or isdir(path):
+            folder, prefix = path.rstrip("/"), ""
+        else:
+            folder, prefix = dirname(path), basename(path)
         listing = []
-        if path.strip().endswith("/"):
-            path = path[:-1]
         try:
-            listing = [f"{path}/{name}" for name in listdir(path)]
+            listing = [path_join(folder, name) for name in listdir(folder or ".") if name.startswith(prefix)]
         except FileNotFoundError:
             pass
         yield from listing
