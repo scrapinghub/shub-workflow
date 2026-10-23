@@ -118,6 +118,16 @@ for seed in new_seeds:
 self.hcf.flush(slot)
 ```
 
+**Frontier writes are slow; at scale, never let them block the consumer.** The synchronous add → flush
+above is fine for small projects. When the writes become the bottleneck, use a background writer
+thread per slot with a **bounded** queue, and when that queue is full, **drop** the job's seeds (and
+count the drop in a stat, e.g. `seeds/dropped/<slot>`) rather than blocking on `put()`. A blocking
+put ties the consumer to the frontier's pace: with many jobs carrying large seed sets, it stalls for
+long periods, stops reading finished jobs, and the backlog of the whole data chain grows without end.
+Seeds only feed future crawling, while the consumer's items are the deliverable. For the same
+reason, don't delay the job's consumed tag until its queued seeds are flushed. Accept that a stop
+loses the queued seeds. Wiki: [Writing without blocking the consumer](https://github.com/scrapinghub/shub-workflow/wiki/Closing-the-Loop#writing-without-blocking-the-consumer).
+
 `hcf_backend.manager` logs routine frontier operations; silence it in your project package `__init__.py`:
 `logging.getLogger("hcf_backend.manager").setLevel(logging.ERROR)`.
 
