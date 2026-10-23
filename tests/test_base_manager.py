@@ -41,6 +41,19 @@ class WorkFlowManagerTest(TestCase):
         self.assertEqual(manager.project_id, 999)
         self.assertEqual(manager.get_project().key, '999')
 
+    def test_is_resumed_read_only(self, mocked_update_metadata, mocked_get_job_tags):
+        class TestManager(WorkFlowManager):
+            def workflow_loop(self):
+                return True
+
+        mocked_get_job_tags.side_effect = [[], []]
+
+        with script_args(["my_fantasy_name"]):
+            manager = TestManager()
+        self.assertFalse(manager.is_resumed)
+        with self.assertRaises(AttributeError):
+            manager.is_resumed = True  # type: ignore[misc]
+
     @patch("shub_workflow.base.WorkFlowManager._check_resume_workflow")
     def test_check_resume_workflow_not_called(
         self, mocked_check_resume_workflow, mocked_update_metadata, mocked_get_job_tags
