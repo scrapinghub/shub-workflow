@@ -118,32 +118,16 @@ re-pull from GitHub on every session. You choose how new commits reach you:
 The plugin lives in [`plugins/shub-workflow-toolkit/`](plugins/shub-workflow-toolkit); the
 marketplace manifest is [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json).
 
-# Note
-
-The requirements for this library are defined in setup.py as usual. The Pipfile in the repository doesn't define dependencies. It is only used
-for setting up a development environment for shub-workflow library development and testing.
-
-
 # For developers
 
-For installing a development environment for shub-workflow, the package comes with a Pipfile. So, clone or fork the repository and do:
+To run the tests, the type checks and the linters, install [tox](https://tox.wiki/) and run:
 
 ```
-> pipenv install --dev
-> cp pre-commit .git/hooks/
+> tox
 ```
 
-for installing the environment, and:
+To run the linters on every commit, install [pre-commit](https://pre-commit.com/) and run:
 
 ```
-> pipenv shell
-```
-
-for initiating it.
-
-There is a script, lint.sh, that you can run everytime you need from the repo root folder, but it is also executed each time you do `git commit` (provided
-you installed the pre-commit hook during the installation step described above). It checks code pep8 and typing integrity, via flake8 and mypy.
-
-```
-> ./lint.sh
+> pre-commit install
 ```
