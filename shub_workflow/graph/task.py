@@ -2,8 +2,7 @@ import logging
 import shlex
 import abc
 from fractions import Fraction
-from typing import NewType, List, Dict, Optional, Union, Literal, Callable, Protocol
-from typing_extensions import TypedDict, NotRequired
+from typing import NewType, List, Dict, Optional, Union, Literal, Callable, Protocol, TypedDict, NotRequired
 
 from jinja2 import Template
 

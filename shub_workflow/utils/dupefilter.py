@@ -3,9 +3,8 @@ import os
 import abc
 import tempfile
 from typing import Union
-from typing import Container
+from typing import Container, Protocol
 
-from typing_extensions import Protocol
 from sqlitedict import SqliteDict
 
 

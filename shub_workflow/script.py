@@ -28,9 +28,10 @@ from typing import (
     Type,
     Set,
     TYPE_CHECKING,
+    TypedDict,
+    NotRequired,
 )
 from pprint import pformat
-from typing_extensions import TypedDict, NotRequired
 
 if TYPE_CHECKING:
     from _typeshed import SupportsWrite

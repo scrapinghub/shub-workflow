@@ -28,11 +28,11 @@ from typing import (
     MutableMapping,
     Iterator,
     cast,
+    NotRequired,
 )
 
 import jmespath
 import dateparser
-from typing_extensions import NotRequired
 from bloom_filter2 import BloomFilter
 from sqlitedict import SqliteDict
 from scrapy import Spider

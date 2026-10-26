@@ -8,12 +8,11 @@ import re
 import logging
 from time import time
 from argparse import Namespace
-from typing import NewType, Dict, List, Optional, Set, Tuple, DefaultDict
+from typing import NewType, Dict, List, Optional, Set, Tuple, DefaultDict, TypedDict, NotRequired
 
 from collections import defaultdict, OrderedDict
 from copy import copy, deepcopy
 
-from typing_extensions import TypedDict, NotRequired
 import yaml
 
 try:

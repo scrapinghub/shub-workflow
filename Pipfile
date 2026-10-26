@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-pyyaml = "==6.0"
+pyyaml = "*"
 scrapinghub = {version = ">=2.4.0", extras = ["msgpack"]}
 jinja2 = ">=2.7.3"
 sqlitedict = "==2.1.0"
@@ -12,7 +12,6 @@ s3fs = ">=0.4.0"
 google-cloud-storage = ">=1.38.0"
 bloom-filter2 = "2.0.0"
 tenacity = "*"
-typing-extensions = "*"
 collection-scanner = "*"
 scrapy = "*"
 boto3 = ">=1.9.92"
@@ -29,7 +28,7 @@ mypy = ">=1.4.1"
 pylint = "*"
 pytest = "*"
 twine = "*"
-ipython = "<=8.18.1"
+ipython = "*"
 grip = "*"
 types-requests = "*"
 types-setuptools = "*"
@@ -39,4 +38,4 @@ pytest-cov = "*"
 types-dateparser = "*"
 
 [requires]
-python_version = "3.10"
+python_version = "3.11"

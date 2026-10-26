@@ -14,9 +14,8 @@ This is a DISCOVERY consumer, and it needs NO process_input() override:
 - post_process_input_items() runs once per job for side effects (here: push the job's seeds to a frontier).
 """
 import logging
-from typing import List, Set
+from typing import List, Set, NotRequired
 
-from typing_extensions import NotRequired
 from shub_workflow.issuer import IssuerScriptWithSCJobInput, IssuerItem, ItemId, InputSource
 
 
