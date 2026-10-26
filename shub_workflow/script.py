@@ -27,10 +27,13 @@ from typing import (
     Protocol,
     Type,
     Set,
-    IO,
+    TYPE_CHECKING,
 )
 from pprint import pformat
 from typing_extensions import TypedDict, NotRequired
+
+if TYPE_CHECKING:
+    from _typeshed import SupportsWrite
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -104,7 +107,7 @@ class ArgumentParser(PythonArgumentParser):
         if self.raise_parse_error:
             return super().exit(*args, **kwargs)
 
-    def print_usage(self, file: Optional[IO[str]] = None):
+    def print_usage(self, file: "Optional[SupportsWrite[str]]" = None):
         if not self.programs:
             super().print_usage()
 
@@ -117,7 +120,7 @@ class ArgumentParser(PythonArgumentParser):
             available += f"* {k}: {v['description']}\n"
         return available
 
-    def print_help(self, file: Optional[IO[str]] = None):
+    def print_help(self, file: "Optional[SupportsWrite[str]]" = None):
         if self.raise_parse_error:
             super().print_help(file)
             print(f"Programs available:\n{self._get_available_programs()}", file=sys.stderr)
@@ -815,7 +818,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
                 break
             self.maybe_upload_stats()
 
-    def upload_stats(self):
+    def upload_stats(self):  # type: ignore[override]
         # reset the throttle window on every upload — including explicit ones (e.g. an issuer uploading on
         # input consumption) — so maybe_upload_stats() won't re-upload again until stats_interval has elapsed
         # since the last actual upload.

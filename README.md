@@ -120,13 +120,13 @@ marketplace manifest is [`.claude-plugin/marketplace.json`](.claude-plugin/marke
 
 # Note
 
-The requirements for this library are defined in setup.py as usual. The Pipfile files in the repository don't define dependencies. It is only used
+The requirements for this library are defined in setup.py as usual. The Pipfile in the repository doesn't define dependencies. It is only used
 for setting up a development environment for shub-workflow library development and testing.
 
 
 # For developers
 
-For installing a development environment for shub-workflow, the package comes with Pipfile and Pipfile.lock files. So, clone or fork the repository and do:
+For installing a development environment for shub-workflow, the package comes with a Pipfile. So, clone or fork the repository and do:
 
 ```
 > pipenv install --dev
