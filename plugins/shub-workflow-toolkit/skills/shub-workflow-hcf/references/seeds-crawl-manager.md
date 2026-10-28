@@ -28,7 +28,7 @@ class CrawlManager(HCFSeedsCrawlManager):
 - **Split slots:** `SLOT_SPLITS = {"<canonical name>": n}` reads `<base>`, `<base>_1` … `<base>_<n-1>`
   in rotation; each read starts after the last slot read and skips empty ones, so the generator ends
   only when all are empty.
-- Hooks: `filter_out_seed(seed, qdata)` (default drops `qdata["processed"]`), `requested_seeds()`
+- Hooks: `filter_out_seed(seed, qdata)` (default keeps every seed), `requested_seeds()`
   (default `SEEDS_PER_JOB × max_running_jobs`), `process_seeds(seeds)` (transform/fan out before
   chunking), `build_schedule_args(seeds)` (add spider args, job settings, tags), `on_empty_frontier()`
   (e.g. reset the slot and schedule a seed job); `max_running_jobs` is a property (add back-pressure).

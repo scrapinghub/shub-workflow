@@ -228,6 +228,15 @@ class MySeedsCrawlManager(HCFSeedsCrawlManager):
         SpiderName("othersite"): SeedsSpiderConfig(),
     }
 
+    def filter_out_seed(self, seed, qdata):
+        return seed.startswith("#")
+
+
+class DefaultsSeedsCrawlManager(HCFSeedsCrawlManager):
+    name = "crawlmanager"
+    frontier_name = "myfrontier"
+    ENABLED_SPIDERS = {SpiderName("othersite"): SeedsSpiderConfig()}
+
 
 class HCFSeedsCrawlManagerTest(TestCase):
     def setUp(self):
@@ -268,7 +277,7 @@ class HCFSeedsCrawlManagerTest(TestCase):
         self.assertEqual(self.make("othersite").get_slotname(), "othersite")
 
     def test_schedule_args_from_slot(self):
-        self.add("mysite_tags", ["s1", "s2", ("s3", {"processed": True})], ["s4", "s5"])
+        self.add("mysite_tags", ["s1", "s2", "#s3"], ["s4", "s5"])
         manager = self.make("mysite_tags")
         params = list(manager.set_parameters_gen())
         self.assertEqual(
@@ -283,11 +292,12 @@ class HCFSeedsCrawlManagerTest(TestCase):
         self.assertEqual(manager.stats.get_value("hcf/seeds/mysite_tags/filtered"), 1)
 
     def test_defaults(self):
-        self.add("othersite", ["s1", "s2"])
-        manager = self.make("othersite")
+        self.add("othersite", ["s1", ("#s2", {"processed": True})])
+        manager = self.make("othersite", cls=DefaultsSeedsCrawlManager)
         self.assertEqual(
-            list(manager.set_parameters_gen()), [{"seeds": '["s1"]', "units": 1}, {"seeds": '["s2"]', "units": 1}]
+            list(manager.set_parameters_gen()), [{"seeds": '["s1"]', "units": 1}, {"seeds": '["#s2"]', "units": 1}]
         )
+        self.assertIsNone(manager.stats.get_value("hcf/seeds/othersite/filtered"))
 
     def test_running_jobs_from_sc_settings(self):
         self.assertEqual(self.make("mysite_tags").max_running_jobs, 2)

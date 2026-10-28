@@ -306,10 +306,9 @@ class HCFSeedsCrawlManager(GeneratorCrawlManager):
 
     def filter_out_seed(self, seed: str, qdata: Dict[str, Any]) -> bool:
         """
-        Whether to discard a seed read from the frontier. By default, discards the ones whose qdata is marked as
-        processed.
+        Whether to discard a seed read from the frontier (i.e. based on its qdata). By default, keeps all of them.
         """
-        return bool(qdata.get("processed"))
+        return False
 
     def requested_seeds(self) -> int:
         """
