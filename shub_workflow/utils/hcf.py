@@ -8,7 +8,7 @@ Requires the optional hcf-backend package:
 import json
 import logging
 from itertools import cycle
-from typing import Any, Dict, Generator, Iterable, Iterator, List, Optional, Tuple, TypedDict
+from typing import Any, Dict, Generator, Iterable, Iterator, List, Mapping, Optional, Tuple, TypedDict
 
 from shub_workflow.crawl import GeneratorCrawlManager, JobParams, ScheduleArgs
 from shub_workflow.script import BaseScript, JobDict, JobKey, Outcome, SpiderName
@@ -227,7 +227,7 @@ class HCFSeedsCrawlManager(GeneratorCrawlManager):
 
     # The spiders that run with this manager, each one with its configuration. Starting the manager for a spider
     # that is not here is an error.
-    ENABLED_SPIDERS: Dict[SpiderName, SeedsSpiderConfig] = {}
+    ENABLED_SPIDERS: Mapping[SpiderName, SeedsSpiderConfig] = {}
     # Number of slots of a source (by canonical name), when its slot is split. Default 1 (not split).
     SLOT_SPLITS: Dict[str, int] = {}
     # The name of the frontier. If not set, it is read from the project setting FRONTIER_NAME.
