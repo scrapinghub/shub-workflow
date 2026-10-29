@@ -1,4 +1,5 @@
 import os
+from io import StringIO
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple
 from unittest import TestCase
@@ -275,6 +276,55 @@ class HCFSeedsCrawlManagerTest(TestCase):
         self.assertEqual(manager.get_slotname(), "mysite_tags")
         self.assertEqual(manager.get_slotname(2), "mysite_tags_2")
         self.assertEqual(self.make("othersite").get_slotname(), "othersite")
+        self.assertEqual(manager.get_slotname(1, SpiderName("othersite")), "othersite_1")
+
+    def test_shared_slot(self):
+        class FakeTagsVariantSpider(FakeTagsSpider):
+            # a variant of the same source that misses its own seeds_source, so it inherits "tags"
+            name = "mysite_users"
+
+        FAKE_SPIDERS["mysite_users"] = FakeTagsVariantSpider
+        self.addCleanup(FAKE_SPIDERS.pop, "mysite_users")
+
+        # a variant that is not enabled (i.e. a periodic seeder) may share the slot
+        self.assertEqual(self.make("mysite_tags").get_slotname(), "mysite_tags")
+
+        class SharedManager(MySeedsCrawlManager):
+            ENABLED_SPIDERS = {**MySeedsCrawlManager.ENABLED_SPIDERS, SpiderName("mysite_users"): SeedsSpiderConfig()}
+
+        for spider in ("mysite_tags", "mysite_users"):
+            with self.assertRaises(SystemExit), patch("sys.stderr", new_callable=StringIO) as stderr:
+                self.make(spider, cls=SharedManager)
+            self.assertIn("are both fed from slot(s) mysite_tags.", stderr.getvalue())
+        # the managers of the other spiders run normally
+        self.make("othersite", cls=SharedManager)
+
+    def test_shared_split_slot(self):
+        class SplitSlotSpider(FakePlainSpider):
+            name = "mysite_tags_1"
+
+        FAKE_SPIDERS["mysite_tags_1"] = SplitSlotSpider
+        self.addCleanup(FAKE_SPIDERS.pop, "mysite_tags_1")
+
+        class SplitManager(MySeedsCrawlManager):
+            SLOT_SPLITS = {"mysite": 2}
+            ENABLED_SPIDERS = {**MySeedsCrawlManager.ENABLED_SPIDERS, SpiderName("mysite_tags_1"): SeedsSpiderConfig()}
+
+        manager = self.make("othersite", cls=SplitManager)
+        self.assertEqual(manager.get_slotnames(SpiderName("mysite_tags")), ["mysite_tags", "mysite_tags_1"])
+        with self.assertRaises(SystemExit), patch("sys.stderr", new_callable=StringIO) as stderr:
+            self.make("mysite_tags", cls=SplitManager)
+        self.assertIn(
+            "Spiders mysite_tags and mysite_tags_1 are both fed from slot(s) mysite_tags_1.", stderr.getvalue()
+        )
+
+    def test_shared_slot_enabled_spider_not_found(self):
+        class MissingManager(MySeedsCrawlManager):
+            ENABLED_SPIDERS = {**MySeedsCrawlManager.ENABLED_SPIDERS, SpiderName("removed"): SeedsSpiderConfig()}
+
+        with self.assertLogs("shub_workflow.utils.hcf", level="WARNING") as logs:
+            self.make("mysite_tags", cls=MissingManager)
+        self.assertIn("Enabled spider removed not found in project.", logs.output[0])
 
     def test_schedule_args_from_slot(self):
         self.add("mysite_tags", ["s1", "s2", "#s3"], ["s4", "s5"])

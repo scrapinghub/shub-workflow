@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="shub-workflow",
-    version="1.14.45.1",
+    version="1.14.45.2",
     description="Workflow manager for Zyte ScrapyCloud tasks.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
@@ -38,9 +38,9 @@ setup(
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
     ],
     package_data={"shub_workflow": ["py.typed"]},
 )

@@ -217,7 +217,9 @@ class HCFSeedsCrawlManager(GeneratorCrawlManager):
 
     The slot of a spider is named after its canonical name and its seeds_source attribute (see get_base_slotname()).
     A source too big for a single writer can have its slot split in several ones (see SLOT_SPLITS): they are read in
-    rotation. The other behaviors are customized by overriding the hooks: filter_out_seed(), process_seeds(),
+    rotation. Two enabled spiders can't be fed from the same slot (each manager would schedule the seeds the other
+    one reads too): the manager refuses to start if the slots of its spider are also slots of another enabled spider.
+    The other behaviors are customized by overriding the hooks: filter_out_seed(), process_seeds(),
     build_schedule_args(), requested_seeds(), on_empty_frontier().
 
     It is meant to be scheduled automatically, so it acquires the jobs left running by a previous instance of the
@@ -250,8 +252,31 @@ class HCFSeedsCrawlManager(GeneratorCrawlManager):
         for outcome in self.fatal_outcomes:
             if outcome not in self.failed_outcomes:
                 self.failed_outcomes.append(outcome)
+        self.check_shared_slots()
         self.__split_gen = cycle(range(self.get_slot_splits()))
         self.__hcf = None
+
+    def check_shared_slots(self):
+        """
+        Fails if a slot of the target spider is also a slot of another enabled spider (i.e. a spider variant that
+        misses its own seeds_source, so it inherits the one of the spider it derives from). Only the managers of the
+        spiders involved fail: the other ones run normally.
+        """
+        assert self.spider is not None
+        own_slots = set(self.get_slotnames(self.spider))
+        for spider in self.ENABLED_SPIDERS:
+            if spider == self.spider:
+                continue
+            try:
+                shared = own_slots.intersection(self.get_slotnames(spider))
+            except KeyError:
+                LOGGER.warning(f"Enabled spider {spider} not found in project.")
+                continue
+            if shared:
+                self.argparser.error(
+                    f"Spiders {self.spider} and {spider} are both fed from slot(s) {', '.join(sorted(shared))}. "
+                    "Each enabled spider must have its own slot."
+                )
 
     @property
     def hcf(self):
@@ -282,27 +307,40 @@ class HCFSeedsCrawlManager(GeneratorCrawlManager):
         """
         yield from self.get_jobs(project_id, spider=self.spider, **kwargs)
 
-    def get_base_slotname(self) -> str:
+    def get_base_slotname(self, spider: SpiderName) -> str:
         """
-        The slot of the target spider: "<canonical name>_<seeds_source>" if the spider class has a seeds_source
-        attribute (the field the seeds that feed it come from), else the canonical name alone.
+        The slot of the given spider: "<canonical name>_<seeds_source>" if the spider class has a seeds_source
+        attribute (the field the seeds that feed it come from), else the canonical name alone. It is called for every
+        enabled spider (see check_shared_slots()), so an override must compute it from the spider argument.
         """
-        assert self.spider is not None
-        canonical_name = self.get_canonical_spidername(self.spider)
-        seeds_source = getattr(self.spider_loader.load(self.spider), "seeds_source", None)
+        canonical_name = self.get_canonical_spidername(spider)
+        seeds_source = getattr(self.spider_loader.load(spider), "seeds_source", None)
         return f"{canonical_name}_{seeds_source}" if seeds_source else canonical_name
 
-    def get_slot_splits(self) -> int:
-        assert self.spider is not None
-        return self.SLOT_SPLITS.get(self.get_canonical_spidername(self.spider), 1)
+    def get_slot_splits(self, spider: Optional[SpiderName] = None) -> int:
+        """
+        The number of slots of the given spider (default, the target one).
+        """
+        spider = spider or self.spider
+        assert spider is not None
+        return self.SLOT_SPLITS.get(self.get_canonical_spidername(spider), 1)
 
-    def get_slotname(self, split: int = 0) -> str:
+    def get_slotname(self, split: int = 0, spider: Optional[SpiderName] = None) -> str:
         """
-        The name of the given split of the slot: the base slot name for split 0, with a "_<split>" suffix for the
-        other ones. The writers of a split slot (typically, one consumer per split) must follow the same naming.
+        The name of the given split of the slot of the given spider (default, the target one): the base slot name for
+        split 0, with a "_<split>" suffix for the other ones. The writers of a split slot (typically, one consumer per
+        split) must follow the same naming.
         """
-        base = self.get_base_slotname()
+        spider = spider or self.spider
+        assert spider is not None
+        base = self.get_base_slotname(spider)
         return base if split == 0 else f"{base}_{split}"
+
+    def get_slotnames(self, spider: SpiderName) -> List[str]:
+        """
+        All the slots of the given spider.
+        """
+        return [self.get_slotname(split, spider) for split in range(self.get_slot_splits(spider))]
 
     def filter_out_seed(self, seed: str, qdata: Dict[str, Any]) -> bool:
         """
