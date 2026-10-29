@@ -27,7 +27,7 @@ from typing import (
     Protocol,
     Type,
     Set,
-    IO,
+    TYPE_CHECKING,
 )
 from pprint import pformat
 from typing_extensions import TypedDict, NotRequired
@@ -51,6 +51,8 @@ from shub_workflow.utils import (
 )
 from shub_workflow.utils.futils import FSHelper
 
+if TYPE_CHECKING:
+    from _typeshed import SupportsWrite
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +106,7 @@ class ArgumentParser(PythonArgumentParser):
         if self.raise_parse_error:
             return super().exit(*args, **kwargs)
 
-    def print_usage(self, file: Optional[IO[str]] = None):
+    def print_usage(self, file: Optional["SupportsWrite[str]"] = None):
         if not self.programs:
             super().print_usage()
 
@@ -117,7 +119,7 @@ class ArgumentParser(PythonArgumentParser):
             available += f"* {k}: {v['description']}\n"
         return available
 
-    def print_help(self, file: Optional[IO[str]] = None):
+    def print_help(self, file: Optional["SupportsWrite[str]"] = None):
         if self.raise_parse_error:
             super().print_help(file)
             print(f"Programs available:\n{self._get_available_programs()}", file=sys.stderr)

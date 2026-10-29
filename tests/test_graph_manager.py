@@ -1932,7 +1932,7 @@ class ManagerTest(BaseTestCase):
         manager.schedule_script = Mock()
         manager._on_start()
         # will test that all 5 jobs (4 for A and 1 for B) will run one by one
-        side_effects = [f"999/1/{i+1}" for i in range(4)] + ["999/2/1"]
+        side_effects = [f"999/1/{i + 1}" for i in range(4)] + ["999/2/1"]
         for i in range(3):
             side_effect, side_effects = side_effects[:2], side_effects[2:]
             manager.schedule_script.side_effect = side_effect
@@ -2299,7 +2299,7 @@ class ManagerTest(BaseTestCase):
             [
                 {
                     "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"],
-                    "key": f"999/1/{i+1}",
+                    "key": f"999/1/{i + 1}",
                     "close_reason": "finished",
                 }
                 for i in range(4)
@@ -2339,14 +2339,14 @@ class ManagerTest(BaseTestCase):
             [
                 {
                     "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"],
-                    "key": f"999/1/{i+1}",
+                    "key": f"999/1/{i + 1}",
                 }
                 for i in (2, 3)
             ],  # call to get running jobs
             [
                 {
                     "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"],
-                    "key": f"999/1/{i+1}",
+                    "key": f"999/1/{i + 1}",
                     "close_reason": "finished",
                 }
                 for i in (0, 1)
@@ -2394,7 +2394,7 @@ class ManagerTest(BaseTestCase):
             [
                 {
                     "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"],
-                    "key": f"999/1/{i+1}",
+                    "key": f"999/1/{i + 1}",
                     "close_reason": "failed" if i == 3 else "finished",
                 }
                 for i in range(4)
@@ -2428,7 +2428,7 @@ class ManagerTest(BaseTestCase):
             [
                 {
                     "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobB.{i}"],
-                    "key": f"999/2/{i+1}",
+                    "key": f"999/2/{i + 1}",
                 }
                 for i in (1, 3)
             ]
@@ -2438,7 +2438,7 @@ class ManagerTest(BaseTestCase):
             [
                 {
                     "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"],
-                    "key": f"999/1/{i+1}",
+                    "key": f"999/1/{i + 1}",
                     "close_reason": "finished",
                 }
                 for i in (0, 1, 2, 3)
@@ -2446,7 +2446,7 @@ class ManagerTest(BaseTestCase):
             + [
                 {
                     "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobB.{i}"],
-                    "key": f"999/2/{i+1}",
+                    "key": f"999/2/{i + 1}",
                     "close_reason": "finished",
                 }
                 for i in (0, 2)
@@ -2488,7 +2488,7 @@ class ManagerTest(BaseTestCase):
             [
                 {
                     "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobB.{i}"],
-                    "key": f"999/2/{i+1}",
+                    "key": f"999/2/{i + 1}",
                 }
                 for i in (1, 3)
             ]
@@ -2498,7 +2498,7 @@ class ManagerTest(BaseTestCase):
             [
                 {
                     "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobA.{i}"],
-                    "key": f"999/1/{i+1}",
+                    "key": f"999/1/{i + 1}",
                     "close_reason": "finished",
                 }
                 for i in (0, 1, 2, 3)
@@ -2506,7 +2506,7 @@ class ManagerTest(BaseTestCase):
             + [
                 {
                     "tags": ["PARENT_NAME=test", "FLOW_ID=34ab", f"TASK_ID=jobB.{i}"],
-                    "key": f"999/2/{i+1}",
+                    "key": f"999/2/{i + 1}",
                     "close_reason": "finished",
                 }
                 for i in (0, 2)

@@ -389,7 +389,7 @@ class GeneratorCrawlManager(CrawlManager, GeneratorCrawlManagerProtocol):
         return True
 
     def _fulljobparams_from_spiderargs(self, schedule_args: ScheduleArgs) -> FullJobParams:
-        spider = schedule_args.get("spider", self.spider)
+        spider = cast(SpiderName, schedule_args.get("spider", self.spider))
         spider_args = deepcopy(schedule_args)
         for key in tuple(FullJobParams.__annotations__):
             spider_args.pop(key, None)

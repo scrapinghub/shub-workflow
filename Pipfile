@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-pyyaml = "==6.0"
+pyyaml = ">=6.0.2"
 scrapinghub = {version = ">=2.4.0", extras = ["msgpack"]}
 jinja2 = ">=2.7.3"
 sqlitedict = "==2.1.0"
@@ -40,7 +40,6 @@ flake8-import-order = "*"
 pytest-cov = "*"
 types-dateparser = "*"
 pipenv = "==2025.0.4"
-setuptools = "==73.0.1"
 
 [requires]
 python_version = "3.10"
