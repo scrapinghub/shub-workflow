@@ -39,6 +39,8 @@ types-pyyaml = "*"
 flake8-import-order = "*"
 pytest-cov = "*"
 types-dateparser = "*"
+pipenv = "==2025.0.4"
+setuptools = "==73.0.1"
 
 [requires]
 python_version = "3.10"

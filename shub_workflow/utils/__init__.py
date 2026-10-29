@@ -2,7 +2,7 @@ import logging
 import json
 import os
 import hashlib
-from typing import Optional
+from typing import Any, Callable, Optional, TypeVar, cast
 
 from scrapy.settings import BaseSettings
 from tenacity import retry, retry_if_exception_type, before_sleep_log, stop_after_attempt, wait_fixed
@@ -86,7 +86,10 @@ DASH_RETRY_WAIT_SECS = int(os.environ.get("DASH_RETRY_WAIT_SECS", ONE_MIN_IN_S))
 DASH_RETRY_LOGGING_LEVEL = os.environ.get("DASH_RETRY_LOGGING_LEVEL", "ERROR")
 
 
-dash_retry_decorator = retry(
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+_dash_retry = retry(
     # ServerError is the only ScrapinghubAPIError that should be retried. Don't capture ScrapinghubAPIError here
     retry=retry_if_exception_type((ServerError, ReadTimeout, ConnectionError, HTTPError)),
     before_sleep=before_sleep_log(logger, getattr(logging, DASH_RETRY_LOGGING_LEVEL)),
@@ -94,6 +97,13 @@ dash_retry_decorator = retry(
     stop=stop_after_attempt(DASH_RETRY_MAX),
     wait=wait_fixed(DASH_RETRY_WAIT_SECS),
 )
+
+
+def dash_retry_decorator(func: F) -> F:
+    # tenacity >= 9.2 types decorated callables as _RetryDecorated, which mypy doesn't accept as a method
+    # override or protocol member. Keep the original signature instead.
+    return cast(F, _dash_retry(func))
+
 
 _settings_warning_issued = False
 
