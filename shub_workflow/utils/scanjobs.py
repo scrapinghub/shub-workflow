@@ -158,13 +158,12 @@ import zoneinfo
 import math
 import random
 from uuid import uuid4
-from typing import Iterator, Tuple, TypedDict, List, Iterable, Dict, Union, Optional, Any
+from typing import Iterator, Tuple, TypedDict, List, Iterable, Dict, Union, Optional, Any, NotRequired
 from itertools import chain
 
 import dateparser
 import jmespath
 from timelength import TimeLength
-from typing_extensions import NotRequired
 from scrapinghub.client.jobs import Job
 
 from shub_workflow.script import BaseScript, JobDict

@@ -28,9 +28,10 @@ from typing import (
     Type,
     Set,
     TYPE_CHECKING,
+    TypedDict,
+    NotRequired,
 )
 from pprint import pformat
-from typing_extensions import TypedDict, NotRequired
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -817,7 +818,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
                 break
             self.maybe_upload_stats()
 
-    def upload_stats(self):
+    def upload_stats(self):  # type: ignore[override]
         # reset the throttle window on every upload — including explicit ones (e.g. an issuer uploading on
         # input consumption) — so maybe_upload_stats() won't re-upload again until stats_interval has elapsed
         # since the last actual upload.
