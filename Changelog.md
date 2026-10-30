@@ -178,3 +178,4 @@ Minor version changes:
 - 1.14.43: issuer: crawl manager: added a public method for getting all the running jobs along with the spider args
 - 1.14.44: new hcf frontier tool base mixin
 - 1.14.45: new HCFSeedsCrawlmanager class
+- 1.14.46: scanjobs script: new metadata search option
