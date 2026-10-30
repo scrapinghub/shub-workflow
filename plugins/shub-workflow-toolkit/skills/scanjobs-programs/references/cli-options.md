@@ -18,6 +18,7 @@ are `action="append"` — repeat the flag to give several.
 | `-l`, `--log-pattern` | regex on log lines | regex groups (with `--count`, emits `1` per match) |
 | `-i`, `--item-field-pattern` | `jmespath:regex` on items | regex groups, or just existence if regex is empty |
 | `-a`, `--argument-pattern` | spiders: `arg:regex`; scripts (`py:`): bare `regex` | does not emit; **filters** scan to jobs whose argument matches. For spiders the regex is matched against the spider arg named `arg`; for scripts there is no `arg:` separator — the regex is matched against the job command line (`job_cmd`) |
+| `-m`, `--meta-pattern` | `field:regex` on a **job metadata** field (`close_reason`, `version`, `units`, `state`, `items`, `priority`, …) | **filters** and **emits**. A job is scanned only if every `-m` pattern matches (regex searched in the value; an empty regex just requires the field to exist, so a missing field excludes the job). Each pattern captures **one** value: its first regex group, else the whole field value. The captures are prepended to every datapoint of the job, *after* `-c` post-processing (so `-c` never sees them). If the job yields no other datapoint, they make one on their own. That keeps jobs killed before saving stats (e.g. OOM) in the output. With `--data-headers=auto` they come as `field`/`value` pairs |
 | `--tag-pattern` | regex | only scan jobs whose tag matches |
 
 ## Time window

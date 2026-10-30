@@ -105,6 +105,15 @@ Examples
 
       ('datacenter', 0.3159090909090909, 6.7534090909090905))
 
+6. A census of the jobs of the spider "myspider" in the last 3 days: close reason, commit of the deployed
+   version and memory peak, one record per job, written into census.jl. Jobs killed before saving any stats
+   still get a record, with only the --meta-pattern captures:
+
+       > python scanjobs.py --project-id=production myspider -p "3 days" -m close_reason: \\
+       -m 'version:^([0-9a-f]+)-' -s '^memusage/max$' --data-headers=close_reason,commit,memusage -w census.jl
+
+   With -m 'close_reason:memusage|oom' instead, only jobs that died from memory are scanned.
+
 postscript instructions supported:
 ----------------------------------
 
@@ -1024,6 +1033,20 @@ class ScanJobs(BaseScript):
             default=[],
         )
         self.argparser.add_argument(
+            "--meta-pattern",
+            "-m",
+            help=(
+                "Job metadata pattern, in format field:regex (e.g. close_reason, version, units, state, items). "
+                "Can be multiple. Only jobs where every pattern matches are scanned (regex is searched in the field "
+                "value; an empty regex just requires the field to exist). Each pattern captures a value (first "
+                "regex group if any, else the whole field value), which is prepended to every datapoint of the job, "
+                "or generates a datapoint on its own when the job yields no other one (e.g. a job killed before "
+                "saving any stats). With --data-headers=auto, captures are field/value pairs."
+            ),
+            action="append",
+            default=[],
+        )
+        self.argparser.add_argument(
             "--period",
             "-p",
             default=86400,
@@ -1327,6 +1350,25 @@ class ScanJobs(BaseScript):
                     return jdict["spider_args"]
         return None
 
+    def filter_meta_pattern(self, jdict: JobDict) -> Optional[Tuple[Union[str, int, float], ...]]:
+        """
+        Returns the values captured by the meta patterns, or None if the job doesn't match all of them.
+        """
+        captured: Tuple[Union[str, int, float], ...] = ()
+        for meta_pattern in self.args.meta_pattern:
+            field, pattern = meta_pattern.split(":", 1)
+            value: Any = jdict.get(field)
+            if value is None:
+                return None
+            m = re.search(pattern, value if isinstance(value, str) else str(value))
+            if m is None:
+                return None
+            capture = m.group(1) if m.groups() else value
+            if self.args.data_headers == "auto":
+                captured += (field,)
+            captured += (capture,)
+        return captured
+
     def _print_argument_match(self, jdict: JobDict, tstamp: datetime.datetime, jobcount: int) -> None:
         print(f"Jobs scanned: {jobcount}")
         print(f"Timestamp reached: {tstamp}")
@@ -1426,6 +1468,9 @@ class ScanJobs(BaseScript):
             meta.append("job_cmd")
         if self.args.stat_pattern:
             meta.append("scrapystats")
+        for meta_pattern in self.args.meta_pattern:
+            if (field := meta_pattern.split(":", 1)[0]) not in meta:
+                meta.append(field)
         meta.append("spider")
         tag_patterns = []
         if self.args.tag_pattern:
@@ -1459,6 +1504,10 @@ class ScanJobs(BaseScript):
                 print("Total jobs scanned:", jobcount)
                 break
 
+            meta_groups = self.filter_meta_pattern(jdict)
+            if meta_groups is None:
+                continue
+
             keyprinted = False
             job = self.get_job(jdict["key"])
             if "finished_time" in jdict:
@@ -1483,13 +1532,18 @@ class ScanJobs(BaseScript):
                 self.args.post_process_code.split() if self.args.post_process_code is not None else None
             )
             post_process_stack: List[Union[str, int, float]] = []
+            # ensures to print matching job even if no patterns provided. Also carries the meta pattern captures
+            # when the job didn't yield any other datapoint.
+            last_result = FilterResult(groups=(), tstamp=tstamp)
+            job_has_datapoints = False
             for result in chain(
                 self.filter_log_pattern(jdict, job, limit),
                 self.filter_item_field_pattern(jdict, job, limit),
                 self.filter_stats_pattern(jdict, job, tstamp),
-                # ensure to print matching job even if no patterns provided
-                [FilterResult(groups=(), tstamp=tstamp)],
+                [last_result],
             ):
+                if result is last_result and not job_has_datapoints:
+                    result["groups"] = meta_groups
                 job_link = f"https://app.zyte.com/p/{jdict['key']}/stats"
                 if not keyprinted:
                     print(f"Jobs scanned: {jobcount}")
@@ -1507,7 +1561,7 @@ class ScanJobs(BaseScript):
                     print("Matching stats:", result["stats"])
                     has_match = True
                 if result["groups"]:
-                    if post_process_instructions is not None:
+                    if post_process_instructions is not None and result is not last_result:
                         hold = False
                         if post_process_instructions and post_process_instructions[0] == "hold":
                             post_process_instructions.pop(0)
@@ -1530,6 +1584,10 @@ class ScanJobs(BaseScript):
                                 input("Press Enter to continue...\n")
                             continue
                         post_process_stack = []
+
+                    if result is not last_result:
+                        result["groups"] = meta_groups + result["groups"]
+                        job_has_datapoints = True
 
                     if self.args.data_headers:
                         if self.args.data_headers == "auto":
@@ -1555,7 +1613,10 @@ class ScanJobs(BaseScript):
                             result["dict_groups"]["job_link"] = job_link
                     if not self.args.generate_items_sample:
                         print("Data points generated:", result.get("dict_groups") or result["groups"])
-                any_pattern = self.args.log_pattern or self.args.item_field_pattern or self.args.stat_pattern
+                any_pattern = (
+                    self.args.log_pattern or self.args.item_field_pattern or self.args.stat_pattern
+                    or self.args.meta_pattern
+                )
                 if self.args.write:
                     if result.get("dict_groups"):
                         print(json.dumps(result["dict_groups"]), file=self.args.write)

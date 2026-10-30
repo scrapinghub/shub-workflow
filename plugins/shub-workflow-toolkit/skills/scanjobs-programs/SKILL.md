@@ -2,9 +2,12 @@
 name: scanjobs-programs
 description: >-
   Use for help using shub_workflow's scanjobs tool — scanning ScrapyCloud jobs to extract and plot
-  data from stats, logs, items or spider args. Covers building a scanjobs command line (the
-  stat/log/item/spider-arg patterns, the postscript post-processor -c, the --plot mini-language,
-  time windows, and output modes) and the predefined "programs" shortcut: the PROGRAMS dict in a
+  data from stats, logs, items, spider args or job metadata. Also reach for it, instead of a
+  hand-rolled job-listing script, to take a census of a spider's jobs over a time window: how many
+  ended with each close_reason (e.g. memusage_exceeded / killed by oom), on which deployed version,
+  with which units, alongside per-job stats such as memusage/max. Covers building a scanjobs command
+  line (the stat/log/item/spider-arg/meta patterns, the postscript post-processor -c, the --plot
+  mini-language, time windows, and output modes) and the predefined "programs" shortcut: the PROGRAMS dict in a
   project's scripts/scanjobs.py (a subclass of shub_workflow.utils.scanjobs.ScanJobs), invoked as
   `scanjobs.py -g <program> -v key:val`, including {var} placeholders and {{ }} escaping. Applies to
   any project whose scripts/scanjobs.py subclasses shub_workflow's ScanJobs.
@@ -42,6 +45,19 @@ Invoke: `scanjobs.py -g response_profile -v spider:myspider`.
 > jobs (e.g. `py:monitor.py`, filtered by its run tag like `--has-tag=DAILY`), selects a stat with
 > `-s`, and `--plot`s its evolution over `--period` — a lightweight way to watch monitor-stat trends.
 
+> **Common use — a census of a spider's jobs** (e.g. "since when, and from which deploy, do jobs die
+> from memory?"). Combine `-m` with the stats you care about and write one record per job:
+>
+> ```
+> scanjobs.py --project-id=<PROJECT_ID> myspider -p "3 days" -z UTC \
+>     -m close_reason: -m "version:^([0-9a-f]+)" -s "^memusage/max$" \
+>     --data-headers=close_reason,commit,memusage -w census.jl
+> ```
+>
+> Then group `census.jl` by `close_reason` × `commit`. Jobs killed before saving stats still appear,
+> with only their metadata. Scrapy samples `memusage/max` only every 60 s, so a job OOM-killed sooner
+> than that reports just its startup memory: trust the close reason, not that stat.
+
 > **Human-readable docs.** The shub-workflow wiki has a full prose guide to this tool at
 > <https://github.com/scrapinghub/shub-workflow/wiki/ScanJobs>. If the user wants a walkthrough,
 > a shareable reference, or asks where the documentation is, point them there.
@@ -76,6 +92,8 @@ bogus `-g` (e.g. `-g ?`) — the parser prints `* <name>: <description>` for eac
    - log lines → `-l <regex>` (regex groups emitted; add `--count` to emit `1` per match for counting)
    - items → `-i <jmespath>:<regex>`
    - filter jobs by argument → `-a <arg>:<regex>` for spiders; for scripts (`py:`) a bare `-a <regex>` matched against the job command line
+   - job metadata → `-m <field>:<regex>` (`close_reason`, `version`, `units`, …): filters jobs and
+     prepends one captured value per pattern to the job's datapoints
 2. **Always set `--project-id`** (jobs are read outside ScrapyCloud): a numeric SC project id, or a
    configured alias if the project defines one.
 3. **Parameterize** the per-run bits (spider, source, …) as `{var}` and document them in the
