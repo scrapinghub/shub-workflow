@@ -28,6 +28,7 @@ tutorial. This skill builds on the `shub-workflow-scripts` skill (the base-class
 | --- | --- | --- |
 | `GeneratorCrawlManager` | schedule a **stream** of jobs from a generator of params (the usual case) | [examples/generator_crawl_manager.py](examples/generator_crawl_manager.py) |
 | `AsyncSchedulerCrawlManagerMixin` (+ `GeneratorCrawlManager`) | the cycle schedules **many** jobs and you want them dispatched concurrently | [examples/async_generator_crawl_manager.py](examples/async_generator_crawl_manager.py) |
+| `HCFSeedsCrawlManager` (`shub_workflow.utils.hcf`, a `GeneratorCrawlManager`) | feed one spider with **seeds read from its crawl-frontier slot** (per-spider config, split slots) | the `shub-workflow-hcf` skill |
 | `PeriodicCrawlManager` | keep **one** spider job running, rescheduling it after each finish | [examples/periodic_crawl_manager.py](examples/periodic_crawl_manager.py) |
 | `CrawlManager` | schedule a **single** spider job once (rare on its own; it's the base of the others) | — |
 

@@ -5,10 +5,13 @@ Requires the optional hcf-backend package:
 
     pip install shub-workflow[with-hcf-backend]
 """
+import json
 import logging
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+from itertools import cycle
+from typing import Any, Dict, Generator, Iterable, Iterator, List, Mapping, Optional, Tuple, TypedDict
 
-from shub_workflow.script import BaseScript
+from shub_workflow.crawl import GeneratorCrawlManager, JobParams, ScheduleArgs
+from shub_workflow.script import BaseScript, JobDict, JobKey, Outcome, SpiderName
 
 LOGGER = logging.getLogger(__name__)
 
@@ -176,6 +179,253 @@ class FrontierTool(BaseScript):
                     print(batch_id, seed, qdata)
                 else:
                     print(batch_id, seed)
+
+
+class SeedsSpiderConfig(TypedDict, total=False):
+    """
+    The configuration of a spider in HCFSeedsCrawlManager.ENABLED_SPIDERS. A project can subclass it in order to
+    add its own keys.
+    """
+
+    # Max jobs in parallel. None or absent: read the ScrapyCloud project setting <SPIDER>_RUNNING_JOBS (default 1)
+    # on every loop, so it can be changed without a deploy. 0 pauses the spider.
+    RUNNING_JOBS: Optional[int]
+    # Seeds passed to each job. Default 1.
+    SEEDS_PER_JOB: int
+    # ScrapyCloud units of each job. Default 1.
+    SC_UNITS: int
+
+
+class HCFSeedsCrawlManager(GeneratorCrawlManager):
+    """
+    Crawl manager that feeds a spider with seeds read from its slot of a crawl frontier: it reads seed batches from
+    the slot, deletes them as it reads them, and schedules spider jobs with the seeds, in chunks of SEEDS_PER_JOB,
+    passed as a json list in the spider argument seeds_argument. When the slot is empty the generator ends: the
+    manager waits for its running jobs and closes, and a scheduler is expected to start it again later. One
+    instance runs per spider, with the spider name as command line argument:
+
+        py:crawlmanager.py <spider>
+
+    Subclass it in your project in order to set ENABLED_SPIDERS (and your project base script mixin, if any):
+
+        class MyCrawlManager(HCFSeedsCrawlManager):
+            name = "crawlmanager"
+            ENABLED_SPIDERS = {
+                SpiderName("mysite.com_tags"): {"SEEDS_PER_JOB": 10, "RUNNING_JOBS": 4},
+                SpiderName("mysite.com_authors"): {"SEEDS_PER_JOB": 100, "SC_UNITS": 2},
+            }
+
+    The slot of a spider is named after its canonical name and its seeds_source attribute (see get_base_slotname()).
+    A source too big for a single writer can have its slot split in several ones (see SLOT_SPLITS): they are read in
+    rotation. Two enabled spiders can't be fed from the same slot (each manager would schedule the seeds the other
+    one reads too): the manager refuses to start if the slots of its spider are also slots of another enabled spider.
+    The other behaviors are customized by overriding the hooks: filter_out_seed(), process_seeds(),
+    build_schedule_args(), requested_seeds(), on_empty_frontier().
+
+    It is meant to be scheduled automatically, so it acquires the jobs left running by a previous instance of the
+    same spider (acquire_all_jobs, with get_owned_jobs() narrowed to the target spider), and doesn't acquire finished
+    jobs. Requires the optional hcf-backend package.
+    """
+
+    # The spiders that run with this manager, each one with its configuration. Starting the manager for a spider
+    # that is not here is an error.
+    ENABLED_SPIDERS: Mapping[SpiderName, SeedsSpiderConfig] = {}
+    # Number of slots of a source (by canonical name), when its slot is split. Default 1 (not split).
+    SLOT_SPLITS: Dict[str, int] = {}
+    # The name of the frontier. If not set, it is read from the project setting FRONTIER_NAME.
+    frontier_name: Optional[str] = None
+    # The spider argument that receives the json list of seeds.
+    seeds_argument: str = "seeds"
+    # Close reasons of the spider jobs that stop the crawl (i.e. a suspended account): the manager stops scheduling
+    # and closes once its running jobs finish.
+    fatal_outcomes: Tuple[str, ...] = ()
+
+    acquire_all_jobs = True
+    dont_acquire_finished_jobs = True
+
+    def __init__(self):
+        super().__init__()
+        assert self.spider is not None
+        if self.spider not in self.ENABLED_SPIDERS:
+            self.argparser.error(f"Spider {self.spider} is not enabled.")
+        self.spider_config: SeedsSpiderConfig = self.ENABLED_SPIDERS[self.spider]
+        for outcome in self.fatal_outcomes:
+            if outcome not in self.failed_outcomes:
+                self.failed_outcomes.append(outcome)
+        self.check_shared_slots()
+        self.__split_gen = cycle(range(self.get_slot_splits()))
+        self.__hcf = None
+
+    def check_shared_slots(self):
+        """
+        Fails if a slot of the target spider is also a slot of another enabled spider (i.e. a spider variant that
+        misses its own seeds_source, so it inherits the one of the spider it derives from). Only the managers of the
+        spiders involved fail: the other ones run normally.
+        """
+        assert self.spider is not None
+        own_slots = set(self.get_slotnames(self.spider))
+        for spider in self.ENABLED_SPIDERS:
+            if spider == self.spider:
+                continue
+            try:
+                shared = own_slots.intersection(self.get_slotnames(spider))
+            except KeyError:
+                LOGGER.warning(f"Enabled spider {spider} not found in project.")
+                continue
+            if shared:
+                self.argparser.error(
+                    f"Spiders {self.spider} and {spider} are both fed from slot(s) {', '.join(sorted(shared))}. "
+                    "Each enabled spider must have its own slot."
+                )
+
+    @property
+    def hcf(self):
+        if self.__hcf is None:
+            HCFManager, _ = _import_hcf_backend()
+            frontier = self.frontier_name or self.project_settings.get("FRONTIER_NAME")
+            assert frontier, "Set the frontier_name attribute or the FRONTIER_NAME project setting."
+            self.__hcf = HCFManager(frontier, project_id=self.project_id)
+        return self.__hcf
+
+    @property
+    def seeds_per_job(self) -> int:
+        return self.spider_config.get("SEEDS_PER_JOB", 1)
+
+    @property
+    def max_running_jobs(self) -> int:
+        running_jobs = self.spider_config.get("RUNNING_JOBS")
+        if running_jobs is None:
+            assert self.spider is not None
+            settings = self.get_sc_project_settings()
+            running_jobs = int(settings.get(f"{self.spider.upper()}_RUNNING_JOBS", 1))
+        return running_jobs
+
+    def get_owned_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
+        """
+        Owns every job of the target spider, whoever scheduled it, and only of that spider: all the instances share
+        the same name, so the name-based acquisition alone would adopt the jobs of the other instances.
+        """
+        yield from self.get_jobs(project_id, spider=self.spider, **kwargs)
+
+    def get_base_slotname(self, spider: SpiderName) -> str:
+        """
+        The slot of the given spider: "<canonical name>_<seeds_source>" if the spider class has a seeds_source
+        attribute (the field the seeds that feed it come from), else the canonical name alone. It is called for every
+        enabled spider (see check_shared_slots()), so an override must compute it from the spider argument.
+        """
+        canonical_name = self.get_canonical_spidername(spider)
+        seeds_source = getattr(self.spider_loader.load(spider), "seeds_source", None)
+        return f"{canonical_name}_{seeds_source}" if seeds_source else canonical_name
+
+    def get_slot_splits(self, spider: Optional[SpiderName] = None) -> int:
+        """
+        The number of slots of the given spider (default, the target one).
+        """
+        spider = spider or self.spider
+        assert spider is not None
+        return self.SLOT_SPLITS.get(self.get_canonical_spidername(spider), 1)
+
+    def get_slotname(self, split: int = 0, spider: Optional[SpiderName] = None) -> str:
+        """
+        The name of the given split of the slot of the given spider (default, the target one): the base slot name for
+        split 0, with a "_<split>" suffix for the other ones. The writers of a split slot (typically, one consumer per
+        split) must follow the same naming.
+        """
+        spider = spider or self.spider
+        assert spider is not None
+        base = self.get_base_slotname(spider)
+        return base if split == 0 else f"{base}_{split}"
+
+    def get_slotnames(self, spider: SpiderName) -> List[str]:
+        """
+        All the slots of the given spider.
+        """
+        return [self.get_slotname(split, spider) for split in range(self.get_slot_splits(spider))]
+
+    def filter_out_seed(self, seed: str, qdata: Dict[str, Any]) -> bool:
+        """
+        Whether to discard a seed read from the frontier (i.e. based on its qdata). By default, keeps all of them.
+        """
+        return False
+
+    def requested_seeds(self) -> int:
+        """
+        The minimal number of seeds to read from the frontier on each read.
+        """
+        return self.seeds_per_job * max(self.max_running_jobs, 1)
+
+    def read_seeds_from_slot(self, slot: str) -> List[str]:
+        """
+        Reads batches from the slot, deleting each one as it is read, until at least requested_seeds() seeds pass
+        filter_out_seed(), or the slot is empty. The seeds of a job that fails are therefore lost, unless MAX_RETRIES
+        is set.
+        """
+        seeds: List[str] = []
+        requested = self.requested_seeds()
+        while len(seeds) < requested:
+            batches = list(self.hcf.read(slot, requested - len(seeds)))
+            if not batches:
+                break
+            for batch in batches:
+                for seed, qdata in batch["requests"]:
+                    if self.filter_out_seed(seed, qdata or {}):
+                        self.stats.inc_value(f"hcf/seeds/{slot}/filtered")
+                        continue
+                    seeds.append(seed)
+                self.hcf.delete(slot, [batch["id"]])
+                self.stats.inc_value(f"hcf/batches/{slot}/read")
+        return seeds
+
+    def read_seeds(self) -> List[str]:
+        """
+        Reads seeds from the slots of the spider in rotation, starting with the slot that follows the last one read:
+        an empty slot is skipped, until one gives seeds or all of them were found empty.
+        """
+        for _ in range(self.get_slot_splits()):
+            slot = self.get_slotname(next(self.__split_gen))
+            if seeds := self.read_seeds_from_slot(slot):
+                return seeds
+            LOGGER.info(f"Slot {slot} is empty.")
+        return []
+
+    def process_seeds(self, seeds: List[str]) -> List[str]:
+        """
+        Transforms the seeds read from the frontier before they are chunked into jobs (i.e. combine each one with
+        a list of keywords). By default, returns them unchanged.
+        """
+        return seeds
+
+    def build_schedule_args(self, seeds: List[str]) -> ScheduleArgs:
+        """
+        The scheduling arguments of a job for the given seeds. Override it in order to add spider arguments, job
+        settings or tags.
+        """
+        return ScheduleArgs({self.seeds_argument: json.dumps(seeds), "units": self.spider_config.get("SC_UNITS", 1)})
+
+    def on_empty_frontier(self):
+        """
+        Called when all the slots of the spider were found empty, right before the generator ends (i.e. log an alert,
+        or reset the slot and schedule a seed job).
+        """
+        LOGGER.info(f"No more seeds for spider {self.spider}.")
+
+    def set_parameters_gen(self) -> Generator[ScheduleArgs, None, None]:
+        while True:
+            seeds = self.read_seeds()
+            if not seeds:
+                self.on_empty_frontier()
+                break
+            seeds = self.process_seeds(seeds)
+            seeds_per_job = self.seeds_per_job
+            for idx in range(0, len(seeds), seeds_per_job):
+                yield self.build_schedule_args(seeds[idx: idx + seeds_per_job])
+
+    def bad_outcome_hook(self, spider: SpiderName, outcome: Outcome, job_args_override: JobParams, jobkey: JobKey):
+        if outcome in self.fatal_outcomes:
+            LOGGER.error(f"Job {jobkey} finished with {outcome!r}. Stopping the crawl.")
+            self.workflow_loop_enabled = False
+        else:
+            super().bad_outcome_hook(spider, outcome, job_args_override, jobkey)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ structure, and leave `TODO`s where a project decision is still open.
 | --- | --- | --- |
 | Shared helpers: frontier name, slot naming, storage paths | [Slot naming](https://github.com/scrapinghub/shub-workflow/wiki/Feeding-Spiders#slot-naming) | `common.py` |
 | Spider fed with seeds (`seeds`, `seeds_source`, `seeds_fields`) | [The spider side](https://github.com/scrapinghub/shub-workflow/wiki/Feeding-Spiders#the-spider-side-receiving-seeds) | `seeded_spider.py` |
-| Crawl manager reading seeds, per-source config, acquisition | [The crawl manager side](https://github.com/scrapinghub/shub-workflow/wiki/Feeding-Spiders#the-crawl-manager-side-reading-seeds) | `seeds_crawlmanager.py` |
+| Crawl manager reading seeds, per-source config, acquisition, split slots (ready-made `HCFSeedsCrawlManager`) | [The ready-made seeds crawl manager](https://github.com/scrapinghub/shub-workflow/wiki/Feeding-Spiders#the-ready-made-seeds-crawl-manager) | `seeds_crawlmanager.py` |
 | Url frontier: batch files built by the crawl manager | [Url frontiers](https://github.com/scrapinghub/shub-workflow/wiki/Feeding-Spiders#url-frontiers-batch-files-built-from-the-frontier) | `url_batch_crawlmanager.py` |
 | Consumer: harvest seeds, write the frontier, partition items | [Harvesting seeds](https://github.com/scrapinghub/shub-workflow/wiki/Closing-the-Loop#harvesting-seeds-from-the-items) | `seeds_consumer.py` |
 | Per-slot persistent deduplicator | [Deduplicators](https://github.com/scrapinghub/shub-workflow/wiki/Post-Crawl-Data-Chain#deduplicators) | `slot_deduplicator.py` |

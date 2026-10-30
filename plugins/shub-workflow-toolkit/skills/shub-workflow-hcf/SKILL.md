@@ -4,10 +4,12 @@ description: >-
   Use when working with a ScrapyCloud Hubstorage Crawl Frontier (HCF) from a shub-workflow project —
   running or extending the standalone frontier tool `shub_workflow.utils.hcf.FrontierTool` (list
   slots, count, dump, add seeds, delete batches or slots, move a slot into another), installing the
-  `with-hcf-backend` extra, or writing crawl-manager / consumer code that reads seeds from a frontier
-  slot or writes new seeds into it through `hcf_backend`'s `HCFManager`. Covers the HCF semantics that
-  bite (per-slot fingerprint memory, single writer per slot, read does not remove), the tool's commands
-  and extension points, and the read → delete → schedule and add → flush seed patterns.
+  `with-hcf-backend` extra, building a seeds crawl manager on the ready-made
+  `shub_workflow.utils.hcf.HCFSeedsCrawlManager` (ENABLED_SPIDERS config, split slots, hooks), or
+  writing crawl-manager / consumer code that reads seeds from a frontier slot or writes new seeds into
+  it through `hcf_backend`'s `HCFManager`. Covers the HCF semantics that bite (per-slot fingerprint
+  memory, single writer per slot, read does not remove), the tool's commands and extension points, and
+  the read → delete → schedule and add → flush seed patterns.
 ---
 
 # HCF frontier tools (`shub_workflow.utils.hcf`)
@@ -98,10 +100,19 @@ class MyFrontierTool(FrontierTool):
 The tool is a standalone script for operating a frontier by hand (or from maintenance scripts that
 subclass it). Workflow components — crawl managers and consumers — use `HCFManager` directly, as below.
 
-## Seeds in workflow components
+## The ready-made seeds crawl manager: `HCFSeedsCrawlManager`
+
+Before hand-writing a crawl manager that feeds a spider with seeds from its slot, subclass
+`HCFSeedsCrawlManager` (same module): set `name` and an `ENABLED_SPIDERS` dict of `SeedsSpiderConfig`
+entries (`RUNNING_JOBS`, `SEEDS_PER_JOB`, `SC_UNITS`), and customize through hooks. It handles the
+read → delete → schedule loop, split slots (`SLOT_SPLITS`), job ownership and fatal outcomes.
+Configuration, hooks and slot naming: [references/seeds-crawl-manager.md](references/seeds-crawl-manager.md).
+
+## Seeds in workflow components (hand-written)
 
 A crawl manager reads seeds and passes them to spiders as arguments; a consumer (the single writer)
-writes new seeds back. Both with `hcf_backend.manager.HCFManager(frontier, project_id=...)`:
+writes new seeds back. Both with `hcf_backend.manager.HCFManager(frontier, project_id=...)` (the crawl
+manager side is what `HCFSeedsCrawlManager` already implements):
 
 ```python
 # crawl manager, inside set_parameters_gen(): read -> delete -> schedule
