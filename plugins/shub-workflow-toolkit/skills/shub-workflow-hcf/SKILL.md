@@ -98,7 +98,8 @@ class MyFrontierTool(FrontierTool):
 ```
 
 The tool is a standalone script for operating a frontier by hand (or from maintenance scripts that
-subclass it). Workflow components — crawl managers and consumers — use `HCFManager` directly, as below.
+subclass it). Workflow components — crawl managers and consumers — use `HCFManager` directly, as below, or the
+ready-made classes of the same module.
 
 ## The ready-made seeds crawl manager: `HCFSeedsCrawlManager`
 
@@ -130,14 +131,28 @@ self.hcf.flush(slot)
 ```
 
 **Frontier writes are slow; at scale, never let them block the consumer.** The synchronous add → flush
-above is fine for small projects. When the writes become the bottleneck, use a background writer
-thread per slot with a **bounded** queue, and when that queue is full, **drop** the job's seeds (and
-count the drop in a stat, e.g. `seeds/dropped/<slot>`) rather than blocking on `put()`. A blocking
-put ties the consumer to the frontier's pace: with many jobs carrying large seed sets, it stalls for
-long periods, stops reading finished jobs, and the backlog of the whole data chain grows without end.
-Seeds only feed future crawling, while the consumer's items are the deliverable. For the same
-reason, don't delay the job's consumed tag until its queued seeds are flushed. Accept that a stop
-loses the queued seeds. Wiki: [Writing without blocking the consumer](https://github.com/scrapinghub/shub-workflow/wiki/Closing-the-Loop#writing-without-blocking-the-consumer).
+above is fine for small projects. When the writes become the bottleneck, don't hand-roll writer
+threads: mix in **`HCFSeedsWriterMixin`** (same module) and call `self.write_seeds(slot, seeds)`:
+
+```python
+class MyConsumer(HCFSeedsWriterMixin, IssuerScriptWithSCJobInput[MyItem]):
+    frontier_name = "myfrontier"     # else the FRONTIER_NAME project setting
+
+    def post_process_input_items(self, spider_job, args):
+        ...
+        self.write_seeds(slot, list(seeds))   # never blocks
+```
+
+It runs one daemon writer thread per slot behind a **bounded** queue (`seeds_queue_size`, default 20
+seed lists) and **drops** the seeds when the queue is full, counting them in `seeds/dropped/<slot>`
+(also `seeds/enqueued/<slot>`, `seeds/written/<slot>`). Don't make it blocking: a blocking put ties
+the consumer to the frontier's pace, so it stalls for long periods, stops reading finished jobs, and
+the backlog of the whole data chain grows without end. Seeds only feed future crawling, while the
+consumer's items are the deliverable. For the same reason, don't delay the job's consumed tag until
+its queued seeds are flushed. On a normal close it writes the queued seeds (at most
+`seeds_writers_stop_timeout` seconds per slot); on a crash the job fails at once with its traceback
+and the queued seeds are lost (non-daemon writers would keep the dead job alive until Scrapy Cloud
+cancels it as stalled). Wiki: [Writing without blocking the consumer](https://github.com/scrapinghub/shub-workflow/wiki/Closing-the-Loop#writing-without-blocking-the-consumer).
 
 `hcf_backend.manager` logs routine frontier operations; silence it in your project package `__init__.py`:
 `logging.getLogger("hcf_backend.manager").setLevel(logging.ERROR)`.

@@ -7,11 +7,14 @@ Requires the optional hcf-backend package:
 """
 import json
 import logging
+import time
 from itertools import cycle
+from queue import Full, Queue
+from threading import Thread
 from typing import Any, Dict, Generator, Iterable, Iterator, List, Mapping, Optional, Tuple, TypedDict
 
 from shub_workflow.crawl import GeneratorCrawlManager, JobParams, ScheduleArgs
-from shub_workflow.script import BaseScript, JobDict, JobKey, Outcome, SpiderName
+from shub_workflow.script import BaseLoopScriptProtocol, BaseScript, JobDict, JobKey, Outcome, SpiderName
 
 LOGGER = logging.getLogger(__name__)
 
@@ -426,6 +429,159 @@ class HCFSeedsCrawlManager(GeneratorCrawlManager):
             self.workflow_loop_enabled = False
         else:
             super().bad_outcome_hook(spider, outcome, job_args_override, jobkey)
+
+
+class SlotSeedsWriter:
+    """
+    Writes seeds into a frontier slot from a background thread, so the script that produces them doesn't wait for
+    the frontier. The seeds are handed over through a bounded queue: when it is full, enqueue() drops them instead of
+    blocking. Used by HCFSeedsWriterMixin, one instance per slot, which keeps the single writer per slot rule.
+
+    The thread is a daemon: if the script crashes, it doesn't keep the process alive (it would hang without output
+    until ScrapyCloud cancels the job), and the seeds still queued are lost. On a normal close, call stop() in order
+    to write them first.
+    """
+
+    def __init__(
+        self,
+        frontier_name: str,
+        slot: str,
+        project_id: Optional[int] = None,
+        queue_size: int = 20,
+        write_chunk_size: int = 100,
+    ):
+        self.frontier_name = frontier_name
+        self.slot = slot
+        self.project_id = project_id
+        self.write_chunk_size = write_chunk_size
+        self.queue: Queue[Optional[List[str]]] = Queue(queue_size)
+        self.thread: Optional[Thread] = None
+        # Number of seeds written into the frontier (some of them may be discarded by it, if already seen).
+        self.written = 0
+
+    def enqueue(self, seeds: List[str]) -> bool:
+        """
+        Queues the seeds for writing. Returns False if they were dropped because the queue is full.
+        """
+        self.ensure_active_thread()
+        try:
+            self.queue.put_nowait(seeds)
+        except Full:
+            return False
+        return True
+
+    def ensure_active_thread(self):
+        """
+        Starts the writer thread if it is not running (not started yet, or died on an error). Must be called only
+        from the thread that owns the writer, so two writer threads can never run at the same time.
+        """
+        if self.thread is None or not self.thread.is_alive():
+            self.thread = Thread(target=self._write_queue, name=f"seeds-writer-{self.slot}", daemon=True)
+            self.thread.start()
+
+    def _write_queue(self):
+        HCFManager, _ = _import_hcf_backend()
+        manager = HCFManager(self.frontier_name, project_id=self.project_id)
+        while (seeds := self.queue.get()) is not None:
+            for idx in range(0, len(seeds), self.write_chunk_size):
+                for seed in seeds[idx: idx + self.write_chunk_size]:
+                    manager.add_request(self.slot, {"fp": seed, "qdata": {}})
+                manager.flush(self.slot)
+            self.written += len(seeds)
+            LOGGER.info(f"Wrote {len(seeds)} seeds to slot {self.slot!r}. Queued seed lists: {self.queue.qsize()}")
+
+    def stop(self, timeout: float) -> bool:
+        """
+        Writes the queued seeds and stops the writer thread, waiting at most the given number of seconds. Returns
+        whether all of them were written.
+        """
+        self.ensure_active_thread()
+        assert self.thread is not None
+        deadline = time.time() + timeout
+        try:
+            self.queue.put(None, timeout=timeout)
+        except Full:
+            return False
+        self.thread.join(max(deadline - time.time(), 0))
+        # if the thread died on an error, the stop mark is still in the queue
+        return not self.thread.is_alive() and self.queue.empty()
+
+
+class HCFSeedsWriterMixin(BaseLoopScriptProtocol):
+    """
+    Writes seeds into the slots of a crawl frontier without blocking the script, with a background writer thread per
+    slot (see SlotSeedsWriter). It is the typical seeds writer of a consumer issuer that extracts new seeds from the
+    spider jobs it reads and feeds them back into the frontier:
+
+        class MyConsumer(HCFSeedsWriterMixin, IssuerScriptWithSCJobInput[MyItem]):
+            frontier_name = "myfrontier"
+
+            def post_process_input_items(self, spider_job, args):
+                self.write_seeds(slot, seeds)
+
+    Writing into the frontier is slow, so when a slot writer has seeds_queue_size seed lists already queued, new
+    ones are dropped instead of making the script wait: dropping seeds is the accepted price of a script that never
+    stalls. The stats seeds/enqueued/<slot>, seeds/dropped/<slot> and seeds/written/<slot> count the seeds, so the
+    loss can be measured.
+
+    On close the script writes the queued seeds, waiting at most seeds_writers_stop_timeout seconds. If it crashes,
+    the job fails right away and the queued seeds are lost. Only one process may write a slot at a time: don't run
+    two instances of the script that write the same slots. Requires the optional hcf-backend package.
+    """
+
+    # The name of the frontier. If not set, it is read from the project setting FRONTIER_NAME.
+    frontier_name: Optional[str] = None
+    # Max number of seed lists queued for writing in each slot. When the queue is full, new seeds are dropped.
+    seeds_queue_size: int = 20
+    # The writer flushes the seeds to the frontier each this number of seeds.
+    seeds_write_chunk_size: int = 100
+    # Max seconds to wait on close for each slot writer to write its queued seeds.
+    seeds_writers_stop_timeout: float = 1800
+
+    def __init__(self):
+        super().__init__()
+        self.__seeds_writers: Dict[str, SlotSeedsWriter] = {}
+
+    def write_seeds(self, slot: str, seeds: List[str]):
+        """
+        Queues the seeds for writing into the given slot of the frontier. Doesn't block: the seeds are dropped if the
+        queue of the slot is full.
+        """
+        if not seeds:
+            return
+        if (writer := self.__seeds_writers.get(slot)) is None:
+            frontier = self.frontier_name or self.project_settings.get("FRONTIER_NAME")
+            assert frontier, "Set the frontier_name attribute or the FRONTIER_NAME project setting."
+            writer = SlotSeedsWriter(
+                frontier,
+                slot,
+                project_id=self.project_id,
+                queue_size=self.seeds_queue_size,
+                write_chunk_size=self.seeds_write_chunk_size,
+            )
+            self.__seeds_writers[slot] = writer
+        if writer.enqueue(seeds):
+            self.stats.inc_value(f"seeds/enqueued/{slot}", len(seeds))
+        else:
+            self.stats.inc_value(f"seeds/dropped/{slot}", len(seeds))
+            LOGGER.info(f"Seeds queue of slot {slot!r} is full. Dropped {len(seeds)} seeds.")
+
+    def update_seeds_writers_stats(self):
+        # the stats are updated from the main thread only, as they may be uploaded concurrently
+        for slot, writer in self.__seeds_writers.items():
+            self.stats.set_value(f"seeds/written/{slot}", writer.written)
+
+    def base_loop_tasks(self):
+        super().base_loop_tasks()  # type: ignore
+        self.update_seeds_writers_stats()
+
+    def on_close(self):
+        super().on_close()  # type: ignore
+        for slot, writer in self.__seeds_writers.items():
+            LOGGER.info(f"Writing the queued seeds of slot {slot!r}...")
+            if not writer.stop(self.seeds_writers_stop_timeout):
+                LOGGER.warning(f"Seeds writer of slot {slot!r} didn't write all its queued seeds.")
+        self.update_seeds_writers_stats()
 
 
 if __name__ == "__main__":

@@ -179,3 +179,4 @@ Minor version changes:
 - 1.14.44: new hcf frontier tool base mixin
 - 1.14.45: new HCFSeedsCrawlmanager class
 - 1.14.46: scanjobs script: new metadata search option
+- 1.14.47: new hcf seeds writer mixin (non blocking frontier writes from a background thread per slot)

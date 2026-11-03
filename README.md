@@ -56,7 +56,8 @@ currently bundles ten skills:
   dedup, batch output slots, and issuer-based delivery (replacing the deprecated `BaseDeliverScript`).
 - **shub-workflow-hcf** — working with a Hubstorage Crawl Frontier (`shub_workflow.utils.hcf` /
   `FrontierTool`): running and extending the frontier tool script (list/count/dump/add/delete/move slots), the
-  HCF semantics that bite, and reading/writing seeds from crawl managers and consumers.
+  HCF semantics that bite, and reading/writing seeds from crawl managers and consumers (`HCFSeedsCrawlManager`,
+  `HCFSeedsWriterMixin`).
 - **shub-workflow-architectures** — designing (or redesigning) a project's workflow architecture in an
   interactive session: interviews the developer about the requirements, maps them to the independent
   agents + role separation architecture, writes a design document, checks it against known pitfalls,

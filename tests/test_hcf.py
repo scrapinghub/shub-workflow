@@ -1,16 +1,18 @@
 import os
+import threading
 from io import StringIO
 from collections import defaultdict
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from unittest import TestCase
 from unittest.mock import patch
 
-from shub_workflow.script import JobKey, Outcome, SpiderName
+from shub_workflow.script import BaseLoopScript, JobKey, Outcome, SpiderName
 from shub_workflow.crawl import JobParams
 from shub_workflow.utils.contexts import script_args
 from shub_workflow.utils.hcf import (
     FrontierTool,
     HCFSeedsCrawlManager,
+    HCFSeedsWriterMixin,
     SeedsSpiderConfig,
     _import_hcf_backend as real_import_hcf_backend,
 )
@@ -391,3 +393,138 @@ class HCFSeedsCrawlManagerTest(TestCase):
             SpiderName("mysite_tags"), Outcome("account_suspended"), JobParams(), JobKey("999/1/1")
         )
         self.assertFalse(manager.workflow_loop_enabled)
+
+
+# released by the tests in order to let the writers of BlockedHCFManager start
+WRITERS_GATE = threading.Event()
+
+
+class BlockedHCFManager(FakeHCFManager):
+    """A manager whose writer threads wait for WRITERS_GATE before reading their queues."""
+
+    def __init__(self, frontier, project_id=None):
+        WRITERS_GATE.wait()
+        super().__init__(frontier, project_id)
+
+
+class FailingHCFManager(FakeHCFManager):
+    """A manager that fails on the seed "boom", killing its writer thread."""
+
+    def add_request(self, slot, request):
+        if request["fp"] == "boom":
+            raise RuntimeError("frontier error")
+        super().add_request(slot, request)
+
+
+class MySeedsWriter(HCFSeedsWriterMixin, BaseLoopScript):
+    frontier_name: Optional[str] = "myfrontier"
+    seeds_queue_size = 2
+    seeds_write_chunk_size = 3
+
+    def __init__(self, seeds_by_slot=None):
+        super().__init__()
+        self.seeds_by_slot = seeds_by_slot or {}
+
+    def workflow_loop(self) -> bool:
+        for slot, seeds_lists in self.seeds_by_slot.items():
+            for seeds in seeds_lists:
+                self.write_seeds(slot, seeds)
+        return False
+
+
+class HCFSeedsWriterMixinTest(TestCase):
+    def setUp(self):
+        global STORE
+        STORE = FakeFrontierStore()
+        WRITERS_GATE.clear()
+        self.addCleanup(WRITERS_GATE.set)
+        os.environ["SH_APIKEY"] = "ffff"
+        os.environ["PROJECT_ID"] = "999"
+        self.hcf_manager_class = FakeHCFManager
+        for p in (
+            patch("shub_workflow.script.BaseScript.get_sc_project_settings", new=lambda _: {}),
+            patch("shub_workflow.utils.hcf._import_hcf_backend", new=lambda: (self.hcf_manager_class, FakeHCFPal)),
+        ):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def make(self, seeds_by_slot=None, cls=MySeedsWriter):
+        with script_args([]):
+            return cls(seeds_by_slot)
+
+    def release_writers(self):
+        # let the blocked writers finish, so they don't write into the frontier of the next test
+        WRITERS_GATE.set()
+        for thread in threading.enumerate():
+            if thread.name.startswith("seeds-writer-"):
+                thread.join(5)
+
+    def test_write_seeds_and_close(self):
+        script = self.make({"slot_a": [["a1", "a2", "a3", "a4"], []], "slot_b": [["b1"]]})
+        script.run()
+        self.assertEqual(STORE.fps("slot_a"), ["a1", "a2", "a3", "a4"])
+        self.assertEqual(STORE.fps("slot_b"), ["b1"])
+        # flushed each seeds_write_chunk_size seeds
+        self.assertEqual(STORE.flushes.count("slot_a"), 2)
+        self.assertEqual(script.stats.get_value("seeds/enqueued/slot_a"), 4)
+        self.assertEqual(script.stats.get_value("seeds/written/slot_a"), 4)
+        self.assertEqual(script.stats.get_value("seeds/written/slot_b"), 1)
+        self.assertIsNone(script.stats.get_value("seeds/dropped/slot_a"))
+
+    def test_frontier_from_project_setting(self):
+        class SettingSeedsWriter(MySeedsWriter):
+            frontier_name = None
+
+        script = self.make(cls=SettingSeedsWriter)
+        with self.assertRaises(AssertionError):
+            script.write_seeds("slot_a", ["a1"])
+        script.project_settings.set("FRONTIER_NAME", "otherfrontier")
+        script.write_seeds("slot_a", ["a1"])
+        script.on_close()
+        self.assertEqual(STORE.fps("slot_a"), ["a1"])
+
+    def test_drops_seeds_when_queue_is_full(self):
+        self.hcf_manager_class = BlockedHCFManager
+        script = self.make({"slot_a": [["a1"], ["a2"], ["a3", "a4"]]})
+        script.workflow_loop()
+        self.assertEqual(script.stats.get_value("seeds/enqueued/slot_a"), 2)
+        self.assertEqual(script.stats.get_value("seeds/dropped/slot_a"), 2)
+        WRITERS_GATE.set()
+        script.on_close()
+        self.assertEqual(STORE.fps("slot_a"), ["a1", "a2"])
+        self.assertEqual(script.stats.get_value("seeds/written/slot_a"), 2)
+
+    def test_writer_thread_is_daemon(self):
+        # a crashed script must not be kept alive by its writers
+        self.hcf_manager_class = BlockedHCFManager
+        script = self.make({"slot_a": [["a1"]]})
+        script.workflow_loop()
+        writers = [t for t in threading.enumerate() if t.name == "seeds-writer-slot_a"]
+        self.assertEqual(len(writers), 1)
+        self.assertTrue(writers[0].daemon)
+        WRITERS_GATE.set()
+        script.on_close()
+
+    def test_stop_timeout(self):
+        self.hcf_manager_class = BlockedHCFManager
+        script = self.make({"slot_a": [["a1"]]})
+        script.seeds_writers_stop_timeout = 0.1
+        script.workflow_loop()
+        with self.assertLogs("shub_workflow.utils.hcf", level="WARNING") as logs:
+            script.on_close()
+        self.assertIn("didn't write all its queued seeds", logs.output[0])
+        self.assertEqual(script.stats.get_value("seeds/written/slot_a"), 0)
+        self.release_writers()
+
+    def test_dead_writer_is_restarted(self):
+        self.hcf_manager_class = FailingHCFManager
+        script = self.make()
+        with patch("threading.excepthook"):
+            script.write_seeds("slot_a", ["boom"])
+            writers = [t for t in threading.enumerate() if t.name == "seeds-writer-slot_a"]
+            for writer in writers:
+                writer.join(5)
+            script.write_seeds("slot_a", ["a1"])
+            script.on_close()
+        self.assertEqual(STORE.fps("slot_a"), ["a1"])
+        self.assertEqual(script.stats.get_value("seeds/written/slot_a"), 1)
