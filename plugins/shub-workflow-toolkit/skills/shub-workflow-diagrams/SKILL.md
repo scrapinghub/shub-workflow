@@ -46,7 +46,10 @@ them produces a diagram neither of you trusts.
    [examples/workflow_gen.py](examples/workflow_gen.py). It is plain data: stages, the cells in
    each, the edges between them. Vocabulary: [references/model-reference.md](references/model-reference.md).
    For a class diagram, copy [examples/class_hierarchy_gen.py](examples/class_hierarchy_gen.py)
-   instead — it is self-contained and needs no engine.
+   instead — it is self-contained and needs no engine — and follow the shared conventions in
+   [references/class-hierarchy.md](references/class-hierarchy.md): which classes go in, what a box
+   lists, the six fixed categories, solid vs dashed edges. Its render also checks the edges against
+   the bases declared in the code and fails on any drift, so fix the model until it passes.
 3. **Render**: `python3 diagrams/workflow_gen.py`. It writes the `.dot` beside the generator and the
    PNG where the README references it.
 4. **Look at the PNG.** This is not optional and not a formality: the model renders happily into

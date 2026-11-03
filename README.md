@@ -64,8 +64,9 @@ currently bundles ten skills:
   and scaffolds the script skeletons of the chosen roles.
 - **shub-workflow-diagrams** — generating a project's architecture diagrams from an editable model:
   banded workflow/pipeline diagrams and UML class-hierarchy diagrams, in the house style shared by
-  these projects, with the rendering engine to copy and the Graphviz constraints that keep the
-  output stable.
+  these projects, with the rendering engine to copy, the Graphviz constraints that keep the
+  output stable, and the common class-hierarchy conventions with a render-time check of the edges
+  against the code.
 
 Install it from this repository's plugin marketplace, from inside Claude Code:
 
