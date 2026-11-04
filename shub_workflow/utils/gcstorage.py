@@ -1,8 +1,9 @@
 import os
 import re
 import logging
+from functools import lru_cache
 from importlib.resources import files
-from typing import Generator, List
+from typing import Generator, List, Optional
 
 from google.cloud import storage
 
@@ -10,6 +11,21 @@ from google.cloud import storage
 _GS_FOLDER_RE = re.compile(r"gs://([-\w]+)/(.*)$")
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _get_client() -> storage.Client:
+    """
+    A storage client shared by all the functions of this module. Building one per call costs a new authorization and a
+    new connection for every operation, which dominates the time of many small operations (e.g. downloading thousands of
+    small files). Keyed by process (a client must not cross a fork) and by credentials file (so setting
+    GOOGLE_APPLICATION_CREDENTIALS later, as set_credential_file_environ() does, still takes effect).
+    """
+    return _build_client(os.getpid(), os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
+
+
+@lru_cache(maxsize=None)
+def _build_client(pid: int, credentials_file: Optional[str]) -> storage.Client:
+    return storage.Client()
 
 
 def get_credfile_path(module, resource, check_exists=True):
@@ -26,7 +42,7 @@ def set_credential_file_environ(module, resource, check_exists=True):
 
 
 def upload_file(src_path: str, dest_path: str, **kwargs):
-    storage_client = storage.Client()
+    storage_client = _get_client()
     m = _GS_FOLDER_RE.match(dest_path)
     if m is None:
         raise ValueError(f"Invalid destination {dest_path}")
@@ -39,7 +55,7 @@ def upload_file(src_path: str, dest_path: str, **kwargs):
 
 
 def list_path(path: str, **kwargs) -> Generator[str, None, None]:
-    storage_client = storage.Client()
+    storage_client = _get_client()
     m = _GS_FOLDER_RE.match(path)
     if m is None:
         raise ValueError(f"Invalid path {path} for GCS.")
@@ -52,7 +68,7 @@ def list_path(path: str, **kwargs) -> Generator[str, None, None]:
 
 
 def list_folder(path: str, **kwargs) -> List[str]:
-    storage_client = storage.Client()
+    storage_client = _get_client()
     m = _GS_FOLDER_RE.match(path)
     if m is None:
         raise ValueError(f"Invalid path {path} for GCS.")
@@ -84,7 +100,7 @@ def list_folder(path: str, **kwargs) -> List[str]:
 
 
 def download_file(path: str, dest: str, **kwargs):
-    storage_client = storage.Client()
+    storage_client = _get_client()
     m = _GS_FOLDER_RE.match(path)
     if m:
         bucket_name, blob_name = m.groups()
@@ -99,7 +115,7 @@ def download_file(path: str, dest: str, **kwargs):
 
 
 def rm_file(path: str, **kwargs):
-    storage_client = storage.Client()
+    storage_client = _get_client()
     m = _GS_FOLDER_RE.match(path)
     if m:
         bucket_name, blob_name = m.groups()
@@ -113,7 +129,7 @@ def rm_file(path: str, **kwargs):
 
 
 def mv_file(src: str, dest: str, **kwargs):
-    storage_client = storage.Client()
+    storage_client = _get_client()
     m = _GS_FOLDER_RE.match(src)
     assert m is not None, "Source must be in the format gs://<bucket>/<blob>"
     src_bucket_name, src_blob_name = m.groups()
@@ -131,7 +147,7 @@ def mv_file(src: str, dest: str, **kwargs):
 
 
 def cp_file(src: str, dest: str, **kwargs):
-    storage_client = storage.Client()
+    storage_client = _get_client()
     m = _GS_FOLDER_RE.match(src)
     assert m is not None, "Source must be in the format gs://<bucket>/<blob>"
     src_bucket_name, src_blob_name = m.groups()
@@ -150,7 +166,7 @@ def cp_file(src: str, dest: str, **kwargs):
 
 
 def exists(src: str, **kwargs) -> bool:
-    storage_client = storage.Client()
+    storage_client = _get_client()
     m = _GS_FOLDER_RE.match(src)
     assert m is not None, "Source must be in the format gs://<bucket>/<blob>"
     src_bucket_name, src_blob_name = m.groups()
@@ -161,7 +177,7 @@ def exists(src: str, **kwargs) -> bool:
 
 
 def get_object(src: str, **kwargs):
-    storage_client = storage.Client()
+    storage_client = _get_client()
     m = _GS_FOLDER_RE.match(src)
     assert m is not None, "Source must be in the format gs://<bucket>/<blob>"
     src_bucket_name, src_blob_name = m.groups()
