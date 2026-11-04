@@ -48,6 +48,7 @@ from shub_workflow.utils import get_project_settings, resolve_shub_jobkey
 from shub_workflow.utils import (
     resolve_project_id,
     dash_retry_decorator,
+    get_memory_usage,
 )
 from shub_workflow.utils.futils import FSHelper
 
@@ -575,6 +576,11 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         return self._schedule_job(spider=spider, tags=tags, units=units, project_id=project_id, **kwargs)
 
     @dash_retry_decorator
+    def _get_jobs_page(self, project_id: Optional[int] = None, **kwargs) -> List[JobDict]:
+        # a plain function, so the retry covers the request: on a generator, the retry would only wrap its
+        # creation, and an error raised while iterating (e.g. a server error on the job list) would escape it.
+        return list(self.get_project(project_id).jobs.iter(**kwargs))
+
     def get_jobs(self, project_id: Optional[int] = None, **kwargs) -> Generator[JobDict, None, None]:
         meta = list(kwargs.get("meta") or [])
         if ("has_tag" in kwargs or "lacks_tag" in kwargs) and "tags" not in meta:
@@ -588,7 +594,7 @@ class BaseScript(SCProjectClass, ArgumentParserScript, BaseScriptProtocol):
         seen = set()
         while True:
             count = 0
-            for job in self.get_project(project_id).jobs.iter(**kwargs):
+            for job in self._get_jobs_page(project_id, **kwargs):
                 count += 1
                 if job["key"] not in seen:
                     yield job
@@ -752,6 +758,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
 
         self.__close_reason = None
         self.__last_stats_upload = None
+        self.__last_memory_log = 0.0
 
     def set_close_reason(self, reason):
         self.__close_reason = reason
@@ -818,11 +825,25 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
             self.maybe_upload_stats()
 
     def upload_stats(self):
+        self.update_memory_stats()
         # reset the throttle window on every upload — including explicit ones (e.g. an issuer uploading on
         # input consumption) — so maybe_upload_stats() won't re-upload again until stats_interval has elapsed
         # since the last actual upload.
         super().upload_stats()
         self.__last_stats_upload = time.time()
+
+    def update_memory_stats(self):
+        """
+        Set the memusage/* stats (see get_memory_usage()), so the last uploaded stats of a job killed for memory show
+        what was using it. Also logs them, at most once per stats_interval, to keep their evolution.
+        """
+        usage = get_memory_usage()
+        for name, value in usage.items():
+            self.stats.set_value(f"memusage/{name}", value)
+        if usage and time.time() - self.__last_memory_log >= self.stats_interval:
+            values = ", ".join(f"{name}={value / 2**20:.0f}" for name, value in usage.items())
+            logger.info(f"Memory usage (MiB): {values}")
+            self.__last_memory_log = time.time()
 
     def maybe_upload_stats(self):
         if self.__last_stats_upload is None or time.time() - self.__last_stats_upload >= self.stats_interval:

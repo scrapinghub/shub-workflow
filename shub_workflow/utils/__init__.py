@@ -2,7 +2,7 @@ import logging
 import json
 import os
 import hashlib
-from typing import Any, Callable, Optional, TypeVar, cast
+from typing import Any, Callable, Dict, Optional, TypeVar, cast
 
 from scrapy.settings import BaseSettings
 from tenacity import retry, retry_if_exception_type, before_sleep_log, stop_after_attempt, wait_fixed
@@ -103,6 +103,56 @@ def dash_retry_decorator(func: F) -> F:
     # tenacity >= 9.2 types decorated callables as _RetryDecorated, which mypy doesn't accept as a method
     # override or protocol member. Keep the original signature instead.
     return cast(F, _dash_retry(func))
+
+
+# /proc/self/status fields (reported in kB) -> memusage stat names
+_PROC_STATUS_FIELDS = {"VmRSS": "rss", "VmHWM": "max", "RssAnon": "rss/anon", "RssFile": "rss/file"}
+# cgroup v2, then v1: usage file, limit file, stat file, and the memory.stat keys of anonymous and file backed memory
+_CGROUP_FILES = (
+    ("/sys/fs/cgroup/memory.current", "/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.stat", "anon", "file"),
+    (
+        "/sys/fs/cgroup/memory/memory.usage_in_bytes",
+        "/sys/fs/cgroup/memory/memory.limit_in_bytes",
+        "/sys/fs/cgroup/memory/memory.stat",
+        "rss",
+        "cache",
+    ),
+)
+
+
+def get_memory_usage() -> Dict[str, int]:
+    """
+    Memory of the current process and of its container (cgroup), in bytes, keyed by stat name. Only what the platform
+    exposes (Linux /proc and cgroup files), so it is empty elsewhere. Resident memory is split into anonymous (the heap)
+    and file backed pages (e.g. a memory mapped file), because a container memory limit may count both.
+    """
+    usage: Dict[str, int] = {}
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                name, _, value = line.partition(":")
+                if name in _PROC_STATUS_FIELDS:
+                    usage[_PROC_STATUS_FIELDS[name]] = int(value.split()[0]) * 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    for current_file, limit_file, stat_file, anon_key, file_key in _CGROUP_FILES:
+        try:
+            with open(current_file) as f:
+                cgroup = {"cgroup": int(f.read())}
+            with open(stat_file) as f:
+                stat = dict(line.split() for line in f)
+            cgroup["cgroup/anon"] = int(stat[anon_key])
+            cgroup["cgroup/file"] = int(stat[file_key])
+        except (OSError, ValueError, KeyError):
+            continue
+        try:
+            with open(limit_file) as f:
+                cgroup["cgroup/limit"] = int(f.read())  # cgroup v2 says "max" when there is no limit
+        except (OSError, ValueError):
+            pass
+        usage.update(cgroup)
+        break
+    return usage
 
 
 _settings_warning_issued = False
