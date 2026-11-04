@@ -71,6 +71,7 @@ target matches many spiders a big-backlog source can't starve the others. No-op 
 | `MAX_ITEMS` | `200_000_000` | bloom capacity + per-job processed ceiling. |
 | `ERRORS_RATE` | `1e-8` | bloom false-positive rate. |
 | `LOAD_DELIVERED_IDS_DAYS` | *(unset)* | days of prior output to reload into `seen` (needs `load_last_outputs`). |
+| `load_last_outputs_threads` | `16` | files `load_last_outputs` downloads in parallel; a long dedup history is many small files, whose reload time is per-file latency. |
 | `close_on_no_inputs` | `False` | stop when no inputs remain (vs. loop forever). |
 | `max_inputs_per_loop` | `-1` | cap inputs per cycle (`-1` = unlimited). |
 | `min_wait_time_secs_to_flush_stopped_spiders` | `0` | grace before flushing a stopped source's partial batch. |

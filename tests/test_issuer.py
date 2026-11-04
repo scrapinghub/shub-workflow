@@ -3,6 +3,7 @@ import gzip
 import json
 import shutil
 import tempfile
+from datetime import datetime, timedelta
 from typing import List, cast
 from unittest import TestCase
 from unittest.mock import patch
@@ -743,3 +744,54 @@ class FileSystemInputTest(IssuerTestBase):
         issuer = self.make(RecordingFSIssuer, [])
         issuer.remove_inputs([InputSource("in/0_x.jl.gz")])
         self.assertEqual(issuer.fshelper.removed, ["in/0_x.jl.gz"])
+
+
+# --------------------------------------------------------------------------- #
+# load_last_outputs                                                           #
+# --------------------------------------------------------------------------- #
+
+
+class ReloadingFSIssuer(RecordingFSIssuer):
+    LOAD_DELIVERED_IDS_DAYS = 30
+    load_last_outputs_threads = 2
+
+
+def batch_name(folder: str, days_ago: int, n: int = 0) -> str:
+    tstamp = (datetime.utcnow() - timedelta(days=days_ago)).strftime("%Y%m%dT%H%M%S")
+    return f"{folder}/s_{tstamp}.{n}.jl.gz"
+
+
+class LoadLastOutputsTest(IssuerTestBase):
+    def test_loads_ids_of_every_folder_within_the_window(self):
+        issuer = self.make(ReloadingFSIssuer, [])
+        issuer.fshelper.files = {
+            batch_name("out", 1): [{"id": "a", "source": "s"}, {"id": "b", "source": "s"}],
+            batch_name("down", 2): [{"original_id": "c", "id": "x"}, {"id": "d"}, {"other": "e"}],
+            batch_name("down", 40): [{"id": "old"}],
+        }
+        issuer.load_last_outputs(("out", "down"), id_field=("original_id", "id"))
+        for id_ in ("a", "b", "c", "d"):
+            self.assertIn(id_, issuer.seen)
+        for id_ in ("x", "e", "old"):
+            self.assertNotIn(id_, issuer.seen)
+        self.assertEqual(issuer.stats.get_value("urls/seen"), 4)
+        self.assertEqual(issuer.stats.get_value("urls/seen/s"), 2)
+
+    def test_more_files_than_threads_all_loaded_and_cleaned(self):
+        issuer = self.make(ReloadingFSIssuer, [])
+        issuer.fshelper.files = {batch_name("out", 1, n): [{"id": f"id{n}"}] for n in range(25)}
+        issuer.load_last_outputs(("out",))
+        self.assertEqual(issuer.stats.get_value("urls/seen"), 25)
+        self.assertTrue(all(f"id{n}" in issuer.seen for n in range(25)))
+        # only the bloom file is left in the cwd: the downloaded files went to a temporary folder, now removed
+        self.assertEqual(os.listdir("."), ["livedup.bloom"])
+
+    def test_vanished_file_is_skipped(self):
+        issuer = self.make(ReloadingFSIssuer, [])
+        present = batch_name("out", 1, 1)
+        issuer.fshelper.files = {present: [{"id": "a"}]}
+        # listed, but removed before its download: the fake fshelper raises on it
+        issuer.fshelper.list_path = lambda prefix: [batch_name("out", 1, 0), present]
+        issuer.load_last_outputs(("out",))
+        self.assertIn("a", issuer.seen)
+        self.assertEqual(issuer.stats.get_value("urls/seen"), 1)

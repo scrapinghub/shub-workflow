@@ -9,7 +9,8 @@ import logging
 import tempfile
 from datetime import datetime, timedelta
 from itertools import cycle
-from collections import defaultdict, Counter
+from collections import defaultdict, Counter, deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import (
     List,
     Optional,
@@ -27,6 +28,7 @@ from typing import (
     Mapping,
     MutableMapping,
     Iterator,
+    Deque,
     cast,
 )
 
@@ -108,6 +110,9 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     # in memory during the live of the job. True deduplicator application requires this to be set.
     # You must also call load_last_outputs() on __init__() with the proper arguments for your application.
     LOAD_DELIVERED_IDS_DAYS: int
+    # how many files load_last_outputs() downloads in parallel. Reloading a long dedupe history means many thousands
+    # of small files, whose time is dominated by the latency of each download rather than by its size.
+    load_last_outputs_threads: int = 16
     # if True, close once there are no more inputs to read
     close_on_no_inputs = False
     # Optional jmespath expression selecting, within each raw input record, the list of objects to explode:
@@ -434,38 +439,61 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         """
         dtnow = datetime.utcnow()
         count = 0
-        for output_folder in output_folders:
-            output_folder = os.path.join(output_folder, prefix)
-            LOGGER.info(f"Reading output folder {output_folder!r}...")
-            for fname in self.fshelper.list_path(output_folder):
-                basename = os.path.basename(fname)
-                if basename_re is None or re.match(basename_re, basename) is not None:
-                    if m := TSTAMP_RE.search(basename):
-                        tstamp = m.group()
-                        dt = dateparser.parse(tstamp, date_formats=("_%Y%m%dT%H%M%S",))
-                        if dt is None or dtnow - dt > timedelta(days=self.LOAD_DELIVERED_IDS_DAYS):
-                            continue
-                        try:
-                            self.fshelper.download_file(fname)
-                        except Exception:
-                            LOGGER.info(f"{fname} is not anymore there.")
-                            continue
-                        with gzip.open(basename) as r:
-                            for line in r:
-                                rec = json.loads(line)
-                                for field in id_field:
-                                    if field in rec:
-                                        self.seen.add(rec[field])
-                                        break
-                                else:
-                                    continue
-                                if "source" in rec:
-                                    self.stats.inc_value(f"urls/seen/{rec['source']}")
-                                self.stats.inc_value("urls/seen")
-                                count += 1
-                        self.fshelper.rm_file(basename)
-            self.__loaded_delivered = True
+        threads = max(1, self.load_last_outputs_threads)
+        with tempfile.TemporaryDirectory(dir=".") as tmpdir, ThreadPoolExecutor(threads) as executor:
+            # downloads run ahead in the threads, while their ids are added here, in listing order: the
+            # dedupe filter is not thread safe. The window bounds how many downloaded files wait on disk.
+            pending: Deque[Future[Optional[str]]] = deque()
+            submitted = 0
+            for output_folder in output_folders:
+                output_folder = os.path.join(output_folder, prefix)
+                LOGGER.info(f"Reading output folder {output_folder!r}...")
+                for fname in self.fshelper.list_path(output_folder):
+                    basename = os.path.basename(fname)
+                    if basename_re is None or re.match(basename_re, basename) is not None:
+                        if m := TSTAMP_RE.search(basename):
+                            tstamp = m.group()
+                            dt = dateparser.parse(tstamp, date_formats=("_%Y%m%dT%H%M%S",))
+                            if dt is None or dtnow - dt > timedelta(days=self.LOAD_DELIVERED_IDS_DAYS):
+                                continue
+                            # the same basename may be listed in several folders (a batch moved between them)
+                            dest = os.path.join(tmpdir, f"{submitted}_{basename}")
+                            submitted += 1
+                            pending.append(executor.submit(self._download_last_output, fname, dest))
+                            if len(pending) >= 2 * threads:
+                                count += self._load_ids_from_file(pending.popleft().result(), id_field)
+            while pending:
+                count += self._load_ids_from_file(pending.popleft().result(), id_field)
+        self.__loaded_delivered = True
         LOGGER.info(f"Loaded {count} seen ids.")
+
+    def _download_last_output(self, fname: str, dest: str) -> Optional[str]:
+        try:
+            self.fshelper.download_file(fname, dest)
+        except Exception:
+            LOGGER.info(f"{fname} is not anymore there.")
+            return None
+        return dest
+
+    def _load_ids_from_file(self, localfile: Optional[str], id_field: Tuple[str, ...]) -> int:
+        if localfile is None:
+            return 0
+        count = 0
+        with gzip.open(localfile) as r:
+            for line in r:
+                rec = json.loads(line)
+                for field in id_field:
+                    if field in rec:
+                        self.seen.add(rec[field])
+                        break
+                else:
+                    continue
+                if "source" in rec:
+                    self.stats.inc_value(f"urls/seen/{rec['source']}")
+                self.stats.inc_value("urls/seen")
+                count += 1
+        os.remove(localfile)
+        return count
 
     def on_start(self):
         super().on_start()
