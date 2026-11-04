@@ -531,14 +531,17 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         self._remove_pending()
 
         now = int(time.time())
+        # read once per loop, and only if some source has pending items: each read lists the project running jobs.
+        running_spiders: Optional[Set[SpiderName]] = None
         for slot, sources_items_dict in self.items_queue.items():
             for source in list(sources_items_dict.keys()):
                 # The per-source stopped-spider partial flush only applies when output is grouped by source;
                 # with a single collapsed bucket a slot's batch flushes only at default_filesize or on close.
                 if self.separate_output_by_source and len(sources_items_dict[source]) > 0:
-                    running_spiders = self.get_project_running_spiders(
-                        canonical=True, crawlmanagers=self.source_crawlmanagers
-                    )
+                    if running_spiders is None:
+                        running_spiders = self.get_project_running_spiders(
+                            canonical=True, crawlmanagers=self.source_crawlmanagers
+                        )
                     if source not in running_spiders:
                         delay = now - self.running_spiders_check_time.setdefault(source, now)
                         if delay > self.min_wait_time_secs_to_flush_stopped_spiders:

@@ -795,3 +795,20 @@ class LoadLastOutputsTest(IssuerTestBase):
         issuer.load_last_outputs(("out",))
         self.assertIn("a", issuer.seen)
         self.assertEqual(issuer.stats.get_value("urls/seen"), 1)
+
+
+class StoppedSpiderFlushTest(IssuerTestBase):
+    def test_running_spiders_read_once_per_loop(self):
+        issuer = self.make(RecordingFSIssuer, [])
+        for source in ("s1", "s2", "s3"):
+            issuer.process_item(cast(MyItem, {"url": f"u-{source}", "source": source}), InputSource("in/0_x.jl.gz"))
+        # both stopped sources were already seen stopped in an earlier loop, long enough ago to flush them now
+        issuer.running_spiders_check_time.update({"s1": 0, "s3": 0})
+        with patch(
+            "shub_workflow.script.BaseScript.get_project_running_spiders", return_value={SpiderName("s2")}
+        ) as mocked, patch.object(issuer, "get_new_inputs", return_value=[]):
+            issuer.workflow_loop()
+        self.assertEqual(mocked.call_count, 1)
+        # the stopped sources were flushed, the running one is still pending
+        self.assertEqual(sorted(items[0]["url"] for _dest, items in issuer.written), ["u-s1", "u-s3"])
+        self.assertEqual([i["url"] for i in issued_items(issuer)], ["u-s2"])
