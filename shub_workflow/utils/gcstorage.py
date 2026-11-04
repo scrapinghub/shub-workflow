@@ -12,6 +12,16 @@ _GS_FOLDER_RE = re.compile(r"gs://([-\w]+)/(.*)$")
 
 _LOGGER = logging.getLogger(__name__)
 
+# How long, in seconds, to keep retrying a failed storage request (timeouts, connection and DNS errors, 429 and 5xx
+# responses) before giving up. The library default, 120 s, is shorter than an ordinary network blip, and a long running
+# script that dies on one may need hours to rebuild its state.
+GCS_RETRY_TIMEOUT_SECS = float(os.environ.get("GCS_RETRY_TIMEOUT_SECS", 30 * 60))
+_RETRY = (
+    storage.retry.DEFAULT_RETRY.with_timeout(GCS_RETRY_TIMEOUT_SECS)
+    if hasattr(storage.retry.DEFAULT_RETRY, "with_timeout")
+    else storage.retry.DEFAULT_RETRY.with_deadline(GCS_RETRY_TIMEOUT_SECS)  # older google-api-core
+)
+
 
 def _get_client() -> storage.Client:
     """
@@ -50,7 +60,7 @@ def upload_file(src_path: str, dest_path: str, **kwargs):
     bucket_kwargs = kwargs.pop("bucket_kwargs", {})
     bucket = storage_client.bucket(bucket_name, **bucket_kwargs)
     blob = bucket.blob(destination_blob_name)
-    blob.upload_from_filename(src_path, retry=storage.retry.DEFAULT_RETRY)
+    blob.upload_from_filename(src_path, retry=_RETRY)
     _LOGGER.info(f"File {src_path} uploaded to {dest_path}.")
 
 
@@ -63,7 +73,7 @@ def list_path(path: str, **kwargs) -> Generator[str, None, None]:
     bucket_kwargs = kwargs.pop("bucket_kwargs", {})
     bucket = storage_client.bucket(bucket_name, **bucket_kwargs)
 
-    for blob in bucket.list_blobs(prefix=blob_prefix, retry=storage.retry.DEFAULT_RETRY):
+    for blob in bucket.list_blobs(prefix=blob_prefix, retry=_RETRY):
         yield f"gs://{bucket_name}/{blob.name}"
 
 
@@ -81,7 +91,7 @@ def list_folder(path: str, **kwargs) -> List[str]:
     result = []
     while new_results:
         new_results = False
-        for blob in bucket.list_blobs(prefix=blob_prefix, retry=storage.retry.DEFAULT_RETRY, start_offset=start_offset):
+        for blob in bucket.list_blobs(prefix=blob_prefix, retry=_RETRY, start_offset=start_offset):
             new_results = True
             if blob_prefix:
                 suffix = blob.name.split(blob_prefix, 1)[1]
@@ -110,7 +120,7 @@ def download_file(path: str, dest: str, **kwargs):
     bucket = storage_client.bucket(bucket_name, **bucket_kwargs)
     blob = bucket.blob(blob_name)
     with open(dest, "wb") as w:
-        blob.download_to_file(w, retry=storage.retry.DEFAULT_RETRY)
+        blob.download_to_file(w, retry=_RETRY)
     _LOGGER.info(f"File {path} downloaded to {dest}.")
 
 
@@ -124,7 +134,7 @@ def rm_file(path: str, **kwargs):
     bucket_kwargs = kwargs.pop("bucket_kwargs", {})
     bucket = storage_client.bucket(bucket_name, **bucket_kwargs)
     blob = bucket.blob(blob_name)
-    blob.delete(retry=storage.retry.DEFAULT_RETRY)
+    blob.delete(retry=_RETRY)
     _LOGGER.info(f"Deleted {path}.")
 
 
@@ -173,7 +183,7 @@ def exists(src: str, **kwargs) -> bool:
 
     bucket_kwargs = kwargs.pop("bucket_kwargs", {})
     bucket = storage_client.bucket(src_bucket_name, **bucket_kwargs)
-    return bucket.blob(src_blob_name).exists()
+    return bucket.blob(src_blob_name).exists(retry=_RETRY)
 
 
 def get_object(src: str, **kwargs):
