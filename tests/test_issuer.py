@@ -909,6 +909,25 @@ class IdsCacheTest(IssuerTestBase):
         self.assertEqual(sorted(header["covers"]), sorted([covered_base, os.path.basename(uncovered)]))
         self.assertEqual(fs.removed, [old_cache])
 
+    def test_an_id_read_again_downstream_under_another_file_name_is_cached_once(self):
+        issuer = self.make_issuer()
+        fs = issuer.fshelper
+        cached = os.path.basename(batch_name("out", 3))
+        fs.raw = {cache_name(3): cache_bytes(["a"], [cached], {"s": 1})}
+        # "b" was in an output batch, and again in the downstream file produced from it, under another name
+        fs.files = {
+            batch_name("out", 2, 0): [{"id": "b", "source": "s"}],
+            batch_name("down", 1, 1): [{"original_id": "a", "source": "s"}, {"original_id": "b", "source": "s"}],
+        }
+        issuer.load_last_outputs(("out", "down"), id_field=("original_id", "id"))
+        (merged,) = fs.cache_files()
+        header, ids = fs.read_cache(merged)
+        self.assertEqual(sorted(ids), ["a", "b"])
+        self.assertEqual(header["count"], 2)
+        self.assertEqual(header["sources"], {"s": 2})
+        self.assertEqual(issuer.stats.get_value("urls/seen"), 2)
+        self.assertEqual(issuer.stats.get_value("urls/reload_repeated"), 2)
+
     def test_second_reload_reads_only_the_cache_files(self):
         issuer = self.make_issuer()
         fs = issuer.fshelper

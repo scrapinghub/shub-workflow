@@ -671,24 +671,40 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         self, localfile: str, id_field: Tuple[str, ...], merger: Optional[_IdsCacheMerger] = None
     ) -> Tuple[int, Counter]:
         count = 0
+        repeated = 0
         sources: Counter = Counter()
         with gzip.open(localfile) as r:
             for line in r:
                 rec = json.loads(line)
                 for field in id_field:
                     if field in rec:
-                        self.seen.add(rec[field])
-                        if merger is not None:
-                            merger.write_id(rec[field])
+                        id_ = rec[field]
                         break
                 else:
                     continue
+                if merger is not None:
+                    # Cache each id once. An id already loaded came from a cache file or from an earlier output file
+                    # (e.g. the same items moved downstream under another file name). An id the filter wrongly reports
+                    # as loaded (a false positive) is left out of the cache, but nothing is lost: its bits were set by
+                    # ids loaded before it, which are all cached, and a bloom filter has no false negatives, so every
+                    # later reload reports it again. Unless the filter is resized (MAX_ITEMS, ERRORS_RATE change the
+                    # bits probed), or the ids that set its bits leave the LOAD_DELIVERED_IDS_DAYS window before it
+                    # would. The check costs time instead: a new id has its hashes computed twice (check, then add),
+                    # about 10-15% more filter time. That is noticeable only on the first reload, which caches the
+                    # whole output history; later ones check only the output files written since the previous reload.
+                    if id_ in self.seen:
+                        repeated += 1
+                        continue
+                    merger.write_id(id_)
+                self.seen.add(id_)
                 if "source" in rec:
                     self.stats.inc_value(f"urls/seen/{rec['source']}")
                     sources[rec["source"]] += 1
                 self.stats.inc_value("urls/seen")
                 count += 1
         os.remove(localfile)
+        if repeated:
+            self.stats.inc_value("urls/reload_repeated", repeated)
         return count, sources
 
     def on_start(self):

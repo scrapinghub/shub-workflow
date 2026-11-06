@@ -99,6 +99,7 @@ Set by `process_item()` / `send_file()` / `workflow_loop()`; `<source>` is the i
 | --- | --- |
 | `urls/issued`, `urls/issued/<source>` | items actually issued (i.e. **not** discarded as dupes) |
 | `urls/seen`, `urls/seen/<source>` | incremented **in the same branch** as `urls/issued` — plus, in `load_last_outputs()`, once per previously delivered id reloaded into `seen` |
+| `urls/reload_repeated` | with `ids_cache_folder`: ids `load_last_outputs()` read again in an uncovered output file (already loaded from a cache file or an earlier output file, e.g. the same items moved downstream under another name), neither cached nor counted in `urls/seen` again |
 | `urls/dupes` | items whose id was already in `seen` (global only, no per source variant) |
 | `urls/dupesrate`, `urls/dupesrate/<source>` | a **ratio**, `dupes / processed`, `set` (not incremented) on every loop and rounded to 2 decimals |
 | `records/wrote`, `records/<source>/wrote`, `records/<slot>/<source>/wrote` | records written to an output file |
