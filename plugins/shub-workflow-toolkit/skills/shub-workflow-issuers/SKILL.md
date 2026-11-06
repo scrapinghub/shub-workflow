@@ -116,6 +116,8 @@ Most issuers are one of two shapes that differ on **dedup persistence**:
 - **Deduplicator** (heavy stage): runs **continuously**, one instance per slot, doing massive
   **persistent** dedup. Calls `load_last_outputs(...)` on init to refill its bloom filter from the
   last `LOAD_DELIVERED_IDS_DAYS` of its own (and downstream) output, so dedup **survives restarts**.
+  For a long history, set `ids_cache_folder` so the reload reads compact, merged ids files instead of
+  every output file (see `ids_cache_folder` in [references/api-cheatsheet.md](references/api-cheatsheet.md)).
 
 So `load_last_outputs` / `LOAD_DELIVERED_IDS_DAYS` is a **deduplicator** trait (long-term
 persistence), not a consumer one. Dedup lives in the deduplicators (not the consumer) deliberately:

@@ -797,6 +797,150 @@ class LoadLastOutputsTest(IssuerTestBase):
         self.assertEqual(issuer.stats.get_value("urls/seen"), 1)
 
 
+# --------------------------------------------------------------------------- #
+# ids cache                                                                   #
+# --------------------------------------------------------------------------- #
+
+
+class CacheFakeFSHelper(FakeFSHelper):
+    """Adds raw files (the ids cache files: gzipped header + ids), uploaded by mv_file() from a local file, and
+    records downloads."""
+
+    def __init__(self):
+        super().__init__()
+        self.raw: dict = {}   # fname -> gzipped bytes
+        self.downloaded: List[str] = []
+
+    def list_path(self, prefix):
+        return sorted(f for f in list(self.files) + list(self.raw) if f.startswith(prefix))
+
+    def download_file(self, src, dst=None):
+        self.downloaded.append(src)
+        if src in self.raw:
+            with open(dst, "wb") as w:
+                w.write(self.raw[src])
+        else:
+            super().download_file(src, dst)
+
+    def mv_file(self, src, dst):
+        super().mv_file(src, dst)
+        with open(src, "rb") as r:
+            self.raw[dst] = r.read()
+        os.remove(src)
+
+    def rm_file(self, path):
+        super().rm_file(path)
+        self.raw.pop(path, None)
+
+    def cache_files(self):
+        return sorted(f for f in self.raw if f.endswith(".ids.gz"))
+
+    def read_cache(self, fname):
+        lines = gzip.decompress(self.raw[fname]).decode().splitlines()
+        return json.loads(lines[0]), lines[1:]
+
+
+def cache_name(days_ago: int, n: int = 0) -> str:
+    tstamp = (datetime.utcnow() - timedelta(days=days_ago)).strftime("%Y%m%dT%H%M%S")
+    return f"cache/ids_{tstamp}_{n}.ids.gz"
+
+
+def cache_bytes(ids, covers, sources=None):
+    header = {"count": len(ids), "sources": sources or {}, "covers": covers}
+    return gzip.compress("".join(f"{line}\n" for line in [json.dumps(header)] + list(ids)).encode())
+
+
+class CachingFSIssuer(ReloadingFSIssuer):
+    ids_cache_folder = "cache"
+    ids_cache_merge_size = 3
+
+    def init_fshelper(self):
+        return CacheFakeFSHelper()
+
+
+class IdsCacheTest(IssuerTestBase):
+    def make_issuer(self) -> CachingFSIssuer:
+        return self.make(CachingFSIssuer, [])
+
+    def test_output_files_are_not_cached_when_written(self):
+        issuer = self.make_issuer()
+        issuer.process_item(cast(MyItem, {"url": "u1", "source": "s"}), InputSource("in/s_x.jl.gz"))
+        issuer.flush_files()
+        self.assertEqual(len(issuer.written), 1)
+        self.assertEqual(issuer.fshelper.raw, {})
+
+    def test_first_reload_caches_the_output_files_in_files_of_about_merge_size_ids(self):
+        issuer = self.make_issuer()
+        fs = issuer.fshelper
+        fs.files = {batch_name("out", n + 1, n): [{"id": f"id{n}", "source": "s"}] for n in range(5)}
+        issuer.load_last_outputs(("out",))
+        self.assertEqual(issuer.stats.get_value("urls/seen"), 5)
+        headers = [fs.read_cache(f)[0] for f in fs.cache_files()]
+        self.assertEqual(sorted(h["count"] for h in headers), [2, 3])
+        self.assertEqual(sorted(c for h in headers for c in h["covers"]), sorted(os.path.basename(f) for f in fs.files))
+        self.assertEqual(sum(h["sources"]["s"] for h in headers), 5)
+        self.assertEqual(fs.removed, [])   # output files are never removed
+        # each cache file is named by the newest output file it covers
+        for fname in fs.cache_files():
+            header = fs.read_cache(fname)[0]
+            newest = max(c.split("_")[1].split(".")[0] for c in header["covers"])
+            self.assertIn(f"ids_{newest}_", fname)
+
+    def test_reload_reads_cache_files_and_only_the_uncovered_output_files(self):
+        issuer = self.make_issuer()
+        covered, uncovered = batch_name("out", 1, 0), batch_name("down", 2, 1)
+        covered_base = os.path.basename(covered)
+        fs = issuer.fshelper
+        # the output content differs from its cache, to tell which one was read
+        fs.files = {covered: [{"id": "from_output"}], uncovered: [{"id": "c", "source": "s"}]}
+        old_cache = cache_name(1)
+        fs.raw = {old_cache: cache_bytes(["a", "b"], [covered_base], {"s": 2})}
+        issuer.load_last_outputs(("out", "down"))
+        for id_ in ("a", "b", "c"):
+            self.assertIn(id_, issuer.seen)
+        self.assertNotIn("from_output", issuer.seen)
+        self.assertNotIn(covered, fs.downloaded)
+        self.assertEqual(issuer.stats.get_value("urls/seen"), 3)
+        self.assertEqual(issuer.stats.get_value("urls/seen/s"), 3)
+        # the cache file below merge size and the uncovered output are merged; the old cache file is removed
+        (merged,) = fs.cache_files()
+        header, ids = fs.read_cache(merged)
+        self.assertEqual(sorted(ids), ["a", "b", "c"])
+        self.assertEqual(sorted(header["covers"]), sorted([covered_base, os.path.basename(uncovered)]))
+        self.assertEqual(fs.removed, [old_cache])
+
+    def test_second_reload_reads_only_the_cache_files(self):
+        issuer = self.make_issuer()
+        fs = issuer.fshelper
+        fs.files = {batch_name("out", 1, n): [{"id": f"id{n}"}] for n in range(3)}
+        issuer.load_last_outputs(("out",))
+        fs.downloaded.clear()
+        again = self.make_issuer()
+        again.fshelper = fs
+        again.load_last_outputs(("out",))
+        self.assertEqual(fs.downloaded, fs.cache_files())
+        self.assertEqual(len(fs.downloaded), 1)
+        self.assertEqual(again.stats.get_value("urls/seen"), 3)
+
+    def test_full_cache_file_and_a_lone_small_one_are_kept(self):
+        issuer = self.make_issuer()
+        fs = issuer.fshelper
+        full, lone = cache_name(1, 0), cache_name(1, 1)
+        fs.raw = {full: cache_bytes(["a", "b", "c"], ["x"]), lone: cache_bytes(["d"], ["y"])}
+        issuer.load_last_outputs(("out",))
+        self.assertEqual(fs.cache_files(), sorted([full, lone]))
+        self.assertEqual(fs.removed, [])
+        self.assertEqual(issuer.stats.get_value("urls/seen"), 4)
+
+    def test_cache_files_out_of_the_window_are_ignored(self):
+        issuer = self.make_issuer()
+        fs = issuer.fshelper
+        fs.raw = {cache_name(40): cache_bytes(["old"], ["x"])}
+        issuer.load_last_outputs(("out",))
+        self.assertNotIn("old", issuer.seen)
+        self.assertEqual(fs.downloaded, [])
+
+
 class StoppedSpiderFlushTest(IssuerTestBase):
     def test_running_spiders_read_once_per_loop(self):
         issuer = self.make(RecordingFSIssuer, [])

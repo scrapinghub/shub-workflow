@@ -72,6 +72,8 @@ target matches many spiders a big-backlog source can't starve the others. No-op 
 | `ERRORS_RATE` | `1e-8` | bloom false-positive rate. |
 | `LOAD_DELIVERED_IDS_DAYS` | *(unset)* | days of prior output to reload into `seen` (needs `load_last_outputs`). |
 | `load_last_outputs_threads` | `16` | files `load_last_outputs` downloads in parallel; a long dedup history is many small files, whose reload time is per-file latency. |
+| `ids_cache_folder` | `None` | where `load_last_outputs` keeps the ids of the output files it has read, in files of about `ids_cache_merge_size` ids. The next reload reads those cache files, and in full only the output files no cache file covers (by name, in whichever folder they are now), which it then caches. The first reload builds the cache of the existing history; output files are never touched. One folder (or one `load_last_outputs` prefix) per instance. |
+| `ids_cache_merge_size` | `5_000_000` | ids per cache file; cache files with fewer are merged again on the next reload. |
 | `close_on_no_inputs` | `False` | stop when no inputs remain (vs. loop forever). |
 | `max_inputs_per_loop` | `-1` | cap inputs per cycle (`-1` = unlimited). |
 | `min_wait_time_secs_to_flush_stopped_spiders` | `0` | grace before flushing a stopped source's partial batch. |

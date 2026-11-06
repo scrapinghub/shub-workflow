@@ -4,9 +4,11 @@ import abc
 import json
 import time
 import gzip
+import shutil
 import hashlib
 import logging
 import tempfile
+from uuid import uuid4
 from datetime import datetime, timedelta
 from itertools import cycle
 from collections import defaultdict, Counter, deque
@@ -63,6 +65,93 @@ Slot = NewType("Slot", str)
 
 TSTAMP_RE = re.compile(r"_\d{8}T\d{6}")
 
+# name suffix of the ids cache files (see IssuerScript.ids_cache_folder)
+IDS_CACHE_SUFFIX = ".ids.gz"
+
+
+def _write_ids_cache_file(localfile: str, header: Dict[str, Any], ids_path: str):
+    """
+    An ids cache file is gzipped text: a first line with a json header, then one id per line. The header has the
+    number of ids ("count"), how many of them come from each source ("sources"), and the names of the output files
+    whose ids the file holds ("covers").
+    """
+    with gzip.open(localfile, "wt") as w, open(ids_path) as r:
+        w.write(json.dumps(header) + "\n")
+        shutil.copyfileobj(r, w)
+
+
+def _newest_tstamp(fnames: Iterable[str]) -> str:
+    tstamps = [m.group() for m in map(TSTAMP_RE.search, fnames) if m is not None]
+    return max(tstamps) if tstamps else datetime.utcnow().strftime("_%Y%m%dT%H%M%S")
+
+
+class _IdsCacheMerger:
+    """
+    Used by IssuerScript.load_last_outputs(). Gathers the ids of the output files that no cache file covers yet, and
+    of the cache files with fewer than merge_size ids, and writes them to the cache folder in files of about
+    merge_size ids. The cache files merged into a new one are removed only once it is uploaded, so a shutdown at any
+    point loses no id: at worst some ids are left in two cache files, which is harmless.
+    """
+
+    def __init__(self, fshelper, cache_folder: str, prefix: str, merge_size: int, tmpdir: str):
+        self.fshelper = fshelper
+        self.cache_folder = cache_folder
+        self.prefix = prefix
+        self.merge_size = merge_size
+        self.tmpdir = tmpdir
+        self.written = 0
+        self._new_buffer()
+
+    def _new_buffer(self):
+        self.ids_path = os.path.join(self.tmpdir, f"merging_{uuid4().hex}.txt")
+        # the ids wait on local disk, not in memory: merge_size ids may be hundreds of MB as python strings
+        self.ids_file = open(self.ids_path, "w")
+        self.count = 0
+        self.covers: List[str] = []
+        self.sources: Counter = Counter()
+        self.to_remove: List[str] = []
+        self.inputs = 0
+
+    def write_id(self, id_: str):
+        self.ids_file.write(f"{id_}\n")
+        self.count += 1
+
+    def add_input(self, covers: List[str], sources: Mapping[str, int], remove: Optional[str] = None):
+        """
+        Call it after the ids of an input were written with write_id(). remove is the input's cache file, to remove
+        once merged (None for an output file, which is never removed).
+        """
+        self.covers.extend(covers)
+        self.sources.update(sources)
+        self.inputs += 1
+        if remove is not None:
+            self.to_remove.append(remove)
+        if self.count >= self.merge_size:
+            self.flush()
+
+    def flush(self):
+        self.ids_file.close()
+        # a lone cache file would be rewritten as it is: keep it instead
+        if self.count and not (self.inputs == 1 and self.to_remove):
+            header = {"count": self.count, "sources": dict(self.sources), "covers": self.covers}
+            name = f"{self.prefix}ids{_newest_tstamp(self.covers)}_{uuid4().hex[:8]}{IDS_CACHE_SUFFIX}"
+            localfile = self.ids_path + ".gz"
+            _write_ids_cache_file(localfile, header, self.ids_path)
+            dest = os.path.join(self.cache_folder, name)
+            self.fshelper.mv_file(localfile, dest)
+            for fname in self.to_remove:
+                self.fshelper.rm_file(fname)
+            self.written += 1
+            LOGGER.info(f"Merged {self.count} ids of {self.inputs} files into {dest}.")
+        os.remove(self.ids_path)
+        self._new_buffer()
+
+    def close(self):
+        self.flush()
+        self.ids_file.close()
+        os.remove(self.ids_path)
+
+
 ItemId = NewType("ItemId", str)
 Source = NewType("Source", SpiderName)
 InputSource = NewType("InputSource", str)
@@ -113,6 +202,13 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     # how many files load_last_outputs() downloads in parallel. Reloading a long dedupe history means many thousands
     # of small files, whose time is dominated by the latency of each download rather than by its size.
     load_last_outputs_threads: int = 16
+    # Folder where load_last_outputs() keeps the ids of the output files it has read, in files of about
+    # ids_cache_merge_size ids, so that the next reload reads only those cache files plus the output files written
+    # since (or not cached yet for any other reason). The first reload builds the cache of the existing outputs, and
+    # the output files themselves are never touched. None (default) disables the cache. Give each issuer instance
+    # its own folder, or a distinct load_last_outputs() prefix.
+    ids_cache_folder: Optional[str] = None
+    ids_cache_merge_size: int = 5_000_000
     # if True, close once there are no more inputs to read
     close_on_no_inputs = False
     # Optional jmespath expression selecting, within each raw input record, the list of objects to explode:
@@ -436,36 +532,132 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         Each file is dated by the _YYYYmmddTHHMMSS timestamp in its name. Following the batch filename standard,
         the name must start with a source (or slot) designation followed by an underscore before the timestamp:
         files whose name starts with the bare timestamp are skipped.
+
+        With ids_cache_folder set, the ids cache files (with the same prefix) are read first, and then only the output
+        files that no cache file covers: an output file is covered by name, in whichever of the output folders it is
+        now, so one moved downstream keeping its name stays covered. The ids of the uncovered output files, and those
+        of the cache files with fewer than ids_cache_merge_size ids, are written to new cache files of about that
+        many ids, each uploaded as soon as it fills: a reload stopped midway keeps what it cached. A cache file is
+        dated by the newest output file it covers.
         """
         dtnow = datetime.utcnow()
+
+        def in_window(basename: str) -> bool:
+            if (m := TSTAMP_RE.search(basename)) is None:
+                return False
+            dt = dateparser.parse(m.group(), date_formats=("_%Y%m%dT%H%M%S",))
+            return dt is not None and dtnow - dt <= timedelta(days=self.LOAD_DELIVERED_IDS_DAYS)
+
         count = 0
+        covered: Set[str] = set()
         threads = max(1, self.load_last_outputs_threads)
         with tempfile.TemporaryDirectory(dir=".") as tmpdir, ThreadPoolExecutor(threads) as executor:
-            # downloads run ahead in the threads, while their ids are added here, in listing order: the
-            # dedupe filter is not thread safe. The window bounds how many downloaded files wait on disk.
-            pending: Deque[Future[Optional[str]]] = deque()
-            submitted = 0
-            for output_folder in output_folders:
-                output_folder = os.path.join(output_folder, prefix)
-                LOGGER.info(f"Reading output folder {output_folder!r}...")
-                for fname in self.fshelper.list_path(output_folder):
+            merger: Optional[_IdsCacheMerger] = None
+            if self.ids_cache_folder is not None:
+                merger = _IdsCacheMerger(
+                    self.fshelper, self.ids_cache_folder, prefix, self.ids_cache_merge_size, tmpdir
+                )
+                count += self._load_ids_cache(executor, tmpdir, prefix, in_window, covered, merger)
+
+            def output_files() -> Iterator[str]:
+                skipped = 0
+                for output_folder in output_folders:
+                    output_folder = os.path.join(output_folder, prefix)
+                    LOGGER.info(f"Reading output folder {output_folder!r}...")
+                    for fname in self.fshelper.list_path(output_folder):
+                        basename = os.path.basename(fname)
+                        if basename_re is not None and re.match(basename_re, basename) is None:
+                            continue
+                        if not in_window(basename):
+                            continue
+                        if basename in covered:
+                            skipped += 1
+                            continue
+                        yield fname
+                if merger is not None:
+                    LOGGER.info(f"Skipped {skipped} output files covered by the ids cache.")
+
+            for fname, localfile in self._download_ahead(executor, tmpdir, output_files()):
+                if localfile is None:
+                    continue
+                file_count, sources = self._load_ids_from_file(localfile, id_field, merger)
+                count += file_count
+                if merger is not None:
                     basename = os.path.basename(fname)
-                    if basename_re is None or re.match(basename_re, basename) is not None:
-                        if m := TSTAMP_RE.search(basename):
-                            tstamp = m.group()
-                            dt = dateparser.parse(tstamp, date_formats=("_%Y%m%dT%H%M%S",))
-                            if dt is None or dtnow - dt > timedelta(days=self.LOAD_DELIVERED_IDS_DAYS):
-                                continue
-                            # the same basename may be listed in several folders (a batch moved between them)
-                            dest = os.path.join(tmpdir, f"{submitted}_{basename}")
-                            submitted += 1
-                            pending.append(executor.submit(self._download_last_output, fname, dest))
-                            if len(pending) >= 2 * threads:
-                                count += self._load_ids_from_file(pending.popleft().result(), id_field)
-            while pending:
-                count += self._load_ids_from_file(pending.popleft().result(), id_field)
+                    # the same basename may be listed in several folders (a batch moved between them)
+                    covered.add(basename)
+                    merger.add_input([basename], sources)
+            if merger is not None:
+                merger.close()
+                LOGGER.info(f"Wrote {merger.written} merged ids cache files.")
         self.__loaded_delivered = True
         LOGGER.info(f"Loaded {count} seen ids.")
+
+    def _load_ids_cache(
+        self,
+        executor: ThreadPoolExecutor,
+        tmpdir: str,
+        prefix: str,
+        in_window,
+        covered: Set[str],
+        merger: _IdsCacheMerger,
+    ) -> int:
+        assert self.ids_cache_folder is not None
+        cache_folder = os.path.join(self.ids_cache_folder, prefix)
+        LOGGER.info(f"Reading ids cache folder {cache_folder!r}...")
+        cache_files = [
+            fname
+            for fname in self.fshelper.list_path(cache_folder)
+            if fname.endswith(IDS_CACHE_SUFFIX) and in_window(os.path.basename(fname))
+        ]
+        LOGGER.info(f"Found {len(cache_files)} ids cache files.")
+        count = 0
+        for fname, localfile in self._download_ahead(executor, tmpdir, cache_files):
+            count += self._load_ids_cache_file(fname, localfile, covered, merger)
+        return count
+
+    def _load_ids_cache_file(
+        self, fname: str, localfile: Optional[str], covered: Set[str], merger: _IdsCacheMerger
+    ) -> int:
+        if localfile is None:
+            return 0
+        with gzip.open(localfile, "rt") as r:
+            header = json.loads(r.readline())
+            merge = header["count"] < self.ids_cache_merge_size
+            for line in r:
+                id_ = line.rstrip("\n")
+                self.seen.add(id_)
+                if merge:
+                    merger.write_id(id_)
+        os.remove(localfile)
+        covered.update(header["covers"])
+        self.stats.inc_value("urls/seen", header["count"])
+        for source, source_count in header["sources"].items():
+            self.stats.inc_value(f"urls/seen/{source}", source_count)
+        if merge:
+            merger.add_input(header["covers"], header["sources"], remove=fname)
+        return header["count"]
+
+    def _download_ahead(
+        self, executor: ThreadPoolExecutor, tmpdir: str, fnames: Iterable[str]
+    ) -> Iterator[Tuple[str, Optional[str]]]:
+        """
+        Yields (fname, local file) in the order of fnames, the local file being None if fname could not be
+        downloaded. Downloads run ahead in the threads, while their ids are added by the caller, in the main thread:
+        the dedupe filter is not thread safe. The window bounds how many downloaded files wait on disk.
+        """
+        window = 2 * max(1, self.load_last_outputs_threads)
+        pending: Deque[Tuple[str, Future[Optional[str]]]] = deque()
+        for fname in fnames:
+            # unique local names: the same basename may be listed in several folders
+            dest = os.path.join(tmpdir, f"{uuid4().hex}_{os.path.basename(fname)}")
+            pending.append((fname, executor.submit(self._download_last_output, fname, dest)))
+            if len(pending) >= window:
+                done, future = pending.popleft()
+                yield done, future.result()
+        while pending:
+            done, future = pending.popleft()
+            yield done, future.result()
 
     def _download_last_output(self, fname: str, dest: str) -> Optional[str]:
         try:
@@ -475,25 +667,29 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
             return None
         return dest
 
-    def _load_ids_from_file(self, localfile: Optional[str], id_field: Tuple[str, ...]) -> int:
-        if localfile is None:
-            return 0
+    def _load_ids_from_file(
+        self, localfile: str, id_field: Tuple[str, ...], merger: Optional[_IdsCacheMerger] = None
+    ) -> Tuple[int, Counter]:
         count = 0
+        sources: Counter = Counter()
         with gzip.open(localfile) as r:
             for line in r:
                 rec = json.loads(line)
                 for field in id_field:
                     if field in rec:
                         self.seen.add(rec[field])
+                        if merger is not None:
+                            merger.write_id(rec[field])
                         break
                 else:
                     continue
                 if "source" in rec:
                     self.stats.inc_value(f"urls/seen/{rec['source']}")
+                    sources[rec["source"]] += 1
                 self.stats.inc_value("urls/seen")
                 count += 1
         os.remove(localfile)
-        return count
+        return count, sources
 
     def on_start(self):
         super().on_start()
