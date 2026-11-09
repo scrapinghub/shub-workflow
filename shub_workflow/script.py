@@ -784,7 +784,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
             type=int,
             default=self.max_running_time,
             metavar="SECONDS",
-            help="Set max time after which the script will auto shutdown.",
+            help="Set max time, in seconds, after which the script will auto shutdown.",
         )
 
     def on_start(self):
