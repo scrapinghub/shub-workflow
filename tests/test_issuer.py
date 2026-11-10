@@ -941,6 +941,29 @@ class IdsCacheTest(IssuerTestBase):
         self.assertEqual(len(fs.downloaded), 1)
         self.assertEqual(again.stats.get_value("urls/seen"), 3)
 
+    def test_progress_is_logged_after_each_file_until_the_last_one_is_loaded(self):
+        issuer = self.make_issuer()
+        issuer.load_last_outputs_log_interval = 0
+        fs = issuer.fshelper
+        # more cache files than the download window (2 * load_last_outputs_threads): the last ones are loaded once
+        # every download is done, so no download log line marks their progress
+        fs.raw = {cache_name(1, n): cache_bytes([f"c{n}_{i}" for i in range(3)], [f"x{n}"]) for n in range(6)}
+        fs.files = {batch_name("out", 1): [{"id": "o"}]}
+        with self.assertLogs("shub_workflow.issuer", "INFO") as logs:
+            issuer.load_last_outputs(("out",))
+        progress = [line for line in logs.output if "so far" in line]
+        self.assertEqual(len(progress), 7)
+        self.assertIn("Loaded 19 ids of 7 files so far", progress[-1])
+
+    def test_progress_log_is_throttled(self):
+        issuer = self.make_issuer()
+        issuer.load_last_outputs_log_interval = 3600
+        fs = issuer.fshelper
+        fs.raw = {cache_name(1, n): cache_bytes([f"c{n}_{i}" for i in range(3)], [f"x{n}"]) for n in range(6)}
+        with self.assertLogs("shub_workflow.issuer", "INFO") as logs:
+            issuer.load_last_outputs(("out",))
+        self.assertEqual([line for line in logs.output if "so far" in line], [])
+
     def test_full_cache_file_and_a_lone_small_one_are_kept(self):
         issuer = self.make_issuer()
         fs = issuer.fshelper

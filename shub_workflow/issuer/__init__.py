@@ -85,6 +85,30 @@ def _newest_tstamp(fnames: Iterable[str]) -> str:
     return max(tstamps) if tstamps else datetime.utcnow().strftime("_%Y%m%dT%H%M%S")
 
 
+class _ReloadProgress:
+    """
+    Used by IssuerScript.load_last_outputs() to log its progress, from the main thread, once a file's ids are loaded
+    and at most every interval seconds. The download log lines are no sign of progress: the downloads run ahead of
+    the loading, so the last ones are logged long before the ids of the files still waiting in the download window
+    are loaded. With cache files of millions of ids, that wait lasts hours, and a job silent for that long is
+    cancelled as stalled by Scrapy Cloud.
+    """
+
+    def __init__(self, interval: float):
+        self.interval = interval
+        self.files = 0
+        self.ids = 0
+        self.last_log = time.time()
+
+    def loaded(self, fname: str, ids: int):
+        self.files += 1
+        self.ids += ids
+        now = time.time()
+        if now - self.last_log >= self.interval:
+            self.last_log = now
+            LOGGER.info(f"Loaded {self.ids} ids of {self.files} files so far (last: {os.path.basename(fname)}).")
+
+
 class _IdsCacheMerger:
     """
     Used by IssuerScript.load_last_outputs(). Gathers the ids of the output files that no cache file covers yet, and
@@ -202,6 +226,10 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
     # how many files load_last_outputs() downloads in parallel. Reloading a long dedupe history means many thousands
     # of small files, whose time is dominated by the latency of each download rather than by its size.
     load_last_outputs_threads: int = 16
+    # load_last_outputs() logs its progress at most every this many seconds, once a file's ids are loaded. It must be
+    # well below the Scrapy Cloud stall timeout (1 hour without log lines): the time a single file takes to load adds
+    # to it.
+    load_last_outputs_log_interval: float = 300
     # Folder where load_last_outputs() keeps the ids of the output files it has read, in files of about
     # ids_cache_merge_size ids, so that the next reload reads only those cache files plus the output files written
     # since (or not cached yet for any other reason). The first reload builds the cache of the existing outputs, and
@@ -551,13 +579,14 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         count = 0
         covered: Set[str] = set()
         threads = max(1, self.load_last_outputs_threads)
+        progress = _ReloadProgress(self.load_last_outputs_log_interval)
         with tempfile.TemporaryDirectory(dir=".") as tmpdir, ThreadPoolExecutor(threads) as executor:
             merger: Optional[_IdsCacheMerger] = None
             if self.ids_cache_folder is not None:
                 merger = _IdsCacheMerger(
                     self.fshelper, self.ids_cache_folder, prefix, self.ids_cache_merge_size, tmpdir
                 )
-                count += self._load_ids_cache(executor, tmpdir, prefix, in_window, covered, merger)
+                count += self._load_ids_cache(executor, tmpdir, prefix, in_window, covered, merger, progress)
 
             def output_files() -> Iterator[str]:
                 skipped = 0
@@ -582,6 +611,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
                     continue
                 file_count, sources = self._load_ids_from_file(localfile, id_field, merger)
                 count += file_count
+                progress.loaded(fname, file_count)
                 if merger is not None:
                     basename = os.path.basename(fname)
                     # the same basename may be listed in several folders (a batch moved between them)
@@ -601,6 +631,7 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         in_window,
         covered: Set[str],
         merger: _IdsCacheMerger,
+        progress: _ReloadProgress,
     ) -> int:
         assert self.ids_cache_folder is not None
         cache_folder = os.path.join(self.ids_cache_folder, prefix)
@@ -613,7 +644,10 @@ class IssuerScript(BaseLoopScript, Generic[ITEMTYPE, PROCESS_INPUT_ARGS_TYPE]):
         LOGGER.info(f"Found {len(cache_files)} ids cache files.")
         count = 0
         for fname, localfile in self._download_ahead(executor, tmpdir, cache_files):
-            count += self._load_ids_cache_file(fname, localfile, covered, merger)
+            file_count = self._load_ids_cache_file(fname, localfile, covered, merger)
+            count += file_count
+            if localfile is not None:
+                progress.loaded(fname, file_count)
         return count
 
     def _load_ids_cache_file(
