@@ -180,3 +180,5 @@ Minor version changes:
 - 1.14.45: new HCFSeedsCrawlmanager class
 - 1.14.46: scanjobs script: new metadata search option
 - 1.14.47: new hcf seeds writer mixin (non blocking frontier writes from a background thread per slot)
+- 1.14.48: performance improvements in deduplicators cache loading
+- 1.14.49: google credentials handling improvements
