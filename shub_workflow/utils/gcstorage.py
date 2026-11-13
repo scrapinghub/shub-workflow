@@ -1,11 +1,14 @@
 import os
 import re
+import json
+import base64
 import logging
 from functools import lru_cache
 from importlib.resources import files
-from typing import Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from google.cloud import storage
+from google.oauth2 import service_account
 
 
 _GS_FOLDER_RE = re.compile(r"gs://([-\w]+)/(.*)$")
@@ -23,19 +26,93 @@ _RETRY = (
 )
 
 
+# Environment variable that holds the service account key itself (its JSON, raw or base64-encoded), for environments
+# where no key file exists, e.g. a Scrapy Cloud job whose secrets come in environment variables. The client is then
+# built from it directly, with no file written anywhere. GOOGLE_APPLICATION_CREDENTIALS is the PATH of a key file:
+# google-auth repeats its value verbatim in its errors ("File <value> was not found.") and in its debug log, so a key
+# stored in it gets printed as soon as anything reads it before it has been moved into a file.
+CREDENTIALS_JSON_ENV = "GOOGLE_APPLICATION_CREDENTIALS_JSON"
+_CREDENTIALS_FILE_ENV = "GOOGLE_APPLICATION_CREDENTIALS"
+
+
+class InvalidCredentialsError(ValueError):
+    """A service account key held in an environment variable can't be used. The message never includes the key."""
+
+
 def _get_client() -> storage.Client:
     """
     A storage client shared by all the functions of this module. Building one per call costs a new authorization and a
     new connection for every operation, which dominates the time of many small operations (e.g. downloading thousands of
-    small files). Keyed by process (a client must not cross a fork) and by credentials file (so setting
+    small files). Keyed by process (a client must not cross a fork) and by the credentials variables (so setting
     GOOGLE_APPLICATION_CREDENTIALS later, as set_credential_file_environ() does, still takes effect).
     """
-    return _build_client(os.getpid(), os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
+    return _build_client(
+        os.getpid(), os.environ.get(_CREDENTIALS_FILE_ENV), os.environ.get(CREDENTIALS_JSON_ENV)
+    )
 
 
 @lru_cache(maxsize=None)
-def _build_client(pid: int, credentials_file: Optional[str]) -> storage.Client:
-    return storage.Client()
+def _build_client(pid: int, credentials_file: Optional[str], credentials_json: Optional[str]) -> storage.Client:
+    found = _inline_service_account_info(credentials_file, credentials_json)
+    if found is None:
+        return storage.Client()
+    source, info = found
+    try:
+        credentials = service_account.Credentials.from_service_account_info(info)
+    except Exception as exc:
+        message = str(exc)
+        for secret in (info.get("private_key"), credentials_json, credentials_file):
+            if secret:
+                message = message.replace(secret, "<redacted>")
+        raise InvalidCredentialsError(
+            f"The service account key in {source} can't be loaded: {type(exc).__name__}: {message}"
+        ) from None
+    # An explicit project, even None, keeps the client from looking one up through google-auth's defaults, which read
+    # GOOGLE_APPLICATION_CREDENTIALS again.
+    return storage.Client(project=info.get("project_id"), credentials=credentials)
+
+
+def _inline_service_account_info(
+    credentials_file: Optional[str], credentials_json: Optional[str]
+) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """
+    The service account key held in the environment itself, as (variable name, info), or None when there is none and
+    the client must be built the default way (GOOGLE_APPLICATION_CREDENTIALS as a file path, or other google-auth
+    sources).
+
+    CREDENTIALS_JSON_ENV is read first. A key stored in GOOGLE_APPLICATION_CREDENTIALS instead of a file path is
+    accepted too, for backward compatibility, so that it is never handed to google-auth.
+    """
+    if credentials_json:
+        return CREDENTIALS_JSON_ENV, _parse_service_account_info(credentials_json, CREDENTIALS_JSON_ENV)
+    if credentials_file and not os.path.exists(credentials_file) and _decode_inline(credentials_file) is not None:
+        return _CREDENTIALS_FILE_ENV, _parse_service_account_info(credentials_file, _CREDENTIALS_FILE_ENV)
+    return None
+
+
+def _decode_inline(value: str) -> Optional[str]:
+    """The JSON text held in value, raw or base64-encoded, or None if value doesn't hold one (e.g. a file path)."""
+    text = value.strip()
+    if text.startswith("{"):
+        return text
+    try:
+        decoded = base64.b64decode(text, validate=True).decode()
+    except ValueError:  # binascii.Error and UnicodeDecodeError are ValueErrors
+        return None
+    return decoded if decoded.lstrip().startswith("{") else None
+
+
+def _parse_service_account_info(value: str, envname: str) -> Dict[str, Any]:
+    text = _decode_inline(value)
+    if text is None:
+        raise InvalidCredentialsError(f"{envname} holds neither JSON nor base64-encoded JSON.")
+    try:
+        info = json.loads(text)
+    except ValueError:
+        raise InvalidCredentialsError(f"{envname} does not hold valid JSON.") from None
+    if not isinstance(info, dict):
+        raise InvalidCredentialsError(f"{envname} does not hold a JSON object.")
+    return info
 
 
 def get_credfile_path(module, resource, check_exists=True):

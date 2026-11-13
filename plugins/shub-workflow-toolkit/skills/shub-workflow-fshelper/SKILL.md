@@ -106,6 +106,13 @@ Full signatures, return types, and cross-backend behavior:
   per-method via `op_kwargs_by_method_name={"upload_file": {"ACL": "bucket-owner-full-control"}}`.
 - **Env credentials win.** `s3_credentials` prefers `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
   from the environment over the `aws_key`/`aws_secret` you pass. `AWS_REGION` is honored too.
+- **GCS key: a path, or the key in `GOOGLE_APPLICATION_CREDENTIALS_JSON`.** `GOOGLE_APPLICATION_CREDENTIALS`
+  must hold the key file's *path*. To pass the key itself (JSON, raw or base64), e.g. as a ScrapyCloud
+  secret, use `GOOGLE_APPLICATION_CREDENTIALS_JSON`: the client is built from it with no file written,
+  and it wins over a path. Never put the key in `GOOGLE_APPLICATION_CREDENTIALS`: google-auth repeats
+  that value in its errors and debug log, so the private key gets printed. (shub-workflow's own GCS client
+  tolerates a key there for backward compatibility; other code doesn't.) Bad keys raise
+  `gcstorage.InvalidCredentialsError`, whose message never includes the value.
 - **Role assumption is automatic & rotating.** Give the helper both `aws_role` and `aws_external_id`
   and it builds an `S3SessionFactory` that calls STS `assume_role` and **refreshes the temporary
   credentials before they expire** (`expiration_margin_minutes`, default 10) on every wrapped call.
