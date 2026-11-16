@@ -121,6 +121,33 @@ class GCStorageClientTest(TestCase):
         self.from_info.assert_not_called()
         self.client_cls.assert_called_once_with()
 
+    def test_logs_the_account_of_an_inline_key(self) -> None:
+        self.credentials.service_account_email = "example@example-project.iam.gserviceaccount.com"
+        os.environ[gcstorage.CREDENTIALS_JSON_ENV] = json.dumps(service_account_info())
+        with self.assertLogs(gcstorage._LOGGER, "INFO") as logs:
+            gcstorage._get_client()
+        self.assertEqual(
+            logs.output,
+            [
+                f"INFO:{gcstorage.__name__}:GCS client uses example@example-project.iam.gserviceaccount.com "
+                f"({gcstorage.CREDENTIALS_JSON_ENV})"
+            ],
+        )
+
+    def test_logs_the_account_of_the_default_credentials(self) -> None:
+        self.client_cls.return_value._credentials = MagicMock(service_account_email="default@example.com")
+        with self.assertLogs(gcstorage._LOGGER, "INFO") as logs:
+            gcstorage._get_client()
+        self.assertEqual(
+            logs.output, [f"INFO:{gcstorage.__name__}:GCS client uses default@example.com (default credentials)"]
+        )
+
+    def test_logs_unknown_account_when_credentials_have_no_email(self) -> None:
+        self.client_cls.return_value._credentials = object()
+        with self.assertLogs(gcstorage._LOGGER, "INFO") as logs:
+            gcstorage._get_client()
+        self.assertIn("GCS client uses unknown account (default credentials)", logs.output[0])
+
     def test_errors_never_include_the_variable_value(self) -> None:
         cases = [
             (gcstorage.CREDENTIALS_JSON_ENV, "not json at all, secret-ish text"),
@@ -181,7 +208,10 @@ class GCStorageRealKeyTest(TestCase):
         ).decode()
         # the legacy layout that leaked the key through google-auth's "File <value> was not found." error
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = json.dumps(service_account_info(pem))
-        client = gcstorage._get_client()
+        with self.assertLogs(gcstorage._LOGGER, "INFO") as logs:
+            client = gcstorage._get_client()
+        self.assertIn("example@example-project.iam.gserviceaccount.com", logs.output[0])
+        self.assertNotIn("PRIVATE KEY", "".join(logs.output))
         self.assertEqual(client.project, "example-project")
         self.assertIsInstance(client._credentials, service_account.Credentials)
         self.assertEqual(

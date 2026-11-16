@@ -55,7 +55,9 @@ def _get_client() -> storage.Client:
 def _build_client(pid: int, credentials_file: Optional[str], credentials_json: Optional[str]) -> storage.Client:
     found = _inline_service_account_info(credentials_file, credentials_json)
     if found is None:
-        return storage.Client()
+        client = storage.Client()
+        _log_account(getattr(client, "_credentials", None), "default credentials")
+        return client
     source, info = found
     try:
         credentials = service_account.Credentials.from_service_account_info(info)
@@ -67,9 +69,19 @@ def _build_client(pid: int, credentials_file: Optional[str], credentials_json: O
         raise InvalidCredentialsError(
             f"The service account key in {source} can't be loaded: {type(exc).__name__}: {message}"
         ) from None
+    _log_account(credentials, source)
     # An explicit project, even None, keeps the client from looking one up through google-auth's defaults, which read
     # GOOGLE_APPLICATION_CREDENTIALS again.
     return storage.Client(project=info.get("project_id"), credentials=credentials)
+
+
+def _log_account(credentials: Any, source: str) -> None:
+    """
+    Logs which account the GCS client authenticates as, so a job's log shows at a glance whether the expected
+    credentials were loaded. Only the account email: never anything from the key itself.
+    """
+    email = getattr(credentials, "service_account_email", None) or "unknown account"
+    _LOGGER.info(f"GCS client uses {email} ({source})")
 
 
 def _inline_service_account_info(
