@@ -14,7 +14,8 @@ LOG = logging.getLogger(__name__)
 class MyLoop(BaseLoopScript):
 
     loop_mode = 60        # default seconds between cycles (0 = run body once). --loop-mode overrides.
-    max_running_time = 0  # if >0, auto-stop after this many seconds (also --max-running-time)
+    max_running_time = 0  # if >0, auto-stop after this many seconds (also --max-running-time) plus a random jitter
+    max_running_time_jitter = 0.05  # jitter: up to this fraction of max_running_time, always added (0 = no jitter)
     stats_interval = 120  # seconds between periodic stats uploads during the loop
 
     @property

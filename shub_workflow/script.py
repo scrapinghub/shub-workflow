@@ -9,6 +9,7 @@ import json
 import asyncio
 import logging
 import time
+import random
 from functools import partial
 import subprocess
 from argparse import ArgumentParser as PythonArgumentParser, Namespace
@@ -749,6 +750,10 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
     # --loop-mode command line option overrides it
     loop_mode = 0
     max_running_time = 0
+    # The effective max running time is max_running_time * (1 + max_running_time_jitter * random()). An always
+    # positive random jitter, so jobs started together (e.g. a set of deduplicators) don't all close/restart
+    # together again, and the spread doesn't average out across successive restarts. Set to 0 to disable.
+    max_running_time_jitter = 0.05
     stats_interval = 120
 
     def __init__(self):
@@ -784,8 +789,14 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
             type=int,
             default=self.max_running_time,
             metavar="SECONDS",
-            help="Set max time, in seconds, after which the script will auto shutdown.",
+            help="Set max time, in seconds, after which the script will auto shutdown. A random positive jitter of "
+            "up to max_running_time_jitter (class attribute, default 5%%) of this value is added.",
         )
+
+    def parse_args(self) -> Namespace:
+        args = super().parse_args()
+        self.__max_running_time = args.max_running_time * (1 + self.max_running_time_jitter * random.random())
+        return args
 
     def on_start(self):
         pass
@@ -804,7 +815,7 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
         pass
 
     def is_max_time_ran_out(self) -> bool:
-        return self.args.max_running_time > 0 and time.time() - self.__start_time > self.args.max_running_time
+        return self.__max_running_time > 0 and time.time() - self.__start_time > self.__max_running_time
 
     def __base_loop_tasks(self):
         self.base_loop_tasks()
@@ -850,6 +861,8 @@ class BaseLoopScript(BaseScript, BaseLoopScriptProtocol):
             self.upload_stats()
 
     def _on_start(self):
+        if self.__max_running_time > 0:
+            logger.info(f"Max running time: {self.__max_running_time:.0f} seconds.")
         self.on_start()
         self.workflow_loop_enabled = True
 

@@ -17,7 +17,8 @@ Source of truth:
 | `children_tags` | `None` | extra tags added to every scheduled child job |
 | `PROGRAMS` | `{}` | command-line shortcut definitions (see the `scanjobs-programs` skill) |
 | `loop_mode` * | `0` | (loop scripts) default seconds between cycles; `0` = once. `--loop-mode` overrides |
-| `max_running_time` * | `0` | (loop scripts) auto-stop after N seconds if `>0` |
+| `max_running_time` * | `0` | (loop scripts) auto-stop after N seconds (plus jitter) if `>0`. `--max-running-time` overrides |
+| `max_running_time_jitter` * | `0.05` | (loop scripts) random extra time, up to this fraction of `max_running_time`, always added so jobs started together don't all stop together; `0` = none |
 | `stats_interval` * | `120` | (loop scripts) seconds between periodic stats uploads |
 
 \* `BaseLoopScript` only.

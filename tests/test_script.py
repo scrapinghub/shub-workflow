@@ -1,4 +1,5 @@
 import os
+import time
 from typing import List
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
@@ -82,3 +83,18 @@ class BaseScriptTest(TestCase):
             script.upload_stats()
         for name, value in usage.items():
             self.assertEqual(script.stats.get_value(f"memusage/{name}"), value)
+
+    def _loop_script_ran_out(self, argv: List[str], random_value: float, elapsed: float) -> bool:
+        with script_args(argv), patch("shub_workflow.script.random.random", return_value=random_value):
+            script = MyLoopScript()
+        with patch("shub_workflow.script.time.time", return_value=time.time() + elapsed):
+            return script.is_max_time_ran_out()
+
+    def test_max_running_time_jitter(self):
+        # with max jitter (5%), the limit is 105 seconds instead of 100
+        self.assertFalse(self._loop_script_ran_out(["--max-running-time=100"], 1.0, 104))
+        self.assertTrue(self._loop_script_ran_out(["--max-running-time=100"], 1.0, 106))
+        # with no jitter, the limit is the given one
+        self.assertTrue(self._loop_script_ran_out(["--max-running-time=100"], 0.0, 101))
+        # no max running time, never runs out
+        self.assertFalse(self._loop_script_ran_out([], 1.0, 10**9))
