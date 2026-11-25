@@ -5,7 +5,7 @@ import hashlib
 from typing import Any, Callable, Dict, Optional, TypeVar, cast
 
 from scrapy.settings import BaseSettings
-from tenacity import RetryCallState, retry, retry_if_exception_type, before_sleep_log, wait_fixed
+from tenacity import RetryCallState, retry, retry_if_exception_type, before_sleep_log
 from scrapinghub.client.exceptions import ServerError, Unauthorized
 from requests.exceptions import ReadTimeout, ConnectionError, HTTPError
 
@@ -81,11 +81,17 @@ MINS_IN_A_DAY = 24 * 60
 ONE_MIN_IN_S = 60
 
 
-DASH_RETRY_MAX = int(os.environ.get("DASH_RETRY_MAX", MINS_IN_A_DAY))
-DASH_RETRY_WAIT_SECS = int(os.environ.get("DASH_RETRY_WAIT_SECS", ONE_MIN_IN_S))
-DASH_RETRY_LOGGING_LEVEL = os.environ.get("DASH_RETRY_LOGGING_LEVEL", "ERROR")
-# Max number of times a call is retried because of an ambiguous exception (see DASH_AMBIGUOUS_EXCEPTIONS).
-DASH_AMBIGUOUS_RETRY_MAX = int(os.environ.get("DASH_AMBIGUOUS_RETRY_MAX", 5))
+# The retry settings are environment variables, read when a retry happens rather than at import time. So they can be
+# set from Scrapy Cloud settings in the project settings.py (see kumo_settings()), which is loaded after this module.
+#
+# DASH_RETRY_MAX: max attempts of a call, whatever the error (default: a day of attempts, one per minute).
+# DASH_AMBIGUOUS_RETRY_MAX: max retries of a call after an ambiguous exception (see DASH_AMBIGUOUS_EXCEPTIONS).
+# DASH_RETRY_WAIT_SECS: seconds to wait between attempts.
+# DASH_RETRY_LOGGING_LEVEL: log level of the message logged before each retry.
+DEFAULT_DASH_RETRY_MAX = MINS_IN_A_DAY
+DEFAULT_DASH_AMBIGUOUS_RETRY_MAX = 5
+DEFAULT_DASH_RETRY_WAIT_SECS = ONE_MIN_IN_S
+DEFAULT_DASH_RETRY_LOGGING_LEVEL = "ERROR"
 
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -101,23 +107,32 @@ _AMBIGUOUS_FAILURES_ATTR = "_dash_ambiguous_failures"
 
 
 def _dash_retry_stop(retry_state: RetryCallState) -> bool:
-    if retry_state.attempt_number >= DASH_RETRY_MAX:
+    if retry_state.attempt_number >= int(os.environ.get("DASH_RETRY_MAX", DEFAULT_DASH_RETRY_MAX)):
         return True
     assert retry_state.outcome is not None
     if isinstance(retry_state.outcome.exception(), DASH_AMBIGUOUS_EXCEPTIONS):
         # retry_state lives along a single decorated call, so this counts the ambiguous failures of that call only.
         failures = getattr(retry_state, _AMBIGUOUS_FAILURES_ATTR, 0) + 1
         setattr(retry_state, _AMBIGUOUS_FAILURES_ATTR, failures)
-        return failures > DASH_AMBIGUOUS_RETRY_MAX
+        return failures > int(os.environ.get("DASH_AMBIGUOUS_RETRY_MAX", DEFAULT_DASH_AMBIGUOUS_RETRY_MAX))
     return False
+
+
+def _dash_retry_wait(retry_state: RetryCallState) -> float:
+    return int(os.environ.get("DASH_RETRY_WAIT_SECS", DEFAULT_DASH_RETRY_WAIT_SECS))
+
+
+def _dash_retry_before_sleep(retry_state: RetryCallState) -> None:
+    level = os.environ.get("DASH_RETRY_LOGGING_LEVEL", DEFAULT_DASH_RETRY_LOGGING_LEVEL)
+    before_sleep_log(logger, getattr(logging, level))(retry_state)
 
 
 _dash_retry = retry(
     retry=retry_if_exception_type(DASH_TEMPORARY_EXCEPTIONS + DASH_AMBIGUOUS_EXCEPTIONS),
-    before_sleep=before_sleep_log(logger, getattr(logging, DASH_RETRY_LOGGING_LEVEL)),
+    before_sleep=_dash_retry_before_sleep,
     reraise=True,
     stop=_dash_retry_stop,
-    wait=wait_fixed(DASH_RETRY_WAIT_SECS),
+    wait=_dash_retry_wait,
 )
 
 
