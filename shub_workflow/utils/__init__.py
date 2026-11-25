@@ -5,8 +5,8 @@ import hashlib
 from typing import Any, Callable, Dict, Optional, TypeVar, cast
 
 from scrapy.settings import BaseSettings
-from tenacity import retry, retry_if_exception_type, before_sleep_log, stop_after_attempt, wait_fixed
-from scrapinghub.client.exceptions import ServerError
+from tenacity import RetryCallState, retry, retry_if_exception_type, before_sleep_log, wait_fixed
+from scrapinghub.client.exceptions import ServerError, Unauthorized
 from requests.exceptions import ReadTimeout, ConnectionError, HTTPError
 
 
@@ -84,17 +84,39 @@ ONE_MIN_IN_S = 60
 DASH_RETRY_MAX = int(os.environ.get("DASH_RETRY_MAX", MINS_IN_A_DAY))
 DASH_RETRY_WAIT_SECS = int(os.environ.get("DASH_RETRY_WAIT_SECS", ONE_MIN_IN_S))
 DASH_RETRY_LOGGING_LEVEL = os.environ.get("DASH_RETRY_LOGGING_LEVEL", "ERROR")
+# Max number of times a call is retried because of an ambiguous exception (see DASH_AMBIGUOUS_EXCEPTIONS).
+DASH_AMBIGUOUS_RETRY_MAX = int(os.environ.get("DASH_AMBIGUOUS_RETRY_MAX", 5))
 
 
 F = TypeVar("F", bound=Callable[..., Any])
 
+# Exceptions that are certainly a temporary Scrapy Cloud issue. Retried up to DASH_RETRY_MAX attempts.
+# ServerError is the only ScrapinghubAPIError that certainly is temporary. Don't capture ScrapinghubAPIError here.
+DASH_TEMPORARY_EXCEPTIONS = (ServerError, ReadTimeout, ConnectionError, HTTPError)
+# Exceptions that usually mean a real error (i.e. lack of permissions), but that Scrapy Cloud can also raise during
+# a temporary blip. Retried at most DASH_AMBIGUOUS_RETRY_MAX times.
+DASH_AMBIGUOUS_EXCEPTIONS = (Unauthorized,)
+
+_AMBIGUOUS_FAILURES_ATTR = "_dash_ambiguous_failures"
+
+
+def _dash_retry_stop(retry_state: RetryCallState) -> bool:
+    if retry_state.attempt_number >= DASH_RETRY_MAX:
+        return True
+    assert retry_state.outcome is not None
+    if isinstance(retry_state.outcome.exception(), DASH_AMBIGUOUS_EXCEPTIONS):
+        # retry_state lives along a single decorated call, so this counts the ambiguous failures of that call only.
+        failures = getattr(retry_state, _AMBIGUOUS_FAILURES_ATTR, 0) + 1
+        setattr(retry_state, _AMBIGUOUS_FAILURES_ATTR, failures)
+        return failures > DASH_AMBIGUOUS_RETRY_MAX
+    return False
+
 
 _dash_retry = retry(
-    # ServerError is the only ScrapinghubAPIError that should be retried. Don't capture ScrapinghubAPIError here
-    retry=retry_if_exception_type((ServerError, ReadTimeout, ConnectionError, HTTPError)),
+    retry=retry_if_exception_type(DASH_TEMPORARY_EXCEPTIONS + DASH_AMBIGUOUS_EXCEPTIONS),
     before_sleep=before_sleep_log(logger, getattr(logging, DASH_RETRY_LOGGING_LEVEL)),
     reraise=True,
-    stop=stop_after_attempt(DASH_RETRY_MAX),
+    stop=_dash_retry_stop,
     wait=wait_fixed(DASH_RETRY_WAIT_SECS),
 )
 
