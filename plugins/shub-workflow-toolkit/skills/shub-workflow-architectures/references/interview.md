@@ -13,9 +13,11 @@ project) and when it can't be (it decides the shape).
 - Periodically: full recrawls of the same targets every day / week / quarter.
 - Once: a one-off crawl.
 
-*Decides:* continuous → independent agents with a frontier (architectures B, C, D). On demand → a
-request file queue with a short per-request flow (architecture A). Periodic → periodic jobs or
-scheduler-driven sweeps. Once → probably just a generator crawl manager, maybe nothing else.
+*Decides:* continuous → independent agents with a frontier (architectures C, D, E). On demand → a
+request file queue with a short per-request flow (architecture B). Periodic → periodic jobs or
+scheduler-driven sweeps; for many independent sites, one spider each, a daily generator crawl
+manager over the project's spiders (architecture A). Once → probably just a generator crawl manager,
+maybe nothing else.
 
 **2. How do the spiders reach the targets?**
 - From short keys: search keywords, categories, tags, usernames, ids (→ seeds).
@@ -51,7 +53,7 @@ versions (more images later, edited content) and which one is wanted?
 **6. Is everything on the listing, or must each item be extracted from its own page?**
 
 *Decides:* single-tier spiders, or two-tier discovery (branch seeds → leaf seeds) + extraction
-(architecture D). Leaf slots double as the "already extracted" memory.
+(architecture E). Leaf slots double as the "already extracted" memory.
 
 **7. Are there customer filters?** Which criteria, and how often do they change?
 
@@ -76,8 +78,9 @@ needs it.
 **10. How many sources, and how similar?** One spider per site, families of spiders, or one broad
 spider receiving the site as an argument?
 
-*Decides:* one crawl manager per spider vs one per family; per-source configuration in one
-`ENABLED_SPIDERS` dict; `canonical_name` and slot naming.
+*Decides:* one crawl manager per spider vs one per family (or one for all the spiders of the
+project, with a broken spiders check, when they are many and run periodically — architecture A);
+per-source configuration in one `ENABLED_SPIDERS` dict; `canonical_name` and slot naming.
 
 **11. Politeness and blocking.** Limits per site (one job at a time)? Known rate limiting or bans?
 Logins or sessions (often: one job at a time per account)? Busy hours to avoid?

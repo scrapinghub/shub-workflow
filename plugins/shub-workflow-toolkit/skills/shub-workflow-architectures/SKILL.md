@@ -54,7 +54,7 @@ haven't thought about yet. So:
 2. **Interview** using [references/interview.md](references/interview.md): the question bank, grouped
    by topic, with the design decision each answer drives. Round 1 is always the shape questions.
 3. **Choose a starting point** with [references/reference-architectures.md](references/reference-architectures.md)
-   (four proven architectures and how they combine), then adapt it to the answers.
+   (five proven architectures and how they combine), then adapt it to the answers.
 4. **Write the design document** from [references/design-doc-template.md](references/design-doc-template.md):
    roles table, storage contracts, scheduling, scale and control knobs, assumptions, open questions.
    Ask where to save it (e.g. `docs/architecture.md` in the project). Review it with the developer

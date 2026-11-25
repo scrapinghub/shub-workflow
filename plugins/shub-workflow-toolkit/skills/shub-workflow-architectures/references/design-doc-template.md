@@ -16,7 +16,7 @@ name pattern — not "a storage".
 - Freshness / recrawl: <requirement>
 
 ## Starting point
-Reference architecture <A|B|C|D|none>, adapted as follows: <differences>.
+Reference architecture <A|B|C|D|E|none>, adapted as follows: <differences>.
 
 ## Roles
 | Component (script) | Role | Base class | Reads | Writes | Instances | Started by | Mode |

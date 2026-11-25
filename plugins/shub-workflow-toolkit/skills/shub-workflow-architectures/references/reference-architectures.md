@@ -1,18 +1,39 @@
 # Reference architectures
 
-Four proven starting points, from the wiki chapter
+Five proven starting points, from the wiki chapter
 [Reference Architectures](https://github.com/scrapinghub/shub-workflow/wiki/Reference-Architectures)
 (with diagrams). Pick the closest one and adapt it; they combine freely.
 
 | The requirements say | Start from |
 | --- | --- |
-| crawls on demand, each one a unit with its own delivery | A |
-| continuous discovery of new items, delivered as they are found | B |
-| items selected by customer criteria, and files downloaded | C |
-| items extracted from their own pages, or items with versions | D |
-| a single crawl now and then, or a fixed list of inputs | none: a generator crawl manager (+ a delivery if needed) |
+| a fixed set of sites (one spider each), crawled periodically, each delivered on its own | A |
+| crawls on demand, each one a unit with its own delivery | B |
+| continuous discovery of new items, delivered as they are found | C |
+| items selected by customer criteria, and files downloaded | D |
+| items extracted from their own pages, or items with versions | E |
+| a single crawl now and then, or a fixed list of input files | none: a generator crawl manager (+ a delivery if needed) |
 
-## A. Request-driven batch crawling
+## A. Periodic crawl of many independent spiders
+
+Hundreds of unrelated sites, one spider each, recrawled every day; nothing crosses jobs and nothing
+is discovered. The project's spider list *is* the work list.
+
+- **One generator crawl manager**, started daily by a periodic job: `set_parameters_gen()` yields
+  `{"spider": name}` for every spider of `self.spider_loader.list()` not carrying a `deactivated` tag
+  in ScrapyCloud (`spider = SpiderName("")`). It finishes when the generator is exhausted and the
+  last job is done; adding a site = deploying its spider. `MAX_RETRIES` retries failed outcomes. If a
+  run can outlast the period, `acquire_all_jobs = True`.
+- **`default_max_jobs` above the project's units** (e.g. 16 for 8): the surplus waits in the
+  ScrapyCloud pending queue, so a freed unit is taken at once instead of at the manager's next loop.
+- **Spiders deliver directly** (one file per spider, a feed export enabled only in production) and
+  check their own item quality (e.g. Spidermon: minimum items, drop vs previous job, field coverage,
+  schema), alerting per job.
+- **Periodic broken spiders check** (`BaseScript`, e.g. with `SlackMixin`; period per the project,
+  daily or weekly): a spider whose last N finished jobs (e.g. 7) all have zero items gets the
+  `deactivated` tag and a notification; the crawl manager then skips it. Removing the tag in the UI after the fix re-enables it. The tag is the
+  maintainers' to-do list (a third or more of the spiders can be deactivated at a time).
+
+## B. Request-driven batch crawling
 
 Requests (files listing sites) arrive at any time; each is crawled and delivered as a unit.
 
@@ -29,7 +50,7 @@ Requests (files listing sites) arrive at any time; each is crawled and delivered
   per site — also used to give incremental crawls the urls already delivered —, a weekly alerts graph
   manager, a watchdog.
 
-## B. Self-replenishing discovery loop
+## C. Self-replenishing discovery loop
 
 Continuous discovery from many sources through branch seeds; deliver each new item once.
 
@@ -40,9 +61,9 @@ Continuous discovery from many sources through branch seeds; deliver each new it
   *is* the delivery.
 - Hourly keep-alive scheduler; daily monitor.
 
-## C. Discovery, filtering, download and delivery
+## D. Discovery, filtering, download and delivery
 
-B plus customer filters, downloads and a volume target.
+C plus customer filters, downloads and a volume target.
 
 - One consumer per source; the biggest sources with split slots (N consumers taking jobs by job
   number modulo N).
@@ -54,7 +75,7 @@ B plus customer filters, downloads and a volume target.
   retry batches.
 - Monitor hooks as back-pressure (flush a permanent spider, reset a slot when a queue runs low).
 
-## D. Two-tier discovery and extraction
+## E. Two-tier discovery and extraction
 
 Items must be extracted from their own pages; items change over time.
 
@@ -70,6 +91,7 @@ Items must be extracted from their own pages; items change over time.
 
 ## Combining
 
-C and D extend B's loop. Any of them can add an A-like request flow for special crawls, or a weekly
-graph manager for reports. A url-heavy source can use url batch files built from the frontier while
-the others use seeds.
+D and E extend C's loop. Any of them can add a B-like request flow for special crawls, a weekly graph
+manager for reports, or A's broken spiders check when it runs many spiders of its own. A grows into B
+when the crawls must be requested on demand instead of run every day. A url-heavy source can use url
+batch files built from the frontier while the others use seeds.
